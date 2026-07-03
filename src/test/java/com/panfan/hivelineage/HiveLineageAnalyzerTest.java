@@ -30,6 +30,7 @@ public class HiveLineageAnalyzerTest {
         test.productionSample01ExtractsJoinedSourceTables();
         test.productionSample02ExtractsUnionAndJoinSourceTables();
         test.generatedCoreLineageCasesParseWithoutFailure();
+        test.unionAllColumnLineageUsesBranchSelectColumns();
         test.columnLineageResolvesJoinAliasToRealSourceTables();
         test.columnLineageUsesSourceMetadataForUnqualifiedJoinColumns();
         test.createTableAsSelectProducesFormalTableLineage();
@@ -416,6 +417,46 @@ public class HiveLineageAnalyzerTest {
         assertContainsSource(result.getStatements().get(1), "ods.user_dept");
         assertContainsSource(result.getStatements().get(2), "ods.union_source_a");
         assertContainsSource(result.getStatements().get(2), "ods.union_source_b");
+    }
+
+    @Test
+    public void unionAllColumnLineageUsesBranchSelectColumns() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("ods.union_source_a", "id", "name")
+            .addTable("ods.union_source_b", "id", "name")
+            .addTable("dwd.union_target", "id", "name");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_union")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript(
+                "insert overwrite table dwd.union_target "
+                    + "select id, name from ods.union_source_a "
+                    + "union all "
+                    + "select id, name from ods.union_source_b;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+
+        TestSupport.assertEquals(0, statement.getParseStatusCode(), "union parse status");
+        TestSupport.assertEquals(2, statement.getColumnLineages().size(), "union column lineage count");
+        TestSupport.assertEquals("dwd.union_target.id", statement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "union id target");
+        TestSupport.assertEquals("id", statement.getColumnLineages().get(0).getExpression(), "union id expression");
+        assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "ods.union_source_a.id");
+        assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "ods.union_source_b.id");
+        TestSupport.assertEquals("dwd.union_target.name", statement.getColumnLineages().get(1).getTargetColumn().getQualifiedName(), "union name target");
+        TestSupport.assertEquals("name", statement.getColumnLineages().get(1).getExpression(), "union name expression");
+        assertContainsColumn(statement.getColumnLineages().get(1).getSourceColumns(), "ods.union_source_a.name");
+        assertContainsColumn(statement.getColumnLineages().get(1).getSourceColumns(), "ods.union_source_b.name");
     }
 
     @Test

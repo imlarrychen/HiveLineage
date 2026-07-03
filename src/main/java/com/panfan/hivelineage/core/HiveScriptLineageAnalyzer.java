@@ -338,15 +338,24 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             Map<String, String> sourceAliases = extractSourceAliases(normalizedStatement);
             sourceAliases.putAll(resolvedParsedStatement.getSourceAliases());
             Map<String, String> columnOwners = buildColumnOwners(request, inputObjects, parseMode, statementWarnings, index);
+            boolean setOperationQuery = isSetOperationQuery(normalizedStatement);
             for (int i = 0; i < selectItems.size(); i++) {
                 String expression = stripAlias(selectItems.get(i));
-                List<ColumnRef> sourceColumns = extractSourceColumns(
-                    expression,
-                    defaultColumnSourceTable,
-                    sourceAliases,
-                    columnOwners,
-                    resolvedParsedStatement.getColumnAliasSources()
-                );
+                List<ColumnRef> sourceColumns = setOperationQuery
+                    ? setOperationSourceColumns(resolvedParsedStatement, i)
+                    : Collections.<ColumnRef>emptyList();
+                if (sourceColumns.isEmpty() && setOperationQuery) {
+                    sourceColumns = extractSetOperationSourceColumns(request, expression, columnReferenceInputObjects, statementWarnings, index);
+                }
+                if (sourceColumns.isEmpty()) {
+                    sourceColumns = extractSourceColumns(
+                        expression,
+                        defaultColumnSourceTable,
+                        sourceAliases,
+                        columnOwners,
+                        resolvedParsedStatement.getColumnAliasSources()
+                    );
+                }
                 sourceColumns = expandViewSourceColumns(request, sourceColumns, viewColumnLineageCache, 0, new LinkedHashSet<String>(), statementWarnings, index);
                 if (sourceColumns.isEmpty() && mayContainColumnReference(expression)) {
                     addWarning(statementWarnings, WarningCode.UNKNOWN_COLUMN_LINEAGE, "Unable to resolve source columns for expression: " + expression, index);
@@ -1179,6 +1188,52 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             }
         }
         return columnOwners;
+    }
+
+    private List<ColumnRef> setOperationSourceColumns(ParsedHiveStatement parsedStatement, int selectIndex) {
+        List<String> sourceColumns = parsedStatement.getSetOperationSourceColumnsBySelectIndex().get(selectIndex);
+        if (sourceColumns == null || sourceColumns.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<ColumnRef> refs = new ArrayList<>();
+        for (String sourceColumn : sourceColumns) {
+            refs.add(new ColumnRef(sourceColumn));
+        }
+        return refs;
+    }
+
+    private boolean isSetOperationQuery(String normalizedStatement) {
+        return Pattern.compile("(?i)\\bunion\\b|\\bintersect\\b|\\bexcept\\b").matcher(normalizedStatement).find();
+    }
+
+    private List<ColumnRef> extractSetOperationSourceColumns(
+        LineageAnalyzeRequest request,
+        String expression,
+        List<DataObjectRef> inputObjects,
+        List<LineageWarning> warnings,
+        int statementIndex
+    ) {
+        if (!isDirectExpression(expression) || expression.contains(".") || inputObjects.size() <= 1) {
+            return Collections.emptyList();
+        }
+        String normalizedColumn = expression.toLowerCase(Locale.ROOT);
+        List<ColumnRef> columns = new ArrayList<>();
+        for (DataObjectRef inputObject : inputObjects) {
+            HiveTableMetadata metadata = loadTableMetadata(request, inputObject.getQualifiedName(), warnings, statementIndex);
+            if (metadata == null || containsColumn(metadata, normalizedColumn)) {
+                columns.add(new ColumnRef(inputObject.getQualifiedName() + "." + expression));
+            }
+        }
+        return columns;
+    }
+
+    private boolean containsColumn(HiveTableMetadata metadata, String normalizedColumn) {
+        for (String column : metadata.getColumns()) {
+            if (normalizedColumn.equals(column.toLowerCase(Locale.ROOT))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<String> splitSelectItems(String selectList) {

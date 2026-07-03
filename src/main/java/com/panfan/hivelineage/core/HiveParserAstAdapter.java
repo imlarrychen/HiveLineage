@@ -32,7 +32,7 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
             StatementType statementType = resolveStatementType(root);
             Set<String> cteAliases = collectCteAliases(root);
             ASTNode mainInsert = findMainInsert(root, statementType);
-            List<String> selectExpressions = resolveSelectExpressions(mainInsert);
+            List<String> selectExpressions = resolveSelectExpressions(root, mainInsert);
             List<String> targetColumns = resolveTargetColumns(root, mainInsert, statementType, selectExpressions);
             if (targetColumns.isEmpty() && statementType == StatementType.INSERT_SELECT) {
                 targetColumns = resolveInsertTargetColumns(normalizedSql);
@@ -45,6 +45,7 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
                 selectExpressions,
                 resolveSourceAliases(root, cteAliases),
                 resolveColumnAliasSources(root),
+                resolveSetOperationSourceColumns(root, cteAliases),
                 resolveStaticPartitionValues(mainInsert),
                 normalizedSql
             );
@@ -150,7 +151,7 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
         if (statementType == StatementType.CREATE_TABLE_AS_SELECT
             || statementType == StatementType.CREATE_VIEW_AS_SELECT
             || statementType == StatementType.ALTER_VIEW_AS_SELECT) {
-            ASTNode selectNode = astWalker.directChild(mainInsert, HiveParser.TOK_SELECT);
+            ASTNode selectNode = directSelectChild(mainInsert);
             List<String> inferred = resolveSelectAliases(selectNode);
             if (!inferred.isEmpty()) {
                 return inferred;
@@ -159,8 +160,41 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
         return selectExpressions.isEmpty() ? Collections.<String>emptyList() : new ArrayList<String>();
     }
 
-    private List<String> resolveSelectExpressions(ASTNode mainInsert) {
-        ASTNode selectNode = astWalker.directChild(mainInsert, HiveParser.TOK_SELECT);
+    private List<String> resolveSelectExpressions(ASTNode root, ASTNode mainInsert) {
+        List<String> expressions = resolveDirectSelectExpressions(mainInsert);
+        if (expressions.size() == 1 && "TOK_SETCOLREF".equalsIgnoreCase(expressions.get(0))) {
+            ASTNode unionNode = findUnionNode(root);
+            if (unionNode != null) {
+                ASTNode firstUnionInsert = firstUnionBranchInsert(unionNode);
+                List<String> unionBranchExpressions = resolveDirectSelectExpressions(firstUnionInsert);
+                if (!unionBranchExpressions.isEmpty()) {
+                    return unionBranchExpressions;
+                }
+            }
+        }
+        return expressions;
+    }
+
+    private List<String> resolveDirectSelectExpressions(ASTNode insertNode) {
+        if (insertNode == null) {
+            return Collections.emptyList();
+        }
+        ASTNode selectNode = directSelectChild(insertNode);
+        if (selectNode == null) {
+            return Collections.emptyList();
+        }
+        return resolveSelectExpressionsFromSelectNode(selectNode);
+    }
+
+    private ASTNode directSelectChild(ASTNode insertNode) {
+        ASTNode selectNode = astWalker.directChild(insertNode, HiveParser.TOK_SELECT);
+        if (selectNode != null) {
+            return selectNode;
+        }
+        return astWalker.directChild(insertNode, HiveParser.TOK_SELECTDI);
+    }
+
+    private List<String> resolveSelectExpressionsFromSelectNode(ASTNode selectNode) {
         if (selectNode == null) {
             return Collections.emptyList();
         }
@@ -172,6 +206,126 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
             }
         }
         return expressions;
+    }
+
+    private ASTNode findUnionNode(ASTNode node) {
+        if (node == null) {
+            return null;
+        }
+        String text = node.getText();
+        if (text != null && text.toUpperCase(Locale.ROOT).startsWith("TOK_UNION")) {
+            return node;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            ASTNode found = findUnionNode((ASTNode) node.getChild(i));
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    private ASTNode firstUnionBranchInsert(ASTNode unionNode) {
+        if (unionNode == null) {
+            return null;
+        }
+        for (int i = 0; i < unionNode.getChildCount(); i++) {
+            ASTNode child = (ASTNode) unionNode.getChild(i);
+            if (child.getType() == HiveParser.TOK_QUERY) {
+                ASTNode insertNode = astWalker.directChild(child, HiveParser.TOK_INSERT);
+                if (insertNode != null) {
+                    return insertNode;
+                }
+            }
+            ASTNode nestedUnionInsert = firstUnionBranchInsert(findUnionNode(child));
+            if (nestedUnionInsert != null) {
+                return nestedUnionInsert;
+            }
+        }
+        return null;
+    }
+
+    private Map<Integer, List<String>> resolveSetOperationSourceColumns(ASTNode root, Set<String> cteAliases) {
+        ASTNode unionNode = findUnionNode(root);
+        if (unionNode == null) {
+            return Collections.emptyMap();
+        }
+        Map<Integer, LinkedHashSet<String>> collected = new HashMap<>();
+        collectSetOperationSourceColumns(unionNode, cteAliases, collected);
+        Map<Integer, List<String>> result = new HashMap<>();
+        for (Map.Entry<Integer, LinkedHashSet<String>> entry : collected.entrySet()) {
+            result.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+        }
+        return result;
+    }
+
+    private void collectSetOperationSourceColumns(
+        ASTNode node,
+        Set<String> cteAliases,
+        Map<Integer, LinkedHashSet<String>> collected
+    ) {
+        if (node == null) {
+            return;
+        }
+        if (node.getType() == HiveParser.TOK_QUERY) {
+            ASTNode insertNode = astWalker.directChild(node, HiveParser.TOK_INSERT);
+            ASTNode selectNode = directSelectChild(insertNode);
+            if (selectNode != null) {
+                Map<String, String> branchAliases = resolveSourceAliases(node, cteAliases);
+                String defaultSource = defaultSourceTable(node, cteAliases);
+                for (int i = 0; i < selectNode.getChildCount(); i++) {
+                    ASTNode selectExpression = (ASTNode) selectNode.getChild(i);
+                    if (selectExpression.getType() != HiveParser.TOK_SELEXPR || selectExpression.getChildCount() == 0) {
+                        continue;
+                    }
+                    LinkedHashSet<String> expressionSources = new LinkedHashSet<>();
+                    collectExpressionSourceColumns((ASTNode) selectExpression.getChild(0), branchAliases, defaultSource, expressionSources);
+                    if (!expressionSources.isEmpty()) {
+                        LinkedHashSet<String> positionSources = collected.get(i);
+                        if (positionSources == null) {
+                            positionSources = new LinkedHashSet<>();
+                            collected.put(i, positionSources);
+                        }
+                        positionSources.addAll(expressionSources);
+                    }
+                }
+            }
+            return;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            collectSetOperationSourceColumns((ASTNode) node.getChild(i), cteAliases, collected);
+        }
+    }
+
+    private void collectExpressionSourceColumns(
+        ASTNode node,
+        Map<String, String> branchAliases,
+        String defaultSource,
+        Set<String> collected
+    ) {
+        if (node == null) {
+            return;
+        }
+        if (node.getType() == HiveParser.TOK_TABLE_OR_COL && node.getChildCount() == 1) {
+            if (defaultSource != null) {
+                collected.add(defaultSource + "." + stripIdentifier(node.getChild(0).getText()));
+            }
+            return;
+        }
+        if (".".equals(node.getText()) && node.getChildCount() == 2) {
+            String owner = expressionExtractor.unparse((ASTNode) node.getChild(0)).toLowerCase(Locale.ROOT);
+            String resolvedOwner = branchAliases.get(owner);
+            collected.add((resolvedOwner == null ? owner : resolvedOwner) + "." + stripIdentifier(node.getChild(1).getText()));
+            return;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            collectExpressionSourceColumns((ASTNode) node.getChild(i), branchAliases, defaultSource, collected);
+        }
+    }
+
+    private String defaultSourceTable(ASTNode queryNode, Set<String> cteAliases) {
+        List<DataObjectRef> sources = resolveInputObjects(queryNode, cteAliases);
+        return sources.size() == 1 ? sources.get(0).getQualifiedName() : null;
     }
 
     private List<String> resolveSelectAliases(ASTNode selectNode) {

@@ -15,6 +15,7 @@ public final class ParsedHiveStatement {
     private final List<String> selectExpressions;
     private final Map<String, String> sourceAliases;
     private final Map<String, String> columnAliasSources;
+    private final Map<Integer, List<String>> setOperationSourceColumnsBySelectIndex;
     private final Map<String, String> staticPartitionValues;
     private final String normalizedSql;
 
@@ -55,6 +56,7 @@ public final class ParsedHiveStatement {
             selectExpressions,
             sourceAliases,
             Collections.<String, String>emptyMap(),
+            Collections.<Integer, List<String>>emptyMap(),
             staticPartitionValues,
             normalizedSql
         );
@@ -71,6 +73,32 @@ public final class ParsedHiveStatement {
         Map<String, String> staticPartitionValues,
         String normalizedSql
     ) {
+        this(
+            statementType,
+            outputObject,
+            inputObjects,
+            targetColumns,
+            selectExpressions,
+            sourceAliases,
+            columnAliasSources,
+            Collections.<Integer, List<String>>emptyMap(),
+            staticPartitionValues,
+            normalizedSql
+        );
+    }
+
+    public ParsedHiveStatement(
+        StatementType statementType,
+        DataObjectRef outputObject,
+        List<DataObjectRef> inputObjects,
+        List<String> targetColumns,
+        List<String> selectExpressions,
+        Map<String, String> sourceAliases,
+        Map<String, String> columnAliasSources,
+        Map<Integer, List<String>> setOperationSourceColumnsBySelectIndex,
+        Map<String, String> staticPartitionValues,
+        String normalizedSql
+    ) {
         this.statementType = statementType;
         this.outputObject = outputObject;
         this.inputObjects = Collections.unmodifiableList(new ArrayList<>(inputObjects));
@@ -78,6 +106,7 @@ public final class ParsedHiveStatement {
         this.selectExpressions = Collections.unmodifiableList(new ArrayList<>(selectExpressions));
         this.sourceAliases = Collections.unmodifiableMap(new HashMap<>(sourceAliases));
         this.columnAliasSources = Collections.unmodifiableMap(new HashMap<>(columnAliasSources));
+        this.setOperationSourceColumnsBySelectIndex = unmodifiableNestedListMap(setOperationSourceColumnsBySelectIndex);
         this.staticPartitionValues = Collections.unmodifiableMap(new HashMap<>(staticPartitionValues));
         this.normalizedSql = normalizedSql;
     }
@@ -110,11 +139,23 @@ public final class ParsedHiveStatement {
         return columnAliasSources;
     }
 
+    public Map<Integer, List<String>> getSetOperationSourceColumnsBySelectIndex() {
+        return setOperationSourceColumnsBySelectIndex;
+    }
+
     public Map<String, String> getStaticPartitionValues() {
         return staticPartitionValues;
     }
 
     public String getNormalizedSql() {
         return normalizedSql;
+    }
+
+    private static Map<Integer, List<String>> unmodifiableNestedListMap(Map<Integer, List<String>> source) {
+        Map<Integer, List<String>> copied = new HashMap<>();
+        for (Map.Entry<Integer, List<String>> entry : source.entrySet()) {
+            copied.put(entry.getKey(), Collections.unmodifiableList(new ArrayList<>(entry.getValue())));
+        }
+        return Collections.unmodifiableMap(copied);
     }
 }
