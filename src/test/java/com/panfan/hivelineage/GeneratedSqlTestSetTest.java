@@ -53,6 +53,18 @@ public class GeneratedSqlTestSetTest {
         }
     }
 
+    @Test
+    public void generatedSqlLineageSnapshotIsUpToDate() throws Exception {
+        Path snapshotFile = Paths.get("src/test/resources/hql/generated/lineage_parse_results.md");
+
+        TestSupport.assertTrue(Files.isRegularFile(snapshotFile), "lineage snapshot file exists");
+        TestSupport.assertEquals(
+            GeneratedSqlLineageSnapshot.render(),
+            new String(Files.readAllBytes(snapshotFile), StandardCharsets.UTF_8),
+            "lineage snapshot content"
+        );
+    }
+
     private static List<Path> listSqlFiles(Path generatedDir) throws Exception {
         List<Path> sqlFiles = new ArrayList<>();
         Files.walk(generatedDir).forEach(path -> {
@@ -64,7 +76,7 @@ public class GeneratedSqlTestSetTest {
         return sqlFiles;
     }
 
-    private static TestMetadataProvider generatedMetadataProvider() {
+    static TestMetadataProvider generatedMetadataProvider() {
         return new TestMetadataProvider()
             .addTable("test_b", "b1", "b2", "b3", "dt", "env")
             .addTable("test_a", "a1", "a2", "ds", "env_name")

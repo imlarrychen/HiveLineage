@@ -323,8 +323,18 @@ mvn -q \
 - [core_lineage_cases.sql](src/test/resources/hql/generated/core_lineage_cases.sql)
 - [lineage_case_01.sql](src/test/resources/hql/generated/lineage_case_01.sql) 到 [lineage_case_10.sql](src/test/resources/hql/generated/lineage_case_10.sql)
 - [lineage_case_metadata.md](src/test/resources/hql/generated/lineage_case_metadata.md)
+- [lineage_parse_results.md](src/test/resources/hql/generated/lineage_parse_results.md)
 
 [GeneratedSqlTestSetTest.java](src/test/java/com/panfan/hivelineage/GeneratedSqlTestSetTest.java) 会扫描 `src/test/resources/hql/generated` 下的 `.sql` 文件并逐个调用 `HiveScriptLineageAnalyzer`，断言生成测试集不出现解析失败。后续新增 SQL 测试集时，只要放到该目录即可被纳入这条测试链路。
+
+`lineage_parse_results.md` 用于人工核验，按 SQL 文件分节记录测试 SQL 和对应解析结果。修改解析逻辑或测试 SQL 后，可以先编译测试类，再运行生成器刷新该文件：
+
+```bash
+mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=/tmp/hive-lineage-cp.txt
+java -cp "target/test-classes:target/classes:$(cat /tmp/hive-lineage-cp.txt)" com.panfan.hivelineage.GeneratedSqlLineageSnapshot
+```
+
+如果使用 JDK 9 及以上版本直接运行 `java` 命令，需要额外加入 `--add-opens=java.base/java.net=ALL-UNNAMED`。
 
 ## OpenSpec
 
