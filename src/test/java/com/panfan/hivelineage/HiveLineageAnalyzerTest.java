@@ -1,5 +1,9 @@
 package com.panfan.hivelineage;
 
+import com.panfan.hivelineage.core.*;
+import com.panfan.hivelineage.metadata.*;
+import com.panfan.hivelineage.request.*;
+import com.panfan.hivelineage.result.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -48,6 +52,7 @@ public class HiveLineageAnalyzerTest {
         test.metadataCacheExpiresPositiveAndMissingEntries();
         test.missingTargetMetadataEmitsWarningsOnStatementAndAnalyzeResult();
         test.missingViewDefinitionEmitsWarningAndKeepsViewSource();
+        test.viewExpansionDepthExceededEmitsWarningAndKeepsBoundaryView();
         test.alterViewAsSelectProducesFormalLineage();
         test.lateralViewExplodeKeepsTableAndExplodeArgumentColumnLineage();
         test.jdbcMetadataProviderRejectsUnsafeTableName();
@@ -983,6 +988,42 @@ public class HiveLineageAnalyzerTest {
     }
 
     @Test
+    public void viewExpansionDepthExceededEmitsWarningAndKeepsBoundaryView() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        TestMetadataProvider metadataProvider = new TestMetadataProvider()
+            .addView(
+                "dim.v_user_level_1",
+                "select user_id from dim.v_user_level_2",
+                "user_id"
+            )
+            .addView(
+                "dim.v_user_level_2",
+                "select user_id from ods.user_base",
+                "user_id"
+            );
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_028")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript("insert overwrite table dwd.user_profile(user_id) select user_id from dim.v_user_level_1;")
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .expandViewLineage(true)
+                .maxViewExpandDepth(1)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+
+        assertContainsSource(statement, "dim.v_user_level_2");
+        assertContainsWarning(statement.getWarnings(), WarningCode.VIEW_EXPANSION_DEPTH_EXCEEDED);
+    }
+
+    @Test
     public void alterViewAsSelectProducesFormalLineage() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
 
@@ -1035,14 +1076,22 @@ public class HiveLineageAnalyzerTest {
         assertContainsColumn(statement.getColumnLineages().get(1).getSourceColumns(), "ods.user_base.tags");
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void jdbcMetadataProviderRejectsUnsafeTableName() {
-        new JdbcMetadataColumnV2Provider(
-            "jdbc:mysql://127.0.0.1:3306/hive",
-            "root",
-            "85418825",
-            "metadata_column_v2 where 1=1"
-        );
+        try {
+            new JdbcMetadataColumnV2Provider(
+                "jdbc:mysql://127.0.0.1:3306/hive",
+                "root",
+                "85418825",
+                "metadata_column_v2 where 1=1"
+            );
+            throw new AssertionError("Expected unsafe metadata table name to be rejected");
+        } catch (IllegalArgumentException expected) {
+            TestSupport.assertTrue(
+                expected.getMessage().contains("metadata table name contains illegal characters"),
+                "unsafe metadata table name error message"
+            );
+        }
     }
 
     private static String readWorkspaceFile(String path) throws Exception {

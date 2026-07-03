@@ -1,0 +1,46 @@
+-- 覆盖点：生产风格 set + 普通 DDL 忽略 + insert overwrite select + join 多表字段归属 + 函数表达式字段血缘
+-- 预期：DDL、set 不产生正式血缘；insert 产生 etl_monitor 源表到目标表的表血缘和字段血缘。
+set mapred.max.split.size = 256000000;
+set mapred.min.split.size.per.rack = 100000000;
+set mapred.min.split.size.per.node = 100000000;
+set hive.input.format = org.apache.hadoop.hive.ql.io.CombineHiveInputFormat;
+set hive.merge.mapfiles = true;
+set hive.merge.mapredfiles = true;
+
+create table if not exists etl_monitor.meta_mid_bdp_usr_login_record
+(
+     domain      string comment '域名'
+    ,bbk_name    string comment '分行'
+    ,dept_ful_nm string comment '用户部门全称'
+    ,user_id     string comment '用户ID'
+    ,user_name   string comment '用户一事通号'
+    ,emp_name    string comment '用户姓名'
+    ,login_time  string comment '登录时间'
+    ,os_type     string comment '操作系统类型'
+    ,ip          string comment '访问ip'
+    ,province    string comment '省份'
+    ,city        string comment '城市'
+    ,mobile_id   string comment '手机设备id'
+    ,dw_upd_tm   string comment '数据更新时间'
+)
+comment '元数据-bdp-用户登陆信息表'
+stored as parquet;
+
+insert overwrite table etl_monitor.meta_mid_bdp_usr_login_record
+select
+      b.domain
+     ,b.bbk_name
+     ,b.dept_ful_nm
+     ,a.user_id
+     ,b.user_name
+     ,b.emp_name
+     ,from_unixtime(cast(a.login_time / 1000 as int), 'yyyy-MM-dd HH:mm:ss') as login_time
+     ,a.os_type
+     ,a.ip
+     ,a.province
+     ,a.city
+     ,a.mobile_id
+     ,current_timestamp() as dw_upd_tm
+from etl_monitor.bdp_meta_leviathan_t_account_login_record a
+left join etl_monitor.meta_mid_bdp_usr_info b
+on a.user_id = b.user_id;

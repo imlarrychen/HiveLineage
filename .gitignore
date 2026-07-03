@@ -1,4 +1,5 @@
 target/
 *.class
 .DS_Store
+.idea/
 openspec/changes/add-hive-sql-lineage-analyzer/design.md.zip
