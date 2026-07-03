@@ -1,0 +1,15 @@
+package com.panfan.hivelineage;
+
+public enum StatementType {
+    INSERT_SELECT,
+    CREATE_TABLE_AS_SELECT,
+    CREATE_TEMPORARY_TABLE_AS_SELECT,
+    CREATE_VIEW_AS_SELECT,
+    ALTER_VIEW_AS_SELECT,
+    CREATE_TABLE_DDL,
+    SELECT,
+    SET,
+    USE,
+    INSERT_VALUES,
+    UNSUPPORTED
+}
