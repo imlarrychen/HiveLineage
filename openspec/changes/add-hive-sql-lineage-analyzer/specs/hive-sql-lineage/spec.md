@@ -216,6 +216,73 @@ from test_b;
 - **并且** 如果函数名提取成功，则 `a1` 的函数名集合应包含 `nvl`
 - **并且** 如果表达式提取成功，则 `a1` 的表达式应记录为 `nvl(b1, 0)`，且 `expressionExtracted = true`
 
+#### 场景：常量字段血缘
+
+- **假设** 测试 SQL 为：
+
+```sql
+insert overwrite table test_a(a1)
+select 't1' as a1
+from test_b;
+```
+
+- **当** 字段血缘被解析
+- **那么** `test_a.a1` 的源字段集合必须为空
+- **并且** `test_a.a1` 的表达式必须记录为 `constant('t1')`
+- **并且** `test_a.a1` 的血缘类型必须为 `CONSTANT`
+- **并且** 字符串常量不得被解析为 `test_b.t1` 或其他伪来源字段
+
+#### 场景：静态分区和动态分区字段对齐
+
+- **假设** 测试 SQL 为：
+
+```sql
+insert overwrite table dwd.user_tag_detail partition(source_system='profile', dt)
+select user_id, tag, dt
+from ods.user_base;
+```
+
+- **并且** 目标表字段包含 `user_id`、`tag`、`source_system`、`dt`
+- **当** 字段血缘被解析
+- **那么** `dwd.user_tag_detail.user_id` 必须来自 `ods.user_base.user_id`
+- **并且** `dwd.user_tag_detail.tag` 必须来自 `ods.user_base.tag` 或可追溯到生成 `tag` 的表达式来源
+- **并且** `dwd.user_tag_detail.dt` 必须来自 `ods.user_base.dt`
+- **并且** `dwd.user_tag_detail.source_system` 的源字段集合必须为空
+- **并且** `dwd.user_tag_detail.source_system` 的表达式必须为 `constant('profile')`
+- **并且** `dwd.user_tag_detail.source_system` 的血缘类型必须为 `CONSTANT`
+
+#### 场景：Union 分支字段表达式
+
+- **假设** 测试 SQL 为：
+
+```sql
+insert overwrite table test_a(a1)
+select table1.a1 from table1
+union all
+select table2.a2 from table2;
+```
+
+- **当** 字段血缘被解析
+- **那么** `test_a.a1` 的源字段必须包含 `table1.a1` 和 `table2.a2`
+- **并且** `test_a.a1` 的表达式必须记录为 `union_all(table1.a1, table2.a2)`
+- **并且** `test_a.a1` 的血缘类型必须为 `DERIVED`
+
+#### 场景：Union 分支常量表达式
+
+- **假设** 测试 SQL 为：
+
+```sql
+insert overwrite table test_a(type_name)
+select 'A' as type_name from table1
+union all
+select 'B' as type_name from table2;
+```
+
+- **当** 字段血缘被解析
+- **那么** `test_a.type_name` 的源字段集合必须为空
+- **并且** `test_a.type_name` 的表达式必须记录为 `union_all(constant('A'), constant('B'))`
+- **并且** `test_a.type_name` 的血缘类型必须为 `CONSTANT`
+
 #### 场景：聚合表达式字段血缘
 
 - **假设** 测试 SQL 为：

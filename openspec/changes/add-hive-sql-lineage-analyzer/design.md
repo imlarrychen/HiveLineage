@@ -375,12 +375,12 @@ analyze table t;
 特殊语句：
 
 - `insert overwrite table target values (...)` 有输出但没有输入数据对象，完全忽略，不产生正式血缘、不产生写入事件、不写图数据库边。
-- 静态分区字段来自常量，只有当该语句同时存在输入表和输出表时，才作为字段血缘中的常量字段输出。
+- 静态分区字段来自常量，只有当该语句同时存在输入表和输出表时，才作为字段血缘中的常量字段输出，`sourceColumns = []`，`expression = constant(...)`，`lineageType = CONSTANT`。
 - `count(*)` 不依赖具体字段，但依赖输入表行集，字段血缘类型记为 `DERIVED`，并通过 `expression = "count(*)"` 和 `sourceObjects` 说明其依赖。
 
 ## Column Lineage Expression Handling
 
-字段血缘解析的复杂度高于表血缘解析。字段血缘首期最重要的是解析出“源字段集合 -> 目标字段”和 `DIRECT/DERIVED` 类型。表达式文本也需要尽量提取：实现必须先尝试从 SQL parser 的源码位置或 AST unparse 中获取表达式，只有在 parser 无法稳定提供表达式文本时才允许置空，并通过 `expressionExtracted` 标记。
+字段血缘解析的复杂度高于表血缘解析。字段血缘首期最重要的是解析出“源字段集合 -> 目标字段”和 `DIRECT/DERIVED/CONSTANT` 类型。表达式文本也需要尽量提取：实现必须先尝试从 SQL parser 的源码位置或 AST unparse 中获取表达式，只有在 parser 无法稳定提供表达式文本时才允许置空，并通过 `expressionExtracted` 标记。
 
 核心策略：
 
@@ -388,7 +388,7 @@ analyze table t;
 - 对 select item 表达式构建或使用 SQL AST 表达式树。
 - 从表达式树中收集所有源字段引用，作为 `sourceColumns`。
 - 尽量保留表达式原文或标准化表达式，作为 `expression`；实现必须尝试提取表达式文本。如果解析框架无法稳定提取，则 `expression` 可以为空，但 `expressionExtracted` 必须为 `false`。
-- 根据表达式形态标记 `lineageType`，首期只区分直接来源和加工来源。
+- 根据表达式形态标记 `lineageType`，首期区分直接来源、加工来源和常量赋值。
 - 对无法完全理解语义的函数或 UDF，不阻断解析；只要能提取参数中的源字段，就输出字段血缘。表达式提取失败只影响解释性字段，不影响字段血缘主链路。
 
 示例：
@@ -406,10 +406,11 @@ test_b.b1, test_b.b2 -> test_a.a1, expression: b1 + b2, lineageType: DERIVED
 test_b.b3            -> test_a.a2, expression: b3,      lineageType: DIRECT
 ```
 
-字段血缘类型首期只保留两类：
+字段血缘类型首期保留三类：
 
 - `DIRECT`：目标字段直接来自单个源字段，例如 `select b3 as a2`。
-- `DERIVED`：目标字段经过加工生成，包括算术计算、普通函数、UDF、聚合、窗口函数、CASE WHEN、类型转换、字符串拼接、常量或静态分区值等。
+- `DERIVED`：目标字段经过加工生成，包括算术计算、普通函数、UDF、聚合、窗口函数、CASE WHEN、类型转换、字符串拼接、union 分支合并等。
+- `CONSTANT`：目标字段由常量赋值得到，例如 `select 't1' as a1`、静态分区 `partition(dt='20260701')`、union 多分支常量值。
 
 不建议首期把 `EXPRESSION`、`FUNCTION`、`AGGREGATION`、`WINDOW` 拆成多个血缘类型。原因是分类越细，实现和使用成本越高，但对首期图谱检索价值有限。函数名、表达式和复杂度可以作为附加字段尽力保留，满足排查和展示需要。
 
@@ -421,6 +422,10 @@ test_b.b3            -> test_a.a2, expression: b3,      lineageType: DIRECT
 - `count(*) as cnt`：`sourceColumns = []`，`sourceObjects = [source table]`，`expression = "count(*)"`，`lineageType = DERIVED`，`functionNames = ["count"]`。
 - `case when status = 1 then price else 0 end as valid_price`：`sourceColumns = [status, price]`，`lineageType = DERIVED`，`complexExpression = true`。
 - `row_number() over(partition by user_id order by create_time) as rn`：`sourceColumns = [user_id, create_time]`，`lineageType = DERIVED`，`functionNames = ["row_number"]`。
+- `'t1' as a1`：`sourceColumns = []`，`expression = "constant('t1')"`，`lineageType = CONSTANT`。
+- `partition(source_system='profile', dt) select user_id, tag, dt ...`：`source_system` 作为 `constant('profile')` 输出，`dt` 对齐 `select` 中的动态分区字段。
+- `select t1.a from t1 union all select t2.b from t2`：`sourceColumns = [t1.a, t2.b]`，`expression = "union_all(t1.a, t2.b)"`，`lineageType = DERIVED`。
+- `select 'A' from t1 union all select 'B' from t2`：`sourceColumns = []`，`expression = "union_all(constant('A'), constant('B'))"`，`lineageType = CONSTANT`。
 - 未知 UDF：提取参数中的字段，保留完整表达式，`lineageType = DERIVED`；如果参数字段也无法可靠识别，返回 `UNKNOWN_COLUMN_LINEAGE` warning。
 
 复杂度评估：
@@ -669,7 +674,8 @@ public class ColumnLineage {
 ```java
 enum LineageType {
     DIRECT,
-    DERIVED
+    DERIVED,
+    CONSTANT
 }
 ```
 
@@ -808,7 +814,7 @@ Output:
           "targetColumn": "dwd.user_profile.dt",
           "sourceColumns": [],
           "sourceObjects": [],
-          "expression": "'20260629'",
+          "expression": "constant('20260629')",
           "lineageType": "CONSTANT",
           "statementIndex": 2
         }

@@ -5,7 +5,7 @@
 项目当前重点支持：
 
 - 表血缘解析：识别输入表、输出表、语句类型和临时表链路。
-- 字段血缘解析：识别目标字段、来源字段、表达式、直接/加工类型。
+- 字段血缘解析：识别目标字段、来源字段、表达式、直接/加工/常量类型。
 - 按需解析：支持只解析表血缘、只解析字段血缘、同时解析两者。
 - 元数据缓存：字段血缘依赖 Hive 表字段元数据，内置缓存减少元数据库访问。
 - 变量处理：支持运行时变量、`set` 会话变量、残留 `${xxx}` 和 `@{xxx}` 兜底替换。
@@ -136,6 +136,14 @@ LineageAnalyzeResult result = analyzer.analyzeScript(LineageAnalyzeRequest.build
 
 - `DIRECT`：直接字段来源，例如 `select b3 from test_b`。
 - `DERIVED`：字段经过函数或表达式加工，例如 `select b1 + b2`、`select upper(name)`。
+- `CONSTANT`：字段由常量赋值得到，例如 `select 't1' as a1` 或静态分区 `partition(dt='20260701')`。
+
+字段血缘表达式口径：
+
+- 普通常量字段不产生源字段，表达式统一记录为 `constant(...)`。例如 `select 't1' as a1` 输出 `sourceColumns = []`、`expression = constant('t1')`、`lineageType = CONSTANT`。
+- 静态分区字段按常量赋值保留在字段血缘结果中，但不产生字段到字段来源。例如 `partition(source_system='profile', dt)` 中 `source_system` 输出为 `constant('profile')`，动态分区 `dt` 则继续对齐 `select` 中的 `dt` 字段。
+- `union all`/集合操作按分支聚合表达式。字段分支示例：`union_all(table1.a1, table2.a2)`；常量分支示例：`union_all(constant('A'), constant('B'))`。
+- 字符串字面量、变量兜底后的字面量、日期格式串等不应被识别为来源字段。例如 `'fallback_value'`、`'yyyy/MM/dd'` 只作为表达式内容，不进入 `sourceColumns`。
 
 ## 元数据查询与缓存
 
@@ -232,6 +240,17 @@ LineageAnalyzeResult result = new HiveScriptLineageAnalyzer().analyzeScript(
 - `create temporary table tmp as select ...` 会记录在当前脚本会话中。
 - 后续语句引用临时表时，会把最终目标表血缘串联到临时表的真实来源表。
 - 默认不返回临时表创建语句本身的结果，除非开启 `includeTemporaryLineage`。
+
+分区字段处理：
+
+- 静态分区字段不从 `select` 列取来源字段，按常量字段血缘输出，例如 `partition(source_system='profile')` 输出 `source_system <- constant('profile')`。
+- 动态分区字段参与 `select` 列对齐，例如 `partition(source_system='profile', dt) select user_id, tag, dt ...` 中，`dt` 对齐 `select` 的第三列，`source_system` 作为静态常量单独输出。
+
+集合操作处理：
+
+- `union all` 会按字段位置合并多个分支的来源字段。
+- 字段表达式使用 `union_all(...)` 表示分支聚合，例如 `union_all(ods.a.id, ods.b.id)`。
+- 如果分支是常量，使用 `constant(...)` 包裹，例如 `union_all(constant('A'), constant('B'))`。
 
 视图处理：
 
