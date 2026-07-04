@@ -313,6 +313,12 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         if (targetColumns.isEmpty()) {
             targetColumns = resolveTargetColumns(request, targetTable, selectItems, parseMode, statementWarnings, index);
         }
+        targetColumns = alignTargetColumnsForStaticPartitions(
+            targetColumns,
+            selectItems.size(),
+            resolvedParsedStatement.getStaticPartitionValues(),
+            extractDynamicPartitionColumns(normalizedStatement)
+        );
         if (targetColumns.size() != selectItems.size()) {
             return failedResult(request, rawStatement, normalizedStatement, index, "COLUMN_COUNT_MISMATCH", "Target columns and select items do not align", statementWarnings);
         }
@@ -341,13 +347,16 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             boolean setOperationQuery = isSetOperationQuery(normalizedStatement);
             for (int i = 0; i < selectItems.size(); i++) {
                 String expression = stripAlias(selectItems.get(i));
+                String lineageExpression = setOperationQuery
+                    ? setOperationExpression(resolvedParsedStatement, i)
+                    : normalizeLineageExpression(expression);
                 List<ColumnRef> sourceColumns = setOperationQuery
                     ? setOperationSourceColumns(resolvedParsedStatement, i)
                     : Collections.<ColumnRef>emptyList();
                 if (sourceColumns.isEmpty() && setOperationQuery) {
                     sourceColumns = extractSetOperationSourceColumns(request, expression, columnReferenceInputObjects, statementWarnings, index);
                 }
-                if (sourceColumns.isEmpty()) {
+                if (sourceColumns.isEmpty() && !isConstantLineageExpression(lineageExpression)) {
                     sourceColumns = extractSourceColumns(
                         expression,
                         defaultColumnSourceTable,
@@ -360,17 +369,15 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 if (sourceColumns.isEmpty() && mayContainColumnReference(expression)) {
                     addWarning(statementWarnings, WarningCode.UNKNOWN_COLUMN_LINEAGE, "Unable to resolve source columns for expression: " + expression, index);
                 }
-                LineageType lineageType = isDirectExpression(expression) && sourceColumns.size() == 1
-                    ? LineageType.DIRECT
-                    : LineageType.DERIVED;
+                LineageType lineageType = resolveLineageType(lineageExpression, expression, sourceColumns);
                 columnLineages.add(new ColumnLineage(
                     new ColumnRef(targetTable + "." + targetColumns.get(i)),
                     sourceColumns,
                     inputObjects,
-                    expression,
+                    lineageExpression,
                     true,
                     lineageType,
-                    extractFunctionNames(expression),
+                    lineageType == LineageType.CONSTANT ? Collections.<String>emptyList() : extractFunctionNames(lineageExpression),
                     lineageType == LineageType.DERIVED,
                     index
                 ));
@@ -380,9 +387,9 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                     new ColumnRef(targetTable + "." + partitionValue.getKey()),
                     Collections.<ColumnRef>emptyList(),
                     inputObjects,
-                    partitionValue.getValue(),
+                    normalizeLineageExpression(partitionValue.getValue()),
                     true,
-                    LineageType.DERIVED,
+                    LineageType.CONSTANT,
                     Collections.<String>emptyList(),
                     false,
                     index
@@ -411,6 +418,48 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             columnLineages,
             statementWarnings
         );
+    }
+
+    private List<String> alignTargetColumnsForStaticPartitions(
+        List<String> targetColumns,
+        int selectItemCount,
+        Map<String, String> staticPartitionValues,
+        List<String> dynamicPartitionColumns
+    ) {
+        if (staticPartitionValues.isEmpty()) {
+            return targetColumns;
+        }
+        List<String> aligned = new ArrayList<>();
+        for (String targetColumn : targetColumns) {
+            if (!staticPartitionValues.containsKey(targetColumn.toLowerCase(Locale.ROOT))) {
+                aligned.add(targetColumn);
+            }
+        }
+        for (String dynamicPartitionColumn : dynamicPartitionColumns) {
+            if (!aligned.contains(dynamicPartitionColumn)) {
+                aligned.add(dynamicPartitionColumn);
+            }
+        }
+        return aligned.size() >= selectItemCount
+            ? new ArrayList<>(aligned.subList(0, selectItemCount))
+            : targetColumns;
+    }
+
+    private List<String> extractDynamicPartitionColumns(String normalizedStatement) {
+        Matcher matcher = Pattern.compile("(?is)\\bpartition\\s*\\(([^)]*)\\)").matcher(normalizedStatement);
+        if (!matcher.find()) {
+            return Collections.emptyList();
+        }
+        List<String> dynamicColumns = new ArrayList<>();
+        for (String partitionItem : splitSelectItems(matcher.group(1))) {
+            if (!partitionItem.contains("=")) {
+                String column = partitionItem.trim().toLowerCase(Locale.ROOT);
+                if (!column.isEmpty()) {
+                    dynamicColumns.add(column);
+                }
+            }
+        }
+        return dynamicColumns;
     }
 
     private void registerTemporaryTable(
@@ -1202,6 +1251,25 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         return refs;
     }
 
+    private String setOperationExpression(ParsedHiveStatement parsedStatement, int selectIndex) {
+        List<String> expressions = parsedStatement.getSetOperationExpressionsBySelectIndex().get(selectIndex);
+        if (expressions == null || expressions.isEmpty()) {
+            return "";
+        }
+        return "union_all(" + joinWithComma(expressions) + ")";
+    }
+
+    private String joinWithComma(List<String> values) {
+        StringBuilder builder = new StringBuilder();
+        for (String value : values) {
+            if (builder.length() > 0) {
+                builder.append(", ");
+            }
+            builder.append(value);
+        }
+        return builder.toString();
+    }
+
     private boolean isSetOperationQuery(String normalizedStatement) {
         return Pattern.compile("(?i)\\bunion\\b|\\bintersect\\b|\\bexcept\\b").matcher(normalizedStatement).find();
     }
@@ -1281,6 +1349,57 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         return expression.matches("[a-zA-Z_][\\w]*(?:\\.[a-zA-Z_][\\w]*)?");
     }
 
+    private LineageType resolveLineageType(String lineageExpression, String rawExpression, List<ColumnRef> sourceColumns) {
+        if (isConstantLineageExpression(lineageExpression)) {
+            return LineageType.CONSTANT;
+        }
+        if (lineageExpression != null && lineageExpression.trim().startsWith("union_all(")) {
+            return LineageType.DERIVED;
+        }
+        if (isDirectExpression(rawExpression) && sourceColumns.size() == 1) {
+            return LineageType.DIRECT;
+        }
+        return LineageType.DERIVED;
+    }
+
+    private String normalizeLineageExpression(String expression) {
+        String trimmed = expression == null ? "" : expression.trim();
+        return isLiteralExpression(trimmed) ? "constant(" + trimmed + ")" : trimmed;
+    }
+
+    private boolean isConstantLineageExpression(String expression) {
+        if (expression == null) {
+            return false;
+        }
+        String trimmed = expression.trim();
+        if (trimmed.startsWith("constant(")) {
+            return true;
+        }
+        if (trimmed.startsWith("union_all(") && trimmed.endsWith(")")) {
+            String inner = trimmed.substring("union_all(".length(), trimmed.length() - 1);
+            List<String> parts = splitSelectItems(inner);
+            if (parts.isEmpty()) {
+                return false;
+            }
+            for (String part : parts) {
+                if (!isConstantLineageExpression(part)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private boolean isLiteralExpression(String expression) {
+        return expression.matches("'(?:[^']|'')*'")
+            || expression.matches("\"(?:[^\"]|\"\")*\"")
+            || expression.matches("[-+]?\\d+(?:\\.\\d+)?")
+            || "true".equalsIgnoreCase(expression)
+            || "false".equalsIgnoreCase(expression)
+            || "null".equalsIgnoreCase(expression);
+    }
+
     private List<ColumnRef> extractSourceColumns(
         String expression,
         String defaultSourceTable,
@@ -1289,7 +1408,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         Map<String, String> columnAliasSources
     ) {
         Set<String> columns = new LinkedHashSet<>();
-        Matcher matcher = IDENTIFIER.matcher(expression);
+        Matcher matcher = IDENTIFIER.matcher(removeStringLiterals(expression));
         while (matcher.find()) {
             String first = matcher.group(1);
             String second = matcher.group(2);
@@ -1349,7 +1468,10 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     }
 
     private boolean mayContainColumnReference(String expression) {
-        Matcher matcher = IDENTIFIER.matcher(expression);
+        if (isLiteralExpression(expression == null ? "" : expression.trim())) {
+            return false;
+        }
+        Matcher matcher = IDENTIFIER.matcher(removeStringLiterals(expression));
         while (matcher.find()) {
             String token = matcher.group(1);
             if (!isKeyword(token) && !isFunctionName(expression, matcher.end())) {
@@ -1357,6 +1479,54 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             }
         }
         return false;
+    }
+
+    private String removeStringLiterals(String expression) {
+        if (expression == null || expression.isEmpty()) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        boolean inSingleQuote = false;
+        boolean inDoubleQuote = false;
+        for (int i = 0; i < expression.length(); i++) {
+            char ch = expression.charAt(i);
+            if (inSingleQuote) {
+                if (ch == '\'' && i + 1 < expression.length() && expression.charAt(i + 1) == '\'') {
+                    builder.append(' ');
+                    i++;
+                    builder.append(' ');
+                    continue;
+                }
+                if (ch == '\'') {
+                    inSingleQuote = false;
+                }
+                builder.append(' ');
+                continue;
+            }
+            if (inDoubleQuote) {
+                if (ch == '"' && i + 1 < expression.length() && expression.charAt(i + 1) == '"') {
+                    builder.append(' ');
+                    i++;
+                    builder.append(' ');
+                    continue;
+                }
+                if (ch == '"') {
+                    inDoubleQuote = false;
+                }
+                builder.append(' ');
+                continue;
+            }
+            if (ch == '\'') {
+                inSingleQuote = true;
+                builder.append(' ');
+            } else if (ch == '"') {
+                inDoubleQuote = true;
+                builder.append(' ');
+            } else {
+                builder.append(ch);
+            }
+        }
+        return builder.toString();
     }
 
     private void addWarning(List<LineageWarning> warnings, WarningCode warningCode, String message, int statementIndex) {

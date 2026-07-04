@@ -31,6 +31,8 @@ public class HiveLineageAnalyzerTest {
         test.productionSample02ExtractsUnionAndJoinSourceTables();
         test.generatedCoreLineageCasesParseWithoutFailure();
         test.unionAllColumnLineageUsesBranchSelectColumns();
+        test.constantSelectItemProducesConstantLineage();
+        test.unionAllConstantExpressionsAreMerged();
         test.columnLineageResolvesJoinAliasToRealSourceTables();
         test.columnLineageUsesSourceMetadataForUnqualifiedJoinColumns();
         test.createTableAsSelectProducesFormalTableLineage();
@@ -46,6 +48,7 @@ public class HiveLineageAnalyzerTest {
         test.viewColumnLineageExpandsToBaseColumns();
         test.dynamicPartitionColumnLineageUsesSelectField();
         test.staticPartitionColumnLineageRecordsConstantExpression();
+        test.mixedStaticAndDynamicPartitionColumnsAreAligned();
         test.statementSplitterIgnoresSemicolonInsideStringAndComments();
         test.insertOverwriteDirectoryIsIgnoredBecauseThereIsNoOutputTable();
         test.selectStarExpandsColumnsFromMetadata();
@@ -450,13 +453,64 @@ public class HiveLineageAnalyzerTest {
         TestSupport.assertEquals(0, statement.getParseStatusCode(), "union parse status");
         TestSupport.assertEquals(2, statement.getColumnLineages().size(), "union column lineage count");
         TestSupport.assertEquals("dwd.union_target.id", statement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "union id target");
-        TestSupport.assertEquals("id", statement.getColumnLineages().get(0).getExpression(), "union id expression");
+        TestSupport.assertEquals("union_all(ods.union_source_a.id, ods.union_source_b.id)", statement.getColumnLineages().get(0).getExpression(), "union id expression");
         assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "ods.union_source_a.id");
         assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "ods.union_source_b.id");
         TestSupport.assertEquals("dwd.union_target.name", statement.getColumnLineages().get(1).getTargetColumn().getQualifiedName(), "union name target");
-        TestSupport.assertEquals("name", statement.getColumnLineages().get(1).getExpression(), "union name expression");
+        TestSupport.assertEquals("union_all(ods.union_source_a.name, ods.union_source_b.name)", statement.getColumnLineages().get(1).getExpression(), "union name expression");
         assertContainsColumn(statement.getColumnLineages().get(1).getSourceColumns(), "ods.union_source_a.name");
         assertContainsColumn(statement.getColumnLineages().get(1).getSourceColumns(), "ods.union_source_b.name");
+    }
+
+    @Test
+    public void constantSelectItemProducesConstantLineage() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_constant")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript("insert overwrite table dwd.constant_target(a1) select 't1' as a1 from ods.user_base;")
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        ColumnLineage column = analyzer.analyzeScript(request).getStatements().get(0).getColumnLineages().get(0);
+
+        TestSupport.assertEquals("dwd.constant_target.a1", column.getTargetColumn().getQualifiedName(), "constant target");
+        TestSupport.assertEquals(LineageType.CONSTANT, column.getLineageType(), "constant lineage type");
+        TestSupport.assertEquals("constant('t1')", column.getExpression(), "constant expression");
+        TestSupport.assertTrue(column.getSourceColumns().isEmpty(), "constant source columns");
+    }
+
+    @Test
+    public void unionAllConstantExpressionsAreMerged() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_union_constant")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript(
+                "insert overwrite table dwd.union_constant_target(type_name) "
+                    + "select 'A' as type_name from ods.union_source_a "
+                    + "union all "
+                    + "select 'B' as type_name from ods.union_source_b;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        ColumnLineage column = analyzer.analyzeScript(request).getStatements().get(0).getColumnLineages().get(0);
+
+        TestSupport.assertEquals("dwd.union_constant_target.type_name", column.getTargetColumn().getQualifiedName(), "union constant target");
+        TestSupport.assertEquals(LineageType.CONSTANT, column.getLineageType(), "union constant lineage type");
+        TestSupport.assertEquals("union_all(constant('A'), constant('B'))", column.getExpression(), "union constant expression");
+        TestSupport.assertTrue(column.getSourceColumns().isEmpty(), "union constant source columns");
     }
 
     @Test
@@ -836,9 +890,42 @@ public class HiveLineageAnalyzerTest {
 
         TestSupport.assertEquals(2, columns.size(), "static partition lineage count");
         TestSupport.assertEquals("dwd.user_profile.dt", columns.get(1).getTargetColumn().getQualifiedName(), "static partition target");
-        TestSupport.assertEquals("'20260701'", columns.get(1).getExpression(), "static partition expression");
+        TestSupport.assertEquals("constant('20260701')", columns.get(1).getExpression(), "static partition expression");
         TestSupport.assertTrue(columns.get(1).getSourceColumns().isEmpty(), "static partition source columns");
-        TestSupport.assertEquals(LineageType.DERIVED, columns.get(1).getLineageType(), "static partition lineage type");
+        TestSupport.assertEquals(LineageType.CONSTANT, columns.get(1).getLineageType(), "static partition lineage type");
+    }
+
+    @Test
+    public void mixedStaticAndDynamicPartitionColumnsAreAligned() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("dwd.user_tag_detail", "user_id", "tag", "source_system", "dt")
+            .addTable("ods.user_base", "user_id", "tags", "dt");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_partition")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript(
+                "insert overwrite table dwd.user_tag_detail partition(source_system='profile', dt) "
+                    + "select user_id, tag, dt "
+                    + "from ods.user_base lateral view explode(tags) exploded_tags as tag;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        List<ColumnLineage> columns = analyzer.analyzeScript(request).getStatements().get(0).getColumnLineages();
+
+        TestSupport.assertEquals("dwd.user_tag_detail.dt", columns.get(2).getTargetColumn().getQualifiedName(), "dynamic partition target");
+        TestSupport.assertEquals("ods.user_base.dt", columns.get(2).getSourceColumns().get(0).getQualifiedName(), "dynamic partition source");
+        TestSupport.assertEquals("dwd.user_tag_detail.source_system", columns.get(3).getTargetColumn().getQualifiedName(), "static partition target");
+        TestSupport.assertEquals(LineageType.CONSTANT, columns.get(3).getLineageType(), "static partition type");
+        TestSupport.assertEquals("constant('profile')", columns.get(3).getExpression(), "static partition expression");
     }
 
     @Test

@@ -16,6 +16,7 @@ public final class ParsedHiveStatement {
     private final Map<String, String> sourceAliases;
     private final Map<String, String> columnAliasSources;
     private final Map<Integer, List<String>> setOperationSourceColumnsBySelectIndex;
+    private final Map<Integer, List<String>> setOperationExpressionsBySelectIndex;
     private final Map<String, String> staticPartitionValues;
     private final String normalizedSql;
 
@@ -57,6 +58,7 @@ public final class ParsedHiveStatement {
             sourceAliases,
             Collections.<String, String>emptyMap(),
             Collections.<Integer, List<String>>emptyMap(),
+            Collections.<Integer, List<String>>emptyMap(),
             staticPartitionValues,
             normalizedSql
         );
@@ -82,6 +84,7 @@ public final class ParsedHiveStatement {
             sourceAliases,
             columnAliasSources,
             Collections.<Integer, List<String>>emptyMap(),
+            Collections.<Integer, List<String>>emptyMap(),
             staticPartitionValues,
             normalizedSql
         );
@@ -96,6 +99,7 @@ public final class ParsedHiveStatement {
         Map<String, String> sourceAliases,
         Map<String, String> columnAliasSources,
         Map<Integer, List<String>> setOperationSourceColumnsBySelectIndex,
+        Map<Integer, List<String>> setOperationExpressionsBySelectIndex,
         Map<String, String> staticPartitionValues,
         String normalizedSql
     ) {
@@ -107,6 +111,7 @@ public final class ParsedHiveStatement {
         this.sourceAliases = Collections.unmodifiableMap(new HashMap<>(sourceAliases));
         this.columnAliasSources = Collections.unmodifiableMap(new HashMap<>(columnAliasSources));
         this.setOperationSourceColumnsBySelectIndex = unmodifiableNestedListMap(setOperationSourceColumnsBySelectIndex);
+        this.setOperationExpressionsBySelectIndex = unmodifiableNestedListMap(setOperationExpressionsBySelectIndex);
         this.staticPartitionValues = Collections.unmodifiableMap(new HashMap<>(staticPartitionValues));
         this.normalizedSql = normalizedSql;
     }
@@ -141,6 +146,10 @@ public final class ParsedHiveStatement {
 
     public Map<Integer, List<String>> getSetOperationSourceColumnsBySelectIndex() {
         return setOperationSourceColumnsBySelectIndex;
+    }
+
+    public Map<Integer, List<String>> getSetOperationExpressionsBySelectIndex() {
+        return setOperationExpressionsBySelectIndex;
     }
 
     public Map<String, String> getStaticPartitionValues() {
