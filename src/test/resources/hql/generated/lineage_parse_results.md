@@ -276,7 +276,7 @@ on a.user_id = b.user_id
 | etl_monitor.meta_mid_bdp_usr_login_record.user_id | etl_monitor.bdp_meta_leviathan_t_account_login_record.user_id | etl_monitor.bdp_meta_leviathan_t_account_login_record<br>etl_monitor.meta_mid_bdp_usr_info | DIRECT | a.user_id |  | false | true |
 | etl_monitor.meta_mid_bdp_usr_login_record.user_name | etl_monitor.meta_mid_bdp_usr_info.user_name | etl_monitor.bdp_meta_leviathan_t_account_login_record<br>etl_monitor.meta_mid_bdp_usr_info | DIRECT | b.user_name |  | false | true |
 | etl_monitor.meta_mid_bdp_usr_login_record.emp_name | etl_monitor.meta_mid_bdp_usr_info.emp_name | etl_monitor.bdp_meta_leviathan_t_account_login_record<br>etl_monitor.meta_mid_bdp_usr_info | DIRECT | b.emp_name |  | false | true |
-| etl_monitor.meta_mid_bdp_usr_login_record.login_time | etl_monitor.bdp_meta_leviathan_t_account_login_record.login_time | etl_monitor.bdp_meta_leviathan_t_account_login_record<br>etl_monitor.meta_mid_bdp_usr_info | DERIVED | from_unixtime(TOK_INT(a.login_time / 1000), 'yyyy-MM-dd HH:mm:ss') | from_unixtime<br>tok_int | true | true |
+| etl_monitor.meta_mid_bdp_usr_login_record.login_time | etl_monitor.bdp_meta_leviathan_t_account_login_record.login_time | etl_monitor.bdp_meta_leviathan_t_account_login_record<br>etl_monitor.meta_mid_bdp_usr_info | DERIVED | from_unixtime(cast(a.login_time / 1000 as int), 'yyyy-MM-dd HH:mm:ss') | from_unixtime<br>cast | true | true |
 | etl_monitor.meta_mid_bdp_usr_login_record.os_type | etl_monitor.bdp_meta_leviathan_t_account_login_record.os_type | etl_monitor.bdp_meta_leviathan_t_account_login_record<br>etl_monitor.meta_mid_bdp_usr_info | DIRECT | a.os_type |  | false | true |
 | etl_monitor.meta_mid_bdp_usr_login_record.ip | etl_monitor.bdp_meta_leviathan_t_account_login_record.ip | etl_monitor.bdp_meta_leviathan_t_account_login_record<br>etl_monitor.meta_mid_bdp_usr_info | DIRECT | a.ip |  | false | true |
 | etl_monitor.meta_mid_bdp_usr_login_record.province | etl_monitor.bdp_meta_leviathan_t_account_login_record.province | etl_monitor.bdp_meta_leviathan_t_account_login_record<br>etl_monitor.meta_mid_bdp_usr_info | DIRECT | a.province |  | false | true |
@@ -1184,7 +1184,7 @@ where dt = '${bizdate}'
 | dwd.user_feature_wide.user_id | ods.user_feature.user_id | ods.user_feature | DIRECT | user_id |  | false | true |
 | dwd.user_feature_wide.valid_score | ods.user_feature.status<br>ods.user_feature.score | ods.user_feature | DERIVED | case when status = 1 then score else 0 end |  | true | true |
 | dwd.user_feature_wide.rn | ods.user_feature.user_id<br>ods.user_feature.update_time | ods.user_feature | DERIVED | row_number(TOK_WINDOWSPEC(TOK_PARTITIONINGSPEC(TOK_DISTRIBUTEBY(user_id), TOK_ORDERBY(TOK_TABSORTCOLNAMEDESC(TOK_NULLS_FIRST(update_time)))))) | row_number<br>tok_windowspec<br>tok_partitioningspec<br>tok_distributeby<br>tok_orderby<br>tok_tabsortcolnamedesc<br>tok_nulls_first | true | true |
-| dwd.user_feature_wide.user_day_key | ods.user_feature.user_id<br>ods.user_feature.dt | ods.user_feature | DERIVED | concat(TOK_STRING(user_id), '_', dt) | concat<br>tok_string | true | true |
+| dwd.user_feature_wide.user_day_key | ods.user_feature.user_id<br>ods.user_feature.dt | ods.user_feature | DERIVED | concat(cast(user_id as string), '_', dt) | concat<br>cast | true | true |
 | dwd.user_feature_wide.udf_score | ods.user_feature.score<br>ods.user_feature.level_code | ods.user_feature | DERIVED | my_udf(score, level_code) | my_udf | true | true |
 
 #### Warnings
@@ -1269,4 +1269,676 @@ select user_id from ods.user_base
 #### Warnings
 
 _None_
+
+## lineage_case_11.sql
+
+### Test SQL
+
+```sql
+-- 覆盖点：单条 SQL 解析失败仍返回失败结果，后续语句继续解析。
+-- 预期：第一条 insert 进入 failed statement；第二条 insert 仍产生 dwd.parse_recovery_target 的正式血缘。
+insert into dwd.parse_error_target select from;
+
+insert overwrite table dwd.parse_recovery_target(user_id, user_name)
+select user_id, user_name
+from ods.user_base
+where dt = '${bizdate}';
+```
+
+### Parse Summary
+
+| Field | Value |
+| --- | --- |
+| workflowId | wf_generated |
+| taskId | lineage_case_11 |
+| taskVersion | V1 |
+| totalStatementCount | 2 |
+| ignoredStatementCount | 0 |
+| failedStatementCount | 1 |
+
+### Statement 0
+
+```sql
+-- 覆盖点：单条 SQL 解析失败仍返回失败结果，后续语句继续解析。
+-- 预期：第一条 insert 进入 failed statement；第二条 insert 仍产生 dwd.parse_recovery_target 的正式血缘。
+insert into dwd.parse_error_target select from
+```
+
+| Field | Value |
+| --- | --- |
+| statementId | wf_generated_lineage_case_11_V1_0 |
+| statementType | UNKNOWN |
+| parseStatusCode | 2 |
+| formalLineageProduced | false |
+| parseMode | TABLE_AND_COLUMN |
+| outputObject |  |
+| inputObjects |  |
+| skipReason |  |
+| failureCode | SQL_PARSE_ERROR |
+| failureMessage | Unsupported statement |
+
+#### Table Lineage
+
+_None_
+
+#### Column Lineage
+
+_None_
+
+#### Warnings
+
+| Code | Message |
+| --- | --- |
+| UNSUPPORTED_STATEMENT | Unsupported statement |
+
+### Statement 1
+
+```sql
+insert overwrite table dwd.parse_recovery_target(user_id, user_name)
+select user_id, user_name
+from ods.user_base
+where dt = '${bizdate}'
+```
+
+| Field | Value |
+| --- | --- |
+| statementId | wf_generated_lineage_case_11_V1_1 |
+| statementType | INSERT_OVERWRITE |
+| parseStatusCode | 0 |
+| formalLineageProduced | true |
+| parseMode | TABLE_AND_COLUMN |
+| outputObject | dwd.parse_recovery_target |
+| inputObjects | ods.user_base |
+| skipReason |  |
+| failureCode |  |
+| failureMessage |  |
+
+#### Table Lineage
+
+| Target | Sources | Operation | Through Temporary Table |
+| --- | --- | --- | --- |
+| dwd.parse_recovery_target | ods.user_base | INSERT_OVERWRITE | false |
+
+#### Column Lineage
+
+| Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| dwd.parse_recovery_target.user_id | ods.user_base.user_id | ods.user_base | DIRECT | user_id |  | false | true |
+| dwd.parse_recovery_target.user_name | ods.user_base.user_name | ods.user_base | DIRECT | user_name |  | false | true |
+
+#### Warnings
+
+| Code | Message |
+| --- | --- |
+| UNRESOLVED_VARIABLE | Unresolved variable ${bizdate} |
+
+## lineage_case_12.sql
+
+### Test SQL
+
+```sql
+-- 覆盖点：目标元数据缺失降级。
+-- 预期：目标表 dwd.metadata_missing_target 不加入 mock metastore；表血缘保留，字段血缘用 select item 降级推断，并输出 METADATA_NOT_FOUND warning。
+insert overwrite table dwd.metadata_missing_target
+select user_id, user_name
+from ods.user_base
+where dt = '${bizdate}';
+```
+
+### Parse Summary
+
+| Field | Value |
+| --- | --- |
+| workflowId | wf_generated |
+| taskId | lineage_case_12 |
+| taskVersion | V1 |
+| totalStatementCount | 1 |
+| ignoredStatementCount | 0 |
+| failedStatementCount | 0 |
+
+### Statement 0
+
+```sql
+-- 覆盖点：目标元数据缺失降级。
+-- 预期：目标表 dwd.metadata_missing_target 不加入 mock metastore；表血缘保留，字段血缘用 select item 降级推断，并输出 METADATA_NOT_FOUND warning。
+insert overwrite table dwd.metadata_missing_target
+select user_id, user_name
+from ods.user_base
+where dt = '${bizdate}'
+```
+
+| Field | Value |
+| --- | --- |
+| statementId | wf_generated_lineage_case_12_V1_0 |
+| statementType | INSERT_OVERWRITE |
+| parseStatusCode | 0 |
+| formalLineageProduced | true |
+| parseMode | TABLE_AND_COLUMN |
+| outputObject | dwd.metadata_missing_target |
+| inputObjects | ods.user_base |
+| skipReason |  |
+| failureCode |  |
+| failureMessage |  |
+
+#### Table Lineage
+
+| Target | Sources | Operation | Through Temporary Table |
+| --- | --- | --- | --- |
+| dwd.metadata_missing_target | ods.user_base | INSERT_OVERWRITE | false |
+
+#### Column Lineage
+
+| Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| dwd.metadata_missing_target.user_id | ods.user_base.user_id | ods.user_base | DIRECT | user_id |  | false | true |
+| dwd.metadata_missing_target.user_name | ods.user_base.user_name | ods.user_base | DIRECT | user_name |  | false | true |
+
+#### Warnings
+
+| Code | Message |
+| --- | --- |
+| UNRESOLVED_VARIABLE | Unresolved variable ${bizdate} |
+| METADATA_NOT_FOUND | Metadata not found for dwd.metadata_missing_target |
+
+## lineage_case_13.sql
+
+### Test SQL
+
+```sql
+-- 覆盖点：临时表优先于同名 metastore 表/视图。
+-- 预期：tmp_shadow_user 在 metastore 中也存在为视图；后续 insert 应使用本脚本 create temporary table 的 ods.user_base 血缘，而不是 metastore 视图定义。
+create temporary table tmp_shadow_user as
+select
+       user_id
+      ,user_name
+from ods.user_base
+where dt = '${bizdate}';
+
+insert overwrite table dwd.temp_shadow_target(user_id, user_name)
+select
+       user_id
+      ,user_name
+from tmp_shadow_user;
+```
+
+### Parse Summary
+
+| Field | Value |
+| --- | --- |
+| workflowId | wf_generated |
+| taskId | lineage_case_13 |
+| taskVersion | V1 |
+| totalStatementCount | 2 |
+| ignoredStatementCount | 0 |
+| failedStatementCount | 0 |
+
+### Statement 0
+
+```sql
+-- 覆盖点：临时表优先于同名 metastore 表/视图。
+-- 预期：tmp_shadow_user 在 metastore 中也存在为视图；后续 insert 应使用本脚本 create temporary table 的 ods.user_base 血缘，而不是 metastore 视图定义。
+create temporary table tmp_shadow_user as
+select
+       user_id
+      ,user_name
+from ods.user_base
+where dt = '${bizdate}'
+```
+
+| Field | Value |
+| --- | --- |
+| statementId | wf_generated_lineage_case_13_V1_0 |
+| statementType | CREATE_TEMPORARY_TABLE_AS_SELECT |
+| parseStatusCode | 0 |
+| formalLineageProduced | true |
+| parseMode | TABLE_AND_COLUMN |
+| outputObject | tmp_shadow_user |
+| inputObjects | ods.user_base |
+| skipReason |  |
+| failureCode |  |
+| failureMessage |  |
+
+#### Table Lineage
+
+| Target | Sources | Operation | Through Temporary Table |
+| --- | --- | --- | --- |
+| tmp_shadow_user | ods.user_base | CREATE_TEMPORARY_TABLE_AS_SELECT | false |
+
+#### Column Lineage
+
+| Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| tmp_shadow_user.user_id | ods.user_base.user_id | ods.user_base | DIRECT | user_id |  | false | true |
+| tmp_shadow_user.user_name | ods.user_base.user_name | ods.user_base | DIRECT | user_name |  | false | true |
+
+#### Warnings
+
+| Code | Message |
+| --- | --- |
+| UNRESOLVED_VARIABLE | Unresolved variable ${bizdate} |
+
+### Statement 1
+
+```sql
+insert overwrite table dwd.temp_shadow_target(user_id, user_name)
+select
+       user_id
+      ,user_name
+from tmp_shadow_user
+```
+
+| Field | Value |
+| --- | --- |
+| statementId | wf_generated_lineage_case_13_V1_1 |
+| statementType | INSERT_OVERWRITE |
+| parseStatusCode | 0 |
+| formalLineageProduced | true |
+| parseMode | TABLE_AND_COLUMN |
+| outputObject | dwd.temp_shadow_target |
+| inputObjects | ods.user_base |
+| skipReason |  |
+| failureCode |  |
+| failureMessage |  |
+
+#### Table Lineage
+
+| Target | Sources | Operation | Through Temporary Table |
+| --- | --- | --- | --- |
+| dwd.temp_shadow_target | ods.user_base | INSERT_OVERWRITE | true |
+
+#### Column Lineage
+
+| Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| dwd.temp_shadow_target.user_id | ods.user_base.user_id | ods.user_base | DIRECT | user_id |  | false | true |
+| dwd.temp_shadow_target.user_name | ods.user_base.user_name | ods.user_base | DIRECT | user_name |  | false | true |
+
+#### Warnings
+
+_None_
+
+## lineage_case_14.sql
+
+### Test SQL
+
+```sql
+-- 覆盖点：inline FROM 子查询、聚合表达式和子查询别名字段回溯。
+-- 预期：dwd.inline_subquery_target 的 user_id 来源 ods.order_detail.user_id；order_cnt 来源 count(*) 表达式。
+insert overwrite table dwd.inline_subquery_target(user_id, order_cnt)
+select
+       x.user_id
+      ,x.order_cnt
+from (
+    select
+           user_id
+          ,count(*) as order_cnt
+    from ods.order_detail
+    where pay_status = 'PAID'
+    group by user_id
+) x
+where x.order_cnt > 0;
+```
+
+### Parse Summary
+
+| Field | Value |
+| --- | --- |
+| workflowId | wf_generated |
+| taskId | lineage_case_14 |
+| taskVersion | V1 |
+| totalStatementCount | 1 |
+| ignoredStatementCount | 0 |
+| failedStatementCount | 0 |
+
+### Statement 0
+
+```sql
+-- 覆盖点：inline FROM 子查询、聚合表达式和子查询别名字段回溯。
+-- 预期：dwd.inline_subquery_target 的 user_id 来源 ods.order_detail.user_id；order_cnt 来源 count(*) 表达式。
+insert overwrite table dwd.inline_subquery_target(user_id, order_cnt)
+select
+       x.user_id
+      ,x.order_cnt
+from (
+    select
+           user_id
+          ,count(*) as order_cnt
+    from ods.order_detail
+    where pay_status = 'PAID'
+    group by user_id
+) x
+where x.order_cnt > 0
+```
+
+| Field | Value |
+| --- | --- |
+| statementId | wf_generated_lineage_case_14_V1_0 |
+| statementType | INSERT_OVERWRITE |
+| parseStatusCode | 0 |
+| formalLineageProduced | true |
+| parseMode | TABLE_AND_COLUMN |
+| outputObject | dwd.inline_subquery_target |
+| inputObjects | ods.order_detail |
+| skipReason |  |
+| failureCode |  |
+| failureMessage |  |
+
+#### Table Lineage
+
+| Target | Sources | Operation | Through Temporary Table |
+| --- | --- | --- | --- |
+| dwd.inline_subquery_target | ods.order_detail | INSERT_OVERWRITE | false |
+
+#### Column Lineage
+
+| Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| dwd.inline_subquery_target.user_id | ods.order_detail.user_id | ods.order_detail | DIRECT | user_id |  | false | true |
+| dwd.inline_subquery_target.order_cnt |  | ods.order_detail | DERIVED | count(*) | count | true | true |
+
+#### Warnings
+
+_None_
+
+## lineage_case_15.sql
+
+### Test SQL
+
+```sql
+-- 覆盖点：where exists 子查询输入表。
+-- 预期：主查询来源 ods.user_base；exists 子查询中的 ods.order_detail 也进入 inputObjects/table lineage source。
+insert overwrite table dwd.exists_filter_target(user_id, user_name)
+select
+       u.user_id
+      ,u.user_name
+from ods.user_base u
+where exists (
+    select 1
+    from ods.order_detail o
+    where o.user_id = u.user_id
+      and o.pay_status = 'PAID'
+);
+```
+
+### Parse Summary
+
+| Field | Value |
+| --- | --- |
+| workflowId | wf_generated |
+| taskId | lineage_case_15 |
+| taskVersion | V1 |
+| totalStatementCount | 1 |
+| ignoredStatementCount | 0 |
+| failedStatementCount | 0 |
+
+### Statement 0
+
+```sql
+-- 覆盖点：where exists 子查询输入表。
+-- 预期：主查询来源 ods.user_base；exists 子查询中的 ods.order_detail 也进入 inputObjects/table lineage source。
+insert overwrite table dwd.exists_filter_target(user_id, user_name)
+select
+       u.user_id
+      ,u.user_name
+from ods.user_base u
+where exists (
+    select 1
+    from ods.order_detail o
+    where o.user_id = u.user_id
+      and o.pay_status = 'PAID'
+)
+```
+
+| Field | Value |
+| --- | --- |
+| statementId | wf_generated_lineage_case_15_V1_0 |
+| statementType | INSERT_OVERWRITE |
+| parseStatusCode | 0 |
+| formalLineageProduced | true |
+| parseMode | TABLE_AND_COLUMN |
+| outputObject | dwd.exists_filter_target |
+| inputObjects | ods.user_base<br>ods.order_detail |
+| skipReason |  |
+| failureCode |  |
+| failureMessage |  |
+
+#### Table Lineage
+
+| Target | Sources | Operation | Through Temporary Table |
+| --- | --- | --- | --- |
+| dwd.exists_filter_target | ods.user_base<br>ods.order_detail | INSERT_OVERWRITE | false |
+
+#### Column Lineage
+
+| Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| dwd.exists_filter_target.user_id | ods.user_base.user_id | ods.user_base<br>ods.order_detail | DIRECT | u.user_id |  | false | true |
+| dwd.exists_filter_target.user_name | ods.user_base.user_name | ods.user_base<br>ods.order_detail | DIRECT | u.user_name |  | false | true |
+
+#### Warnings
+
+_None_
+
+## lineage_case_16.sql
+
+### Test SQL
+
+```sql
+-- 覆盖点：left semi join 和 full outer join。
+-- 预期：left semi join 保留过滤表 ods.order_detail；full outer join 同时保留左右两侧来源表。
+insert overwrite table dwd.semi_join_target(user_id, user_name)
+select
+       u.user_id
+      ,u.user_name
+from ods.user_base u
+left semi join ods.order_detail o
+on u.user_id = o.user_id
+and o.pay_status = 'PAID';
+
+insert overwrite table dwd.full_outer_join_target(user_id, profile_name, feature_status)
+select
+       coalesce(u.user_id, f.user_id) as user_id
+      ,u.user_name as profile_name
+      ,f.status as feature_status
+from ods.user_base u
+full outer join ods.user_feature f
+on u.user_id = f.user_id
+and f.dt = '${bizdate}';
+```
+
+### Parse Summary
+
+| Field | Value |
+| --- | --- |
+| workflowId | wf_generated |
+| taskId | lineage_case_16 |
+| taskVersion | V1 |
+| totalStatementCount | 2 |
+| ignoredStatementCount | 0 |
+| failedStatementCount | 0 |
+
+### Statement 0
+
+```sql
+-- 覆盖点：left semi join 和 full outer join。
+-- 预期：left semi join 保留过滤表 ods.order_detail；full outer join 同时保留左右两侧来源表。
+insert overwrite table dwd.semi_join_target(user_id, user_name)
+select
+       u.user_id
+      ,u.user_name
+from ods.user_base u
+left semi join ods.order_detail o
+on u.user_id = o.user_id
+and o.pay_status = 'PAID'
+```
+
+| Field | Value |
+| --- | --- |
+| statementId | wf_generated_lineage_case_16_V1_0 |
+| statementType | INSERT_OVERWRITE |
+| parseStatusCode | 0 |
+| formalLineageProduced | true |
+| parseMode | TABLE_AND_COLUMN |
+| outputObject | dwd.semi_join_target |
+| inputObjects | ods.user_base<br>ods.order_detail |
+| skipReason |  |
+| failureCode |  |
+| failureMessage |  |
+
+#### Table Lineage
+
+| Target | Sources | Operation | Through Temporary Table |
+| --- | --- | --- | --- |
+| dwd.semi_join_target | ods.user_base<br>ods.order_detail | INSERT_OVERWRITE | false |
+
+#### Column Lineage
+
+| Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| dwd.semi_join_target.user_id | ods.user_base.user_id | ods.user_base<br>ods.order_detail | DIRECT | u.user_id |  | false | true |
+| dwd.semi_join_target.user_name | ods.user_base.user_name | ods.user_base<br>ods.order_detail | DIRECT | u.user_name |  | false | true |
+
+#### Warnings
+
+_None_
+
+### Statement 1
+
+```sql
+insert overwrite table dwd.full_outer_join_target(user_id, profile_name, feature_status)
+select
+       coalesce(u.user_id, f.user_id) as user_id
+      ,u.user_name as profile_name
+      ,f.status as feature_status
+from ods.user_base u
+full outer join ods.user_feature f
+on u.user_id = f.user_id
+and f.dt = '${bizdate}'
+```
+
+| Field | Value |
+| --- | --- |
+| statementId | wf_generated_lineage_case_16_V1_1 |
+| statementType | INSERT_OVERWRITE |
+| parseStatusCode | 0 |
+| formalLineageProduced | true |
+| parseMode | TABLE_AND_COLUMN |
+| outputObject | dwd.full_outer_join_target |
+| inputObjects | ods.user_base<br>ods.user_feature |
+| skipReason |  |
+| failureCode |  |
+| failureMessage |  |
+
+#### Table Lineage
+
+| Target | Sources | Operation | Through Temporary Table |
+| --- | --- | --- | --- |
+| dwd.full_outer_join_target | ods.user_base<br>ods.user_feature | INSERT_OVERWRITE | false |
+
+#### Column Lineage
+
+| Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| dwd.full_outer_join_target.user_id | ods.user_base.user_id<br>ods.user_feature.user_id | ods.user_base<br>ods.user_feature | DERIVED | coalesce(u.user_id, f.user_id) | coalesce | true | true |
+| dwd.full_outer_join_target.profile_name | ods.user_base.user_name | ods.user_base<br>ods.user_feature | DIRECT | u.user_name |  | false | true |
+| dwd.full_outer_join_target.feature_status | ods.user_feature.status | ods.user_base<br>ods.user_feature | DIRECT | f.status |  | false | true |
+
+#### Warnings
+
+| Code | Message |
+| --- | --- |
+| UNRESOLVED_VARIABLE | Unresolved variable ${bizdate} |
+
+## lineage_case_17.sql
+
+### Test SQL
+
+```sql
+-- 覆盖点：union 非 union all、复杂类型字段和复杂表达式。
+-- 预期：plain union 两个分支都进入字段来源；tags[0]、concat/size 等复杂表达式尽量提取来源字段。
+insert overwrite table dwd.union_distinct_complex_target(user_id, label, tag_head, tag_count)
+select
+       user_id
+      ,concat('base:', user_name) as label
+      ,tags[0] as tag_head
+      ,size(tags) as tag_count
+from ods.user_base
+where dt = '${bizdate}'
+union
+select
+       user_id
+      ,concat('feature:', cast(score as string)) as label
+      ,level_code as tag_head
+      ,cast(score as int) as tag_count
+from ods.user_feature
+where dt = '${bizdate}';
+```
+
+### Parse Summary
+
+| Field | Value |
+| --- | --- |
+| workflowId | wf_generated |
+| taskId | lineage_case_17 |
+| taskVersion | V1 |
+| totalStatementCount | 1 |
+| ignoredStatementCount | 0 |
+| failedStatementCount | 0 |
+
+### Statement 0
+
+```sql
+-- 覆盖点：union 非 union all、复杂类型字段和复杂表达式。
+-- 预期：plain union 两个分支都进入字段来源；tags[0]、concat/size 等复杂表达式尽量提取来源字段。
+insert overwrite table dwd.union_distinct_complex_target(user_id, label, tag_head, tag_count)
+select
+       user_id
+      ,concat('base:', user_name) as label
+      ,tags[0] as tag_head
+      ,size(tags) as tag_count
+from ods.user_base
+where dt = '${bizdate}'
+union
+select
+       user_id
+      ,concat('feature:', cast(score as string)) as label
+      ,level_code as tag_head
+      ,cast(score as int) as tag_count
+from ods.user_feature
+where dt = '${bizdate}'
+```
+
+| Field | Value |
+| --- | --- |
+| statementId | wf_generated_lineage_case_17_V1_0 |
+| statementType | INSERT_OVERWRITE |
+| parseStatusCode | 0 |
+| formalLineageProduced | true |
+| parseMode | TABLE_AND_COLUMN |
+| outputObject | dwd.union_distinct_complex_target |
+| inputObjects | ods.user_base<br>ods.user_feature |
+| skipReason |  |
+| failureCode |  |
+| failureMessage |  |
+
+#### Table Lineage
+
+| Target | Sources | Operation | Through Temporary Table |
+| --- | --- | --- | --- |
+| dwd.union_distinct_complex_target | ods.user_base<br>ods.user_feature | INSERT_OVERWRITE | false |
+
+#### Column Lineage
+
+| Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| dwd.union_distinct_complex_target.user_id | ods.user_base.user_id<br>ods.user_feature.user_id | ods.user_base<br>ods.user_feature | DERIVED | union_all(ods.user_base.user_id, ods.user_feature.user_id) | union_all | true | true |
+| dwd.union_distinct_complex_target.label | ods.user_base.user_name<br>ods.user_feature.score | ods.user_base<br>ods.user_feature | DERIVED | union_all(concat('base:', user_name), concat('feature:', cast(score as string))) | union_all<br>concat<br>concat<br>cast | true | true |
+| dwd.union_distinct_complex_target.tag_head | ods.user_base.tags<br>ods.user_feature.level_code | ods.user_base<br>ods.user_feature | DERIVED | union_all(tags[0], ods.user_feature.level_code) | union_all | true | true |
+| dwd.union_distinct_complex_target.tag_count | ods.user_base.tags<br>ods.user_feature.score | ods.user_base<br>ods.user_feature | DERIVED | union_all(size(tags), cast(score as int)) | union_all<br>size<br>cast | true | true |
+
+#### Warnings
+
+| Code | Message |
+| --- | --- |
+| UNRESOLVED_VARIABLE | Unresolved variable ${bizdate} |
 

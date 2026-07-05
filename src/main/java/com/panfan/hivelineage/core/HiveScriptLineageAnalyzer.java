@@ -361,6 +361,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             boolean setOperationQuery = isSetOperationQuery(normalizedStatement);
             for (int i = 0; i < selectItems.size(); i++) {
                 String expression = stripAlias(selectItems.get(i));
+                String sourceExtractionExpression = expression;
                 String lineageExpression = setOperationQuery
                     ? setOperationExpression(resolvedParsedStatement, i)
                     : normalizeLineageExpression(expression);
@@ -388,6 +389,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                     String aliasExpression = directColumnAliasExpression(expression, resolvedParsedStatement.getColumnAliasExpressions());
                     if (aliasExpression != null) {
                         lineageExpression = aliasExpression;
+                        sourceExtractionExpression = aliasExpression;
                     }
                 }
                 if (sourceColumns.isEmpty() && setOperationQuery) {
@@ -395,7 +397,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 }
                 if (sourceColumns.isEmpty() && directProjection == null && !isConstantLineageExpression(lineageExpression)) {
                     sourceColumns = extractSourceColumns(
-                        expression,
+                        sourceExtractionExpression,
                         defaultColumnSourceTable,
                         sourceAliases,
                         columnOwners,
@@ -405,11 +407,11 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 if (directProjection == null) {
                     sourceColumns = expandViewSourceColumns(request, sourceColumns, viewColumnLineageCache, 0, new LinkedHashSet<String>(), statementWarnings, index);
                 }
-                if (sourceColumns.isEmpty() && mayContainColumnReference(expression)) {
-                    addWarning(statementWarnings, WarningCode.UNKNOWN_COLUMN_LINEAGE, "Unable to resolve source columns for expression: " + expression, index);
+                if (sourceColumns.isEmpty() && mayContainColumnReference(sourceExtractionExpression)) {
+                    addWarning(statementWarnings, WarningCode.UNKNOWN_COLUMN_LINEAGE, "Unable to resolve source columns for expression: " + sourceExtractionExpression, index);
                 }
                 LineageType lineageType = directProjection == null
-                    ? resolveLineageType(lineageExpression, expression, sourceColumns)
+                    ? resolveLineageType(lineageExpression, sourceExtractionExpression, sourceColumns)
                     : directProjection.getLineageType();
                 columnLineages.add(new ColumnLineage(
                     new ColumnRef(targetTable + "." + targetColumns.get(i)),
@@ -1482,8 +1484,11 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
 
     private String directColumnAliasExpression(String expression, Map<String, String> columnAliasExpressions) {
         DirectColumn directColumn = parseDirectColumn(expression);
-        if (directColumn == null || directColumn.getOwner() != null) {
+        if (directColumn == null) {
             return null;
+        }
+        if (directColumn.getOwner() != null) {
+            return columnAliasExpressions.get((directColumn.getOwner() + "." + directColumn.getColumn()).toLowerCase(Locale.ROOT));
         }
         return columnAliasExpressions.get(directColumn.getColumn().toLowerCase(Locale.ROOT));
     }
@@ -1540,20 +1545,40 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     }
 
     private String stripAlias(String selectItem) {
-        String alias = extractAlias(selectItem);
-        if (alias == null) {
+        int asIndex = topLevelAsIndex(selectItem);
+        if (asIndex < 0) {
             return selectItem.trim();
         }
-        return selectItem.substring(0, selectItem.toLowerCase(Locale.ROOT).lastIndexOf(" as ")).trim();
+        return selectItem.substring(0, asIndex).trim();
     }
 
     private String extractAlias(String selectItem) {
-        String lower = selectItem.toLowerCase(Locale.ROOT);
-        int asIndex = lower.lastIndexOf(" as ");
+        int asIndex = topLevelAsIndex(selectItem);
         if (asIndex < 0) {
             return null;
         }
         return selectItem.substring(asIndex + 4).trim();
+    }
+
+    private int topLevelAsIndex(String selectItem) {
+        String lower = selectItem.toLowerCase(Locale.ROOT);
+        int depth = 0;
+        int found = -1;
+        for (int i = 0; i <= lower.length() - 4; i++) {
+            char ch = lower.charAt(i);
+            if (ch == '(') {
+                depth++;
+                continue;
+            }
+            if (ch == ')') {
+                depth = Math.max(0, depth - 1);
+                continue;
+            }
+            if (depth == 0 && lower.startsWith(" as ", i)) {
+                found = i;
+            }
+        }
+        return found;
     }
 
     private boolean isDirectExpression(String expression) {
@@ -1637,7 +1662,13 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 String owner = columnOwners.get(first.toLowerCase(Locale.ROOT));
                 columns.add((owner == null ? defaultSourceTable : owner) + "." + first);
             } else {
-                String owner = sourceAliases.get(first.toLowerCase(Locale.ROOT));
+                String alias = first.toLowerCase(Locale.ROOT);
+                String mappedSource = columnAliasSources.get((alias + "." + second).toLowerCase(Locale.ROOT));
+                if (mappedSource != null) {
+                    addMappedColumn(columns, mappedSource, defaultSourceTable, sourceAliases);
+                    continue;
+                }
+                String owner = sourceAliases.get(alias);
                 columns.add((owner == null ? first : owner) + "." + second);
             }
         }
@@ -1757,7 +1788,12 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     }
 
     private boolean isKeyword(String token) {
-        return Arrays.asList("case", "when", "then", "else", "end", "as", "null", "true", "false").contains(token.toLowerCase(Locale.ROOT));
+        return Arrays.asList(
+            "case", "when", "then", "else", "end", "as", "null", "true", "false",
+            "tinyint", "smallint", "int", "integer", "bigint", "float", "double", "decimal",
+            "string", "char", "varchar", "boolean", "binary", "date", "timestamp",
+            "array", "map", "struct", "uniontype"
+        ).contains(token.toLowerCase(Locale.ROOT));
     }
 
     private boolean isAliasKeyword(String token) {

@@ -21,9 +21,9 @@ public class GeneratedSqlTestSetTest {
     public void generatedSqlTestSetsParseWithoutFailure() throws Exception {
         Path generatedDir = Paths.get("src/test/resources/hql/generated");
         List<Path> sqlFiles = listSqlFiles(generatedDir);
-        TestSupport.assertTrue(sqlFiles.size() >= 11, "generated sql file count");
+        TestSupport.assertTrue(sqlFiles.size() >= 18, "generated sql file count");
         assertContainsFile(sqlFiles, "core_lineage_cases.sql");
-        for (int i = 1; i <= 10; i++) {
+        for (int i = 1; i <= 17; i++) {
             assertContainsFile(sqlFiles, String.format("lineage_case_%02d.sql", i));
         }
 
@@ -49,7 +49,11 @@ public class GeneratedSqlTestSetTest {
                     .build())
                 .build());
 
-            TestSupport.assertEquals(0, result.getFailedStatementCount(), "failed count for " + sqlFile + describeFailures(result));
+            if ("lineage_case_11.sql".equals(sqlFile.getFileName().toString())) {
+                assertParseFailureRecovery(sqlFile, result);
+            } else {
+                TestSupport.assertEquals(0, result.getFailedStatementCount(), "failed count for " + sqlFile + describeFailures(result));
+            }
         }
     }
 
@@ -106,6 +110,13 @@ public class GeneratedSqlTestSetTest {
             .addTable("dwd.user_feature_wide", "user_id", "valid_score", "rn", "user_day_key", "udf_score")
             .addTable("dwd.ignore_me", "id", "name")
             .addTable("dwd.parse_error_target", "user_id")
+            .addTable("dwd.parse_recovery_target", "user_id", "user_name")
+            .addTable("dwd.temp_shadow_target", "user_id", "user_name")
+            .addTable("dwd.inline_subquery_target", "user_id", "order_cnt")
+            .addTable("dwd.exists_filter_target", "user_id", "user_name")
+            .addTable("dwd.semi_join_target", "user_id", "user_name")
+            .addTable("dwd.full_outer_join_target", "user_id", "profile_name", "feature_status")
+            .addTable("dwd.union_distinct_complex_target", "user_id", "label", "tag_head", "tag_count")
             .addTable("etl_monitor.meta_mid_bdp_usr_login_record", "domain", "bbk_name", "dept_ful_nm", "user_id", "user_name", "emp_name", "login_time", "os_type", "ip", "province", "city", "mobile_id", "dw_upd_tm")
             .addTable("etl_monitor.bdp_meta_leviathan_t_account_login_record", "user_id", "login_time", "os_type", "ip", "province", "city", "mobile_id")
             .addTable("etl_monitor.meta_mid_bdp_usr_info", "domain", "bbk_name", "dept_ful_nm", "user_id", "user_name", "emp_name", "role")
@@ -115,6 +126,12 @@ public class GeneratedSqlTestSetTest {
             .addTable("etl_monitor.bdp_meta_mcmeta_online_project", "proj_id", "name")
             .addTable("etl_monitor.bdp_meta_leviathan_t_account", "user_id", "name")
             .addTable("etl_monitor.meta_mid_bdp_grp_usr_map", "domain", "bbk_name", "dept_ful_nm", "user_id", "user_name", "emp_name", "role", "group_id")
+            .addView(
+                "default.tmp_shadow_user",
+                "select id as user_id, name as user_name from ods.union_source_a",
+                "user_id",
+                "user_name"
+            )
             .addView(
                 "dim.v_user_base",
                 "select user_id, concat(first_name, last_name) as user_name from ods.user_base",
@@ -149,6 +166,14 @@ public class GeneratedSqlTestSetTest {
             }
         }
         throw new AssertionError("Expected generated SQL file " + fileName);
+    }
+
+    private static void assertParseFailureRecovery(Path sqlFile, LineageAnalyzeResult result) {
+        TestSupport.assertEquals(1, result.getFailedStatementCount(), "failed count for " + sqlFile + describeFailures(result));
+        TestSupport.assertEquals(2, result.getStatements().size(), "returned statement count for " + sqlFile);
+        TestSupport.assertEquals(2, result.getStatements().get(0).getParseStatusCode(), "first statement failed for " + sqlFile);
+        TestSupport.assertEquals(0, result.getStatements().get(1).getParseStatusCode(), "second statement recovered for " + sqlFile);
+        TestSupport.assertEquals("dwd.parse_recovery_target", result.getStatements().get(1).getOutputObject().getQualifiedName(), "recovered target for " + sqlFile);
     }
 
     private static String describeFailures(LineageAnalyzeResult result) {

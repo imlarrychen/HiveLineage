@@ -1,6 +1,6 @@
 # Generated Hive Lineage SQL Test Metadata
 
-这份文件配合 `lineage_case_01.sql` 到 `lineage_case_10.sql` 使用。SQL 文件本身不依赖真实 MySQL 必须在线；自动化测试可以用 mock `HiveMetadataProvider` 加载下面的字段清单。若要走 MySQL，可按“推荐元数据清单”插入 `metadata_column_v2`，并按“视图元数据插入建议”插入 `hive_view_parse_info`。
+这份文件配合 `lineage_case_01.sql` 到 `lineage_case_17.sql` 使用。SQL 文件本身不依赖真实 MySQL 必须在线；自动化测试可以用 mock `HiveMetadataProvider` 加载下面的字段清单。若要走 MySQL，可按“推荐元数据清单”插入 `metadata_column_v2`，并按“视图元数据插入建议”插入 `hive_view_parse_info`。
 
 ## 覆盖矩阵
 
@@ -16,6 +16,13 @@
 | `lineage_case_08.sql` | 静态分区、动态分区、lateral view explode、explode 输出别名回溯 |
 | `lineage_case_09.sql` | 窗口函数、case when、cast、concat、未知 UDF 降级 |
 | `lineage_case_10.sql` | use、普通 DDL、纯 select、insert values、insert overwrite directory 默认忽略、最终可解析 insert |
+| `lineage_case_11.sql` | 单条解析失败返回失败结果、同脚本后续 insert 继续解析 |
+| `lineage_case_12.sql` | 目标元数据缺失降级、表血缘保留、`METADATA_NOT_FOUND` warning |
+| `lineage_case_13.sql` | create temporary table 与同名 metastore 视图冲突时，临时表血缘优先 |
+| `lineage_case_14.sql` | inline FROM 子查询、聚合字段别名回溯 |
+| `lineage_case_15.sql` | where exists 子查询输入表保留 |
+| `lineage_case_16.sql` | left semi join、full outer join |
+| `lineage_case_17.sql` | plain union、复杂类型字段访问、concat/size/cast 复杂表达式 |
 
 ## 推荐元数据清单
 
@@ -25,6 +32,7 @@
 | --- | --- |
 | `default.test_b` | `b1`, `b2`, `b3`, `dt`, `env` |
 | `default.test_a` | `a1`, `a2`, `ds`, `env_name` |
+| `default.tmp_shadow_user` | `user_id`, `user_name`；作为 VIEW 元数据，用于验证同名临时表优先 |
 
 ### ods
 
@@ -49,12 +57,22 @@
 | `dwd.user_feature_wide` | `user_id`, `valid_score`, `rn`, `user_day_key`, `udf_score` |
 | `dwd.ignore_me` | `id`, `name` |
 | `dwd.parse_error_target` | `user_id` |
+| `dwd.parse_recovery_target` | `user_id`, `user_name` |
+| `dwd.temp_shadow_target` | `user_id`, `user_name` |
+| `dwd.inline_subquery_target` | `user_id`, `order_cnt` |
+| `dwd.exists_filter_target` | `user_id`, `user_name` |
+| `dwd.semi_join_target` | `user_id`, `user_name` |
+| `dwd.full_outer_join_target` | `user_id`, `profile_name`, `feature_status` |
+| `dwd.union_distinct_complex_target` | `user_id`, `label`, `tag_head`, `tag_count` |
+
+有意缺失元数据：`dwd.metadata_missing_target` 不应加入 mock metastore 或 MySQL 测试数据，用于验证目标元数据缺失时仍保留表血缘并输出 warning。
 
 ### dim
 
 | 表/视图 | 类型 | 字段 | 视图定义建议 |
 | --- | --- | --- | --- |
 | `dim.v_user_profile` | VIEW | `user_id`, `user_name`, `dept_name` | `select u.user_id, upper(u.user_name) as user_name, d.dept_name from ods.user_base u left join ods.user_dept d on u.dept_id = d.dept_id where u.status = 1` |
+| `default.tmp_shadow_user` | VIEW | `user_id`, `user_name` | `select id as user_id, name as user_name from ods.union_source_a` |
 
 ### etl_monitor
 

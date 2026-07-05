@@ -50,11 +50,17 @@ final class HiveAstExpressionExtractor {
         if (".".equals(text) && expression.getChildCount() == 2) {
             return unparse((ASTNode) expression.getChild(0)) + "." + stripIdentifier(expression.getChild(1).getText());
         }
+        if ("[".equals(text) && expression.getChildCount() == 2) {
+            return unparse((ASTNode) expression.getChild(0)) + "[" + unparse((ASTNode) expression.getChild(1)) + "]";
+        }
         if (expression.getType() == HiveParser.TOK_FUNCTION && expression.getChildCount() > 0) {
             String functionName = stripIdentifier(expression.getChild(0).getText());
             List<String> args = new ArrayList<>();
             for (int i = 1; i < expression.getChildCount(); i++) {
                 args.add(unparse((ASTNode) expression.getChild(i)));
+            }
+            if (functionName.toUpperCase(Locale.ROOT).startsWith("TOK_") && args.size() == 1) {
+                return "cast(" + args.get(0) + " as " + functionName.substring(4).toLowerCase(Locale.ROOT) + ")";
             }
             if ("when".equalsIgnoreCase(functionName) && args.size() >= 2) {
                 return renderCaseWhen(args);

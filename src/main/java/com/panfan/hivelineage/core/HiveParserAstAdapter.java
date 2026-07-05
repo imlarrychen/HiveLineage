@@ -44,8 +44,8 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
                 targetColumns,
                 selectExpressions,
                 resolveSourceAliases(root, cteAliases),
-                resolveColumnAliasSources(root),
-                resolveColumnAliasExpressions(root),
+                resolveColumnAliasSources(root, cteAliases),
+                resolveColumnAliasExpressions(root, cteAliases),
                 resolveSetOperationSourceColumns(root, cteAliases),
                 resolveSetOperationExpressions(root, cteAliases),
                 resolveStaticPartitionValues(mainInsert),
@@ -439,6 +439,13 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
     }
 
     private Map<String, String> resolveSourceAliases(ASTNode root, Set<String> cteAliases) {
+        Map<String, String> aliases = resolveTableSourceAliases(root, cteAliases);
+        aliases.putAll(resolveCteAliasMappings(root, cteAliases));
+        aliases.putAll(resolveSubqueryAliasMappings(root, cteAliases));
+        return aliases;
+    }
+
+    private Map<String, String> resolveTableSourceAliases(ASTNode root, Set<String> cteAliases) {
         Map<String, String> aliases = new HashMap<>();
         List<ASTNode> tabRefs = astWalker.collect(root, HiveParser.TOK_TABREF);
         for (ASTNode tabRef : tabRefs) {
@@ -457,8 +464,6 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
                 aliases.put(alias, tableName);
             }
         }
-        aliases.putAll(resolveCteAliasMappings(root, cteAliases));
-        aliases.putAll(resolveSubqueryAliasMappings(root, cteAliases));
         return aliases;
     }
 
@@ -499,7 +504,7 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
         return values;
     }
 
-    private Map<String, String> resolveColumnAliasSources(ASTNode root) {
+    private Map<String, String> resolveColumnAliasSources(ASTNode root, Set<String> cteAliases) {
         Map<String, String> aliases = new HashMap<>();
         List<ASTNode> lateralViews = astWalker.collect(root, HiveParser.TOK_LATERAL_VIEW);
         for (ASTNode lateralView : lateralViews) {
@@ -525,10 +530,11 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
                 }
             }
         }
+        aliases.putAll(resolveSubqueryColumnAliasSources(root, cteAliases));
         return aliases;
     }
 
-    private Map<String, String> resolveColumnAliasExpressions(ASTNode root) {
+    private Map<String, String> resolveColumnAliasExpressions(ASTNode root, Set<String> cteAliases) {
         Map<String, String> aliases = new HashMap<>();
         List<ASTNode> lateralViews = astWalker.collect(root, HiveParser.TOK_LATERAL_VIEW);
         for (ASTNode lateralView : lateralViews) {
@@ -550,7 +556,71 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
                 }
             }
         }
+        aliases.putAll(resolveSubqueryColumnAliasExpressions(root, cteAliases));
         return aliases;
+    }
+
+    private Map<String, String> resolveSubqueryColumnAliasSources(ASTNode root, Set<String> cteAliases) {
+        Map<String, String> aliases = new HashMap<>();
+        for (SubqueryColumnProjection projection : resolveSubqueryColumnProjections(root, cteAliases)) {
+            if (projection.getSourceColumn() == null) {
+                continue;
+            }
+            aliases.put(projection.getColumnName(), projection.getSourceColumn());
+            aliases.put(projection.getQualifiedColumnName(), projection.getSourceColumn());
+        }
+        return aliases;
+    }
+
+    private Map<String, String> resolveSubqueryColumnAliasExpressions(ASTNode root, Set<String> cteAliases) {
+        Map<String, String> aliases = new HashMap<>();
+        for (SubqueryColumnProjection projection : resolveSubqueryColumnProjections(root, cteAliases)) {
+            aliases.put(projection.getColumnName(), projection.getExpression());
+            aliases.put(projection.getQualifiedColumnName(), projection.getExpression());
+        }
+        return aliases;
+    }
+
+    private List<SubqueryColumnProjection> resolveSubqueryColumnProjections(ASTNode root, Set<String> cteAliases) {
+        List<SubqueryColumnProjection> projections = new ArrayList<>();
+        List<ASTNode> subqueries = astWalker.collect(root, HiveParser.TOK_SUBQUERY);
+        for (ASTNode subquery : subqueries) {
+            if (subquery.getChildCount() < 2) {
+                continue;
+            }
+            String alias = stripIdentifier(subquery.getChild(subquery.getChildCount() - 1).getText()).toLowerCase(Locale.ROOT);
+            if (cteAliases.contains(alias)) {
+                continue;
+            }
+            ASTNode queryNode = astWalker.directChild(subquery, HiveParser.TOK_QUERY);
+            ASTNode insertNode = astWalker.directChild(queryNode, HiveParser.TOK_INSERT);
+            ASTNode selectNode = directSelectChild(insertNode);
+            if (selectNode == null) {
+                continue;
+            }
+            Map<String, String> sourceAliases = resolveTableSourceAliases(subquery, cteAliases);
+            String defaultSource = defaultSourceTable(subquery, cteAliases);
+            for (int i = 0; i < selectNode.getChildCount(); i++) {
+                ASTNode selectExpression = (ASTNode) selectNode.getChild(i);
+                if (selectExpression.getType() != HiveParser.TOK_SELEXPR || selectExpression.getChildCount() == 0) {
+                    continue;
+                }
+                ASTNode expressionNode = (ASTNode) selectExpression.getChild(0);
+                String columnName = selectExpression.getChildCount() > 1
+                    ? stripIdentifier(selectExpression.getChild(selectExpression.getChildCount() - 1).getText()).toLowerCase(Locale.ROOT)
+                    : expressionExtractor.inferColumnName(expressionNode).toLowerCase(Locale.ROOT);
+                LinkedHashSet<String> expressionSources = new LinkedHashSet<>();
+                collectExpressionSourceColumns(expressionNode, sourceAliases, defaultSource, expressionSources);
+                String expression = expressionExtractor.unparse(expressionNode);
+                projections.add(new SubqueryColumnProjection(
+                    alias,
+                    columnName,
+                    expression,
+                    expressionSources.isEmpty() || "count(*)".equalsIgnoreCase(expression) ? null : expressionSources.iterator().next()
+                ));
+            }
+        }
+        return projections;
     }
 
     private Map<String, String> resolveCteAliasMappings(ASTNode root, Set<String> cteAliases) {
@@ -651,6 +721,36 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
             return trimmed.substring(1, trimmed.length() - 1);
         }
         return trimmed;
+    }
+
+    private static final class SubqueryColumnProjection {
+        private final String subqueryAlias;
+        private final String columnName;
+        private final String expression;
+        private final String sourceColumn;
+
+        private SubqueryColumnProjection(String subqueryAlias, String columnName, String expression, String sourceColumn) {
+            this.subqueryAlias = subqueryAlias;
+            this.columnName = columnName;
+            this.expression = expression;
+            this.sourceColumn = sourceColumn;
+        }
+
+        private String getColumnName() {
+            return columnName;
+        }
+
+        private String getQualifiedColumnName() {
+            return subqueryAlias + "." + columnName;
+        }
+
+        private String getExpression() {
+            return expression;
+        }
+
+        private String getSourceColumn() {
+            return sourceColumn;
+        }
     }
 
     private String join(List<String> parts) {

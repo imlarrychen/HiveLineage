@@ -54,6 +54,7 @@ public class HiveLineageAnalyzerTest {
         test.selectStarExpandsColumnsFromMetadata();
         test.selectStarAlignsToTargetMetadataWhenSourceHasExtraColumns();
         test.subqueryAliasColumnLineageResolvesToBaseTable();
+        test.subqueryAliasDerivedColumnKeepsProjectionExpression();
         test.metadataCacheExpiresPositiveAndMissingEntries();
         test.missingTargetMetadataEmitsWarningsOnStatementAndAnalyzeResult();
         test.missingViewDefinitionEmitsWarningAndKeepsViewSource();
@@ -64,6 +65,11 @@ public class HiveLineageAnalyzerTest {
         test.viewColumnLineageKeepsDerivedExpressionWhenExpanded();
         test.lateralViewExplodeKeepsTableAndExplodeArgumentColumnLineage();
         test.jdbcMetadataProviderRejectsUnsafeTableName();
+        test.failedStatementDoesNotStopFollowingStatements();
+        test.missingMetadataKeepsTableLineageAndEmitsWarning();
+        test.temporaryTableShadowsSameNameMetastoreView();
+        test.viewExpansionFailureEmitsWarningAndKeepsViewBoundary();
+        test.parseModeAndIgnoredStatementOptionsWorkInMixedScript();
     }
 
     @Test
@@ -1074,6 +1080,39 @@ public class HiveLineageAnalyzerTest {
     }
 
     @Test
+    public void subqueryAliasDerivedColumnKeepsProjectionExpression() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("ods.order_detail", "user_id", "order_id", "amount")
+            .addTable("dwd.inline_subquery_target", "user_id", "order_cnt");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_subquery_projection")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript(
+                "insert overwrite table dwd.inline_subquery_target(user_id, order_cnt) "
+                    + "select x.user_id, x.order_cnt "
+                    + "from (select user_id, count(*) as order_cnt from ods.order_detail group by user_id) x;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+        ColumnLineage orderCount = statement.getColumnLineages().get(1);
+
+        TestSupport.assertEquals("dwd.inline_subquery_target.order_cnt", orderCount.getTargetColumn().getQualifiedName(), "subquery derived target");
+        TestSupport.assertTrue(orderCount.getSourceColumns().isEmpty(), "count star should not invent source column");
+        TestSupport.assertEquals("count(*)", orderCount.getExpression(), "subquery derived expression");
+        TestSupport.assertEquals(LineageType.DERIVED, orderCount.getLineageType(), "subquery derived type");
+    }
+
+    @Test
     public void metadataCacheExpiresPositiveAndMissingEntries() throws Exception {
         TableIdentifier tableIdentifier = TableIdentifier.of("default", "ods", "user_base");
         ExpiringMetadataProvider positiveProvider = new ExpiringMetadataProvider(
@@ -1384,6 +1423,185 @@ public class HiveLineageAnalyzerTest {
                 "unsafe metadata table name error message"
             );
         }
+    }
+
+    @Test
+    public void failedStatementDoesNotStopFollowingStatements() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_parse_recovery")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript(
+                "insert into dwd.parse_error_target select from;\n"
+                    + "insert overwrite table dwd.parse_recovery_target(user_id) select user_id from ods.user_base;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        LineageAnalyzeResult result = analyzer.analyzeScript(request);
+
+        TestSupport.assertEquals(2, result.getTotalStatementCount(), "parse recovery total count");
+        TestSupport.assertEquals(1, result.getFailedStatementCount(), "parse recovery failed count");
+        TestSupport.assertEquals(2, result.getStatements().size(), "parse recovery returned count");
+        TestSupport.assertEquals(2, result.getStatements().get(0).getParseStatusCode(), "first statement failed status");
+        StatementLineageResult recovered = result.getStatements().get(1);
+        TestSupport.assertEquals(0, recovered.getParseStatusCode(), "following statement parse status");
+        TestSupport.assertEquals("dwd.parse_recovery_target", recovered.getOutputObject().getQualifiedName(), "following statement target");
+        assertContainsSource(recovered, "ods.user_base");
+    }
+
+    @Test
+    public void missingMetadataKeepsTableLineageAndEmitsWarning() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("ods.user_base", "user_id", "user_name");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_missing_metadata_fallback")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript("insert overwrite table dwd.metadata_missing_target select user_id, user_name from ods.user_base;")
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        LineageAnalyzeResult result = analyzer.analyzeScript(request);
+        StatementLineageResult statement = result.getStatements().get(0);
+
+        TestSupport.assertEquals(0, statement.getParseStatusCode(), "missing metadata parse status");
+        TestSupport.assertEquals(1, statement.getTableLineages().size(), "missing metadata table lineage count");
+        TestSupport.assertEquals("dwd.metadata_missing_target", statement.getTableLineages().get(0).getTargetObject().getQualifiedName(), "missing metadata target");
+        assertContainsSource(statement, "ods.user_base");
+        assertContainsWarning(statement.getWarnings(), WarningCode.METADATA_NOT_FOUND);
+        assertContainsWarning(result.getWarnings(), WarningCode.METADATA_NOT_FOUND);
+    }
+
+    @Test
+    public void temporaryTableShadowsSameNameMetastoreView() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("ods.user_base", "user_id", "user_name")
+            .addTable("ods.union_source_a", "id", "name")
+            .addTable("dwd.temp_shadow_target", "user_id", "user_name")
+            .addView(
+                "default.tmp_shadow_user",
+                "select id as user_id, name as user_name from ods.union_source_a",
+                "user_id",
+                "user_name"
+            );
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_temp_shadow")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript(
+                "create temporary table tmp_shadow_user as select user_id, user_name from ods.user_base; "
+                    + "insert overwrite table dwd.temp_shadow_target(user_id, user_name) select user_id, user_name from tmp_shadow_user;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .expandViewLineage(true)
+                .includeTemporaryLineage(true)
+                .build())
+            .build();
+
+        LineageAnalyzeResult result = analyzer.analyzeScript(request);
+        StatementLineageResult finalStatement = result.getStatements().get(1);
+
+        assertContainsSource(finalStatement, "ods.user_base");
+        assertNotContainsSource(finalStatement, "ods.union_source_a");
+        TestSupport.assertEquals("ods.user_base.user_id", finalStatement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(), "shadow first column");
+    }
+
+    @Test
+    public void viewExpansionFailureEmitsWarningAndKeepsViewBoundary() {
+        HiveAstParserAdapter delegate = new FallbackHiveAstParserAdapter(new HiveParserAstAdapter(), new HeuristicHiveAstParserAdapter());
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer(new HiveAstParserAdapter() {
+            @Override
+            public ParsedHiveStatement parse(String normalizedSql) {
+                if (normalizedSql.indexOf("bad_view_marker") >= 0) {
+                    throw new IllegalArgumentException("broken view definition");
+                }
+                return delegate.parse(normalizedSql);
+            }
+        });
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addView("dim.v_broken_user", "select bad_view_marker as user_id from ods.user_base", "user_id");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_view_expansion_failed")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript("insert overwrite table dwd.user_profile(user_id) select user_id from dim.v_broken_user;")
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .expandViewLineage(true)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+
+        assertContainsSource(statement, "dim.v_broken_user");
+        assertContainsWarning(statement.getWarnings(), WarningCode.VIEW_EXPANSION_FAILED);
+    }
+
+    @Test
+    public void parseModeAndIgnoredStatementOptionsWorkInMixedScript() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        String script = "set bizdate=20260701;\n"
+            + "select user_id from ods.user_base;\n"
+            + "insert overwrite table dwd.user_profile(user_id) select user_id from ods.user_base;";
+
+        LineageAnalyzeResult tableOnly = analyzer.analyzeScript(LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_mixed_table_only")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript(script)
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_ONLY)
+                .build())
+            .build());
+
+        TestSupport.assertEquals(3, tableOnly.getTotalStatementCount(), "mixed table only total count");
+        TestSupport.assertEquals(2, tableOnly.getIgnoredStatementCount(), "mixed table only ignored count");
+        TestSupport.assertEquals(1, tableOnly.getStatements().size(), "mixed table only returned count");
+        TestSupport.assertEquals(1, tableOnly.getStatements().get(0).getTableLineages().size(), "mixed table only table lineage");
+        TestSupport.assertTrue(tableOnly.getStatements().get(0).getColumnLineages().isEmpty(), "mixed table only column lineage");
+
+        LineageAnalyzeResult columnOnlyWithIgnored = analyzer.analyzeScript(LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_mixed_column_only")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript(script)
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.COLUMN_ONLY)
+                .includeIgnoredStatements(true)
+                .build())
+            .build());
+
+        TestSupport.assertEquals(3, columnOnlyWithIgnored.getStatements().size(), "mixed include ignored returned count");
+        TestSupport.assertEquals(3, columnOnlyWithIgnored.getStatements().get(0).getParseStatusCode(), "mixed set ignored status");
+        TestSupport.assertEquals(3, columnOnlyWithIgnored.getStatements().get(1).getParseStatusCode(), "mixed select ignored status");
+        StatementLineageResult lineageStatement = columnOnlyWithIgnored.getStatements().get(2);
+        TestSupport.assertTrue(lineageStatement.getTableLineages().isEmpty(), "mixed column only table lineage");
+        TestSupport.assertEquals(1, lineageStatement.getColumnLineages().size(), "mixed column only column lineage");
     }
 
     private static String readWorkspaceFile(String path) throws Exception {
