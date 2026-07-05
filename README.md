@@ -142,7 +142,8 @@ LineageAnalyzeResult result = analyzer.analyzeScript(LineageAnalyzeRequest.build
 
 - 普通常量字段不产生源字段，表达式统一记录为 `constant(...)`。例如 `select 't1' as a1` 输出 `sourceColumns = []`、`expression = constant('t1')`、`lineageType = CONSTANT`。
 - 静态分区字段按常量赋值保留在字段血缘结果中，但不产生字段到字段来源。例如 `partition(source_system='profile', dt)` 中 `source_system` 输出为 `constant('profile')`，动态分区 `dt` 则继续对齐 `select` 中的 `dt` 字段。
-- `union all`/集合操作按分支聚合表达式。字段分支示例：`union_all(table1.a1, table2.a2)`；常量分支示例：`union_all(constant('A'), constant('B'))`。
+- 窗口函数表达式应尽量还原为可读 SQL，不输出 Hive AST 内部 token。例如 `row_number() over(partition by user_id order by update_time desc)` 的函数名只记录 `row_number`。
+- 集合操作按分支聚合表达式。`union all` 使用 `union_all(...)`，plain `union` 使用 `union_distinct(...)`。字段分支示例：`union_all(table1.a1, table2.a2)`；常量分支示例：`union_all(constant('A'), constant('B'))`。
 - 字符串字面量、变量兜底后的字面量、日期格式串等不应被识别为来源字段。例如 `'fallback_value'`、`'yyyy/MM/dd'` 只作为表达式内容，不进入 `sourceColumns`。
 
 ## 元数据查询与缓存
@@ -250,8 +251,8 @@ LineageAnalyzeResult result = new HiveScriptLineageAnalyzer().analyzeScript(
 
 集合操作处理：
 
-- `union all` 会按字段位置合并多个分支的来源字段。
-- 字段表达式使用 `union_all(...)` 表示分支聚合，例如 `union_all(ods.a.id, ods.b.id)`。
+- `union all` 和 plain `union` 会按字段位置合并多个分支的来源字段。
+- 字段表达式使用集合函数名表示分支聚合：`union all` 输出 `union_all(...)`，plain `union` 输出 `union_distinct(...)`。
 - 如果分支是常量，使用 `constant(...)` 包裹，例如 `union_all(constant('A'), constant('B'))`。
 
 视图处理：

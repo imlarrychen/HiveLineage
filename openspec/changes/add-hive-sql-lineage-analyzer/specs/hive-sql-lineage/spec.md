@@ -277,6 +277,22 @@ select table2.a2 from table2;
 - **并且** `test_a.a1` 的表达式必须记录为 `union_all(table1.a1, table2.a2)`
 - **并且** `test_a.a1` 的血缘类型必须为 `DERIVED`
 
+#### 场景：Plain Union 分支字段表达式
+
+- **假设** 测试 SQL 为：
+
+```sql
+insert overwrite table test_a(a1)
+select table1.a1 from table1
+union
+select table2.a2 from table2;
+```
+
+- **当** 字段血缘被解析
+- **那么** `test_a.a1` 的源字段必须包含 `table1.a1` 和 `table2.a2`
+- **并且** `test_a.a1` 的表达式必须记录为 `union_distinct(table1.a1, table2.a2)`
+- **并且** `test_a.a1` 的血缘类型必须为 `DERIVED`
+
 #### 场景：Union 分支常量表达式
 
 - **假设** 测试 SQL 为：
@@ -310,6 +326,23 @@ group by user_id;
 - **并且** 解析器必须尝试提取 `total_amount` 的函数名和表达式
 - **并且** 如果函数名提取成功，则 `total_amount` 的函数名集合应包含 `sum`
 - **并且** 如果表达式提取成功，则 `total_amount` 的表达式应记录为 `sum(amount)`，且 `expressionExtracted = true`
+
+#### 场景：窗口函数表达式字段血缘
+
+- **假设** 测试 SQL 为：
+
+```sql
+insert overwrite table test_a(user_id, rn)
+select user_id,
+       row_number() over(partition by user_id order by update_time desc) as rn
+from test_b;
+```
+
+- **当** 字段血缘被解析
+- **那么** `rn` 的源字段必须包含 `user_id` 和 `update_time`
+- **并且** `rn` 的血缘类型必须为 `DERIVED`
+- **并且** `rn` 的表达式必须记录为 `row_number() over(partition by user_id order by update_time desc)`
+- **并且** `rn` 的函数名集合必须只包含真实函数 `row_number`，不得包含 `TOK_WINDOWSPEC`、`TOK_ORDERBY` 等 Hive AST 内部 token
 
 #### 场景：未知 UDF 降级
 

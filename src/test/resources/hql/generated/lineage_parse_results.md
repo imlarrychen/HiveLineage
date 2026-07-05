@@ -1183,7 +1183,7 @@ where dt = '${bizdate}'
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | dwd.user_feature_wide.user_id | ods.user_feature.user_id | ods.user_feature | DIRECT | user_id |  | false | true |
 | dwd.user_feature_wide.valid_score | ods.user_feature.status<br>ods.user_feature.score | ods.user_feature | DERIVED | case when status = 1 then score else 0 end |  | true | true |
-| dwd.user_feature_wide.rn | ods.user_feature.user_id<br>ods.user_feature.update_time | ods.user_feature | DERIVED | row_number(TOK_WINDOWSPEC(TOK_PARTITIONINGSPEC(TOK_DISTRIBUTEBY(user_id), TOK_ORDERBY(TOK_TABSORTCOLNAMEDESC(TOK_NULLS_FIRST(update_time)))))) | row_number<br>tok_windowspec<br>tok_partitioningspec<br>tok_distributeby<br>tok_orderby<br>tok_tabsortcolnamedesc<br>tok_nulls_first | true | true |
+| dwd.user_feature_wide.rn | ods.user_feature.user_id<br>ods.user_feature.update_time | ods.user_feature | DERIVED | row_number() over(partition by user_id order by update_time desc) | row_number | true | true |
 | dwd.user_feature_wide.user_day_key | ods.user_feature.user_id<br>ods.user_feature.dt | ods.user_feature | DERIVED | concat(cast(user_id as string), '_', dt) | concat<br>cast | true | true |
 | dwd.user_feature_wide.udf_score | ods.user_feature.score<br>ods.user_feature.level_code | ods.user_feature | DERIVED | my_udf(score, level_code) | my_udf | true | true |
 
@@ -1931,10 +1931,10 @@ where dt = '${bizdate}'
 
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| dwd.union_distinct_complex_target.user_id | ods.user_base.user_id<br>ods.user_feature.user_id | ods.user_base<br>ods.user_feature | DERIVED | union_all(ods.user_base.user_id, ods.user_feature.user_id) | union_all | true | true |
-| dwd.union_distinct_complex_target.label | ods.user_base.user_name<br>ods.user_feature.score | ods.user_base<br>ods.user_feature | DERIVED | union_all(concat('base:', user_name), concat('feature:', cast(score as string))) | union_all<br>concat<br>concat<br>cast | true | true |
-| dwd.union_distinct_complex_target.tag_head | ods.user_base.tags<br>ods.user_feature.level_code | ods.user_base<br>ods.user_feature | DERIVED | union_all(tags[0], ods.user_feature.level_code) | union_all | true | true |
-| dwd.union_distinct_complex_target.tag_count | ods.user_base.tags<br>ods.user_feature.score | ods.user_base<br>ods.user_feature | DERIVED | union_all(size(tags), cast(score as int)) | union_all<br>size<br>cast | true | true |
+| dwd.union_distinct_complex_target.user_id | ods.user_base.user_id<br>ods.user_feature.user_id | ods.user_base<br>ods.user_feature | DERIVED | union_distinct(ods.user_base.user_id, ods.user_feature.user_id) | union_distinct | true | true |
+| dwd.union_distinct_complex_target.label | ods.user_base.user_name<br>ods.user_feature.score | ods.user_base<br>ods.user_feature | DERIVED | union_distinct(concat('base:', user_name), concat('feature:', cast(score as string))) | union_distinct<br>concat<br>concat<br>cast | true | true |
+| dwd.union_distinct_complex_target.tag_head | ods.user_base.tags<br>ods.user_feature.level_code | ods.user_base<br>ods.user_feature | DERIVED | union_distinct(tags[0], ods.user_feature.level_code) | union_distinct | true | true |
+| dwd.union_distinct_complex_target.tag_count | ods.user_base.tags<br>ods.user_feature.score | ods.user_base<br>ods.user_feature | DERIVED | union_distinct(size(tags), cast(score as int)) | union_distinct<br>size<br>cast | true | true |
 
 #### Warnings
 

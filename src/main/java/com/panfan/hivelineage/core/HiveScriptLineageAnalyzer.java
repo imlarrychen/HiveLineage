@@ -363,7 +363,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 String expression = stripAlias(selectItems.get(i));
                 String sourceExtractionExpression = expression;
                 String lineageExpression = setOperationQuery
-                    ? setOperationExpression(resolvedParsedStatement, i)
+                    ? setOperationExpression(resolvedParsedStatement, normalizedStatement, i)
                     : normalizeLineageExpression(expression);
                 List<ColumnRef> sourceColumns = setOperationQuery
                     ? setOperationSourceColumns(resolvedParsedStatement, i)
@@ -1363,7 +1363,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         return refs;
     }
 
-    private String setOperationExpression(ParsedHiveStatement parsedStatement, int selectIndex) {
+    private String setOperationExpression(ParsedHiveStatement parsedStatement, String normalizedStatement, int selectIndex) {
         List<String> expressions = parsedStatement.getSetOperationExpressionsBySelectIndex().get(selectIndex);
         if (expressions == null || expressions.isEmpty()) {
             return "";
@@ -1371,7 +1371,24 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         if (expressions.size() == 1) {
             return expressions.get(0);
         }
-        return "union_all(" + joinWithComma(expressions) + ")";
+        return setOperationFunctionName(normalizedStatement) + "(" + joinWithComma(expressions) + ")";
+    }
+
+    private String setOperationFunctionName(String normalizedStatement) {
+        String statement = normalizedStatement == null ? "" : normalizedStatement;
+        if (Pattern.compile("(?i)\\bunion\\s+all\\b").matcher(statement).find()) {
+            return "union_all";
+        }
+        if (Pattern.compile("(?i)\\bunion\\b").matcher(statement).find()) {
+            return "union_distinct";
+        }
+        if (Pattern.compile("(?i)\\bintersect\\b").matcher(statement).find()) {
+            return "intersect";
+        }
+        if (Pattern.compile("(?i)\\bexcept\\b").matcher(statement).find()) {
+            return "except";
+        }
+        return "set_operation";
     }
 
     private String joinWithComma(List<String> values) {
@@ -1589,7 +1606,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         if (isConstantLineageExpression(lineageExpression)) {
             return LineageType.CONSTANT;
         }
-        if (lineageExpression != null && lineageExpression.trim().startsWith("union_all(")) {
+        if (lineageExpression != null && isSetOperationLineageExpression(lineageExpression.trim())) {
             return LineageType.DERIVED;
         }
         if (isDirectExpression(rawExpression)
@@ -1613,8 +1630,9 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         if (trimmed.startsWith("constant(")) {
             return true;
         }
-        if (trimmed.startsWith("union_all(") && trimmed.endsWith(")")) {
-            String inner = trimmed.substring("union_all(".length(), trimmed.length() - 1);
+        String setOperationFunction = setOperationLineageFunction(trimmed);
+        if (setOperationFunction != null && trimmed.endsWith(")")) {
+            String inner = trimmed.substring(setOperationFunction.length() + 1, trimmed.length() - 1);
             List<String> parts = splitSelectItems(inner);
             if (parts.isEmpty()) {
                 return false;
@@ -1627,6 +1645,24 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             return true;
         }
         return false;
+    }
+
+    private boolean isSetOperationLineageExpression(String expression) {
+        return setOperationLineageFunction(expression) != null;
+    }
+
+    private String setOperationLineageFunction(String expression) {
+        if (expression == null) {
+            return null;
+        }
+        String trimmed = expression.trim();
+        String[] functions = {"union_all", "union_distinct", "intersect", "except", "set_operation"};
+        for (String function : functions) {
+            if (trimmed.startsWith(function + "(")) {
+                return function;
+            }
+        }
+        return null;
     }
 
     private boolean isLiteralExpression(String expression) {
@@ -1790,6 +1826,9 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     private boolean isKeyword(String token) {
         return Arrays.asList(
             "case", "when", "then", "else", "end", "as", "null", "true", "false",
+            "over", "partition", "by", "order", "asc", "desc", "rows", "range",
+            "between", "preceding", "following", "current", "row", "unbounded",
+            "nulls", "first", "last",
             "tinyint", "smallint", "int", "integer", "bigint", "float", "double", "decimal",
             "string", "char", "varchar", "boolean", "binary", "date", "timestamp",
             "array", "map", "struct", "uniontype"

@@ -423,10 +423,11 @@ test_b.b3            -> test_a.a2, expression: b3,      lineageType: DIRECT
 - `sum(amount) as total_amount`：`sourceColumns = [amount]`，`expression = "sum(amount)"`，`lineageType = DERIVED`，`functionNames = ["sum"]`。
 - `count(*) as cnt`：`sourceColumns = []`，`sourceObjects = [source table]`，`expression = "count(*)"`，`lineageType = DERIVED`，`functionNames = ["count"]`。
 - `case when status = 1 then price else 0 end as valid_price`：`sourceColumns = [status, price]`，`lineageType = DERIVED`，`complexExpression = true`。
-- `row_number() over(partition by user_id order by create_time) as rn`：`sourceColumns = [user_id, create_time]`，`lineageType = DERIVED`，`functionNames = ["row_number"]`。
+- `row_number() over(partition by user_id order by create_time) as rn`：`sourceColumns = [user_id, create_time]`，`expression = "row_number() over(partition by user_id order by create_time)"`，`lineageType = DERIVED`，`functionNames = ["row_number"]`。
 - `'t1' as a1`：`sourceColumns = []`，`expression = "constant('t1')"`，`lineageType = CONSTANT`。
 - `partition(source_system='profile', dt) select user_id, tag, dt ...`：`source_system` 作为 `constant('profile')` 输出，`dt` 对齐 `select` 中的动态分区字段。
 - `select t1.a from t1 union all select t2.b from t2`：`sourceColumns = [t1.a, t2.b]`，`expression = "union_all(t1.a, t2.b)"`，`lineageType = DERIVED`。
+- `select t1.a from t1 union select t2.b from t2`：`sourceColumns = [t1.a, t2.b]`，`expression = "union_distinct(t1.a, t2.b)"`，`lineageType = DERIVED`。
 - `select 'A' from t1 union all select 'B' from t2`：`sourceColumns = []`，`expression = "union_all(constant('A'), constant('B'))"`，`lineageType = CONSTANT`。
 - 未知 UDF：提取参数中的字段，保留完整表达式，`lineageType = DERIVED`；如果参数字段也无法可靠识别，返回 `UNKNOWN_COLUMN_LINEAGE` warning。
 

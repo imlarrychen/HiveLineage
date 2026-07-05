@@ -56,8 +56,14 @@ final class HiveAstExpressionExtractor {
         if (expression.getType() == HiveParser.TOK_FUNCTION && expression.getChildCount() > 0) {
             String functionName = stripIdentifier(expression.getChild(0).getText());
             List<String> args = new ArrayList<>();
+            ASTNode windowSpec = null;
             for (int i = 1; i < expression.getChildCount(); i++) {
-                args.add(unparse((ASTNode) expression.getChild(i)));
+                ASTNode child = (ASTNode) expression.getChild(i);
+                if (isWindowSpec(child)) {
+                    windowSpec = child;
+                } else {
+                    args.add(unparse(child));
+                }
             }
             if (functionName.toUpperCase(Locale.ROOT).startsWith("TOK_") && args.size() == 1) {
                 return "cast(" + args.get(0) + " as " + functionName.substring(4).toLowerCase(Locale.ROOT) + ")";
@@ -65,7 +71,11 @@ final class HiveAstExpressionExtractor {
             if ("when".equalsIgnoreCase(functionName) && args.size() >= 2) {
                 return renderCaseWhen(args);
             }
-            return functionName + "(" + joinWithComma(args) + ")";
+            String functionCall = functionName + "(" + joinWithComma(args) + ")";
+            if (windowSpec != null) {
+                return functionCall + " " + renderWindowSpec(windowSpec);
+            }
+            return functionCall;
         }
         if ("TOK_FUNCTIONSTAR".equals(text) && expression.getChildCount() > 0) {
             return stripIdentifier(expression.getChild(0).getText()) + "(*)";
@@ -131,5 +141,93 @@ final class HiveAstExpressionExtractor {
             builder.append(" else ").append(args.get(args.size() - 1));
         }
         return builder.append(" end").toString();
+    }
+
+    private boolean isWindowSpec(ASTNode node) {
+        return node != null && "TOK_WINDOWSPEC".equalsIgnoreCase(node.getText());
+    }
+
+    private String renderWindowSpec(ASTNode windowSpec) {
+        List<String> clauses = new ArrayList<>();
+        for (int i = 0; i < windowSpec.getChildCount(); i++) {
+            String clause = renderWindowClause((ASTNode) windowSpec.getChild(i));
+            if (!clause.isEmpty()) {
+                clauses.add(clause);
+            }
+        }
+        return "over(" + joinWithSpace(clauses) + ")";
+    }
+
+    private String renderWindowClause(ASTNode node) {
+        if (node == null) {
+            return "";
+        }
+        String text = node.getText();
+        if ("TOK_PARTITIONINGSPEC".equalsIgnoreCase(text)) {
+            List<String> clauses = new ArrayList<>();
+            for (int i = 0; i < node.getChildCount(); i++) {
+                String clause = renderWindowClause((ASTNode) node.getChild(i));
+                if (!clause.isEmpty()) {
+                    clauses.add(clause);
+                }
+            }
+            return joinWithSpace(clauses);
+        }
+        if ("TOK_DISTRIBUTEBY".equalsIgnoreCase(text)) {
+            return "partition by " + renderChildList(node);
+        }
+        if ("TOK_ORDERBY".equalsIgnoreCase(text)) {
+            List<String> orderItems = new ArrayList<>();
+            for (int i = 0; i < node.getChildCount(); i++) {
+                orderItems.add(renderOrderItem((ASTNode) node.getChild(i)));
+            }
+            return "order by " + joinWithComma(orderItems);
+        }
+        return unparse(node);
+    }
+
+    private String renderOrderItem(ASTNode node) {
+        if (node == null) {
+            return "";
+        }
+        String text = node.getText();
+        if ("TOK_TABSORTCOLNAMEDESC".equalsIgnoreCase(text) && node.getChildCount() > 0) {
+            return renderSortExpression((ASTNode) node.getChild(0)) + " desc";
+        }
+        if ("TOK_TABSORTCOLNAMEASC".equalsIgnoreCase(text) && node.getChildCount() > 0) {
+            return renderSortExpression((ASTNode) node.getChild(0)) + " asc";
+        }
+        return renderSortExpression(node);
+    }
+
+    private String renderSortExpression(ASTNode node) {
+        if (node == null) {
+            return "";
+        }
+        String text = node.getText();
+        if (("TOK_NULLS_FIRST".equalsIgnoreCase(text) || "TOK_NULLS_LAST".equalsIgnoreCase(text))
+            && node.getChildCount() > 0) {
+            return renderSortExpression((ASTNode) node.getChild(0));
+        }
+        return unparse(node);
+    }
+
+    private String renderChildList(ASTNode node) {
+        List<String> parts = new ArrayList<>();
+        for (int i = 0; i < node.getChildCount(); i++) {
+            parts.add(unparse((ASTNode) node.getChild(i)));
+        }
+        return joinWithComma(parts);
+    }
+
+    private String joinWithSpace(List<String> parts) {
+        StringBuilder builder = new StringBuilder();
+        for (String part : parts) {
+            if (builder.length() > 0) {
+                builder.append(' ');
+            }
+            builder.append(part);
+        }
+        return builder.toString();
     }
 }

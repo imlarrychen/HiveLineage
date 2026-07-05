@@ -31,10 +31,12 @@ public class HiveLineageAnalyzerTest {
         test.productionSample02ExtractsUnionAndJoinSourceTables();
         test.generatedCoreLineageCasesParseWithoutFailure();
         test.unionAllColumnLineageUsesBranchSelectColumns();
+        test.plainUnionColumnLineageUsesDistinctExpression();
         test.constantSelectItemProducesConstantLineage();
         test.unionAllConstantExpressionsAreMerged();
         test.columnLineageResolvesJoinAliasToRealSourceTables();
         test.columnLineageUsesSourceMetadataForUnqualifiedJoinColumns();
+        test.windowFunctionExpressionIsRenderedWithoutAstTokens();
         test.createTableAsSelectProducesFormalTableLineage();
         test.temporaryTableLineageIsExpandedToFinalTargetByDefault();
         test.includeTemporaryLineageReturnsTemporaryCreateStatement();
@@ -473,6 +475,40 @@ public class HiveLineageAnalyzerTest {
     }
 
     @Test
+    public void plainUnionColumnLineageUsesDistinctExpression() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("ods.union_source_a", "id")
+            .addTable("ods.union_source_b", "id")
+            .addTable("dwd.union_target", "id");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_union_distinct")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript(
+                "insert overwrite table dwd.union_target "
+                    + "select id from ods.union_source_a "
+                    + "union "
+                    + "select id from ods.union_source_b;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        ColumnLineage column = analyzer.analyzeScript(request).getStatements().get(0).getColumnLineages().get(0);
+
+        TestSupport.assertEquals("dwd.union_target.id", column.getTargetColumn().getQualifiedName(), "plain union target");
+        TestSupport.assertEquals("union_distinct(ods.union_source_a.id, ods.union_source_b.id)", column.getExpression(), "plain union expression");
+        assertContainsColumn(column.getSourceColumns(), "ods.union_source_a.id");
+        assertContainsColumn(column.getSourceColumns(), "ods.union_source_b.id");
+    }
+
+    @Test
     public void constantSelectItemProducesConstantLineage() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
 
@@ -579,6 +615,42 @@ public class HiveLineageAnalyzerTest {
         TestSupport.assertEquals("ods.user_base.user_id", columns.get(0).getSourceColumns().get(0).getQualifiedName(), "metadata user_id source column");
         TestSupport.assertEquals("ods.user_dept.dept_name", columns.get(1).getSourceColumns().get(0).getQualifiedName(), "metadata dept_name source column");
         TestSupport.assertEquals(2, metadataProvider.getLoadCount(), "source metadata load count");
+    }
+
+    @Test
+    public void windowFunctionExpressionIsRenderedWithoutAstTokens() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("ods.user_feature", "user_id", "update_time")
+            .addTable("dwd.window_target", "user_id", "rn");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_window")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript(
+                "insert overwrite table dwd.window_target(user_id, rn) "
+                    + "select user_id, row_number() over(partition by user_id order by update_time desc) as rn "
+                    + "from ods.user_feature;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        ColumnLineage rn = analyzer.analyzeScript(request).getStatements().get(0).getColumnLineages().get(1);
+
+        TestSupport.assertEquals(
+            "row_number() over(partition by user_id order by update_time desc)",
+            rn.getExpression(),
+            "window expression"
+        );
+        TestSupport.assertEquals(Collections.singletonList("row_number"), rn.getFunctionNames(), "window function names");
+        assertContainsColumn(rn.getSourceColumns(), "ods.user_feature.user_id");
+        assertContainsColumn(rn.getSourceColumns(), "ods.user_feature.update_time");
     }
 
     @Test
