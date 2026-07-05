@@ -56,7 +56,13 @@ final class HiveAstExpressionExtractor {
             for (int i = 1; i < expression.getChildCount(); i++) {
                 args.add(unparse((ASTNode) expression.getChild(i)));
             }
+            if ("when".equalsIgnoreCase(functionName) && args.size() >= 2) {
+                return renderCaseWhen(args);
+            }
             return functionName + "(" + joinWithComma(args) + ")";
+        }
+        if ("TOK_FUNCTIONSTAR".equals(text) && expression.getChildCount() > 0) {
+            return stripIdentifier(expression.getChild(0).getText()) + "(*)";
         }
         if (expression.getChildCount() == 2 && isBinaryOperator(text)) {
             return unparse((ASTNode) expression.getChild(0)) + " " + text + " " + unparse((ASTNode) expression.getChild(1));
@@ -86,7 +92,9 @@ final class HiveAstExpressionExtractor {
     }
 
     private boolean isBinaryOperator(String text) {
-        return "+".equals(text) || "-".equals(text) || "*".equals(text) || "/".equals(text) || "%".equals(text);
+        return "+".equals(text) || "-".equals(text) || "*".equals(text) || "/".equals(text) || "%".equals(text)
+            || "=".equals(text) || "==".equals(text) || "<>".equals(text) || "!=".equals(text)
+            || "<".equals(text) || "<=".equals(text) || ">".equals(text) || ">=".equals(text);
     }
 
     private boolean isUnaryOperator(String text) {
@@ -102,5 +110,20 @@ final class HiveAstExpressionExtractor {
             builder.append(part);
         }
         return builder.toString();
+    }
+
+    private String renderCaseWhen(List<String> args) {
+        StringBuilder builder = new StringBuilder("case");
+        int pairEnd = args.size() % 2 == 0 ? args.size() : args.size() - 1;
+        for (int i = 0; i + 1 < pairEnd; i += 2) {
+            builder.append(" when ")
+                .append(args.get(i))
+                .append(" then ")
+                .append(args.get(i + 1));
+        }
+        if (args.size() % 2 == 1) {
+            builder.append(" else ").append(args.get(args.size() - 1));
+        }
+        return builder.append(" end").toString();
     }
 }

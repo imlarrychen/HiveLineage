@@ -128,6 +128,16 @@
 - **那么** 必须产生从 `ods.user` 到 `dwd.user` 的表级血缘
 - **并且** 当目标表元数据可用时，必须产生从 `ods.user.id` 到 `dwd.user.id` 的字段级血缘
 
+#### 场景：Select Star 按目标元数据对齐字段
+
+- **假设** 语句为 `insert overwrite table dwd.user_snapshot select * from ods.user`
+- **并且** 目标表元数据包含 `user_id,user_name,status,dt`
+- **并且** 源表元数据包含 `user_id,user_name,status,dt,source_only`
+- **当** 该语句被解析
+- **那么** 字段血缘必须按目标表字段顺序生成
+- **并且** 必须包含 `dwd.user_snapshot.status <- ods.user.status`
+- **并且** 不得为源表独有字段 `source_only` 生成目标字段血缘
+
 #### 场景：Insert Values 完全忽略
 
 - **假设** 语句为 `insert overwrite table dwd.user values (1, 'tom')`

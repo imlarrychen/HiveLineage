@@ -52,12 +52,16 @@ public class HiveLineageAnalyzerTest {
         test.statementSplitterIgnoresSemicolonInsideStringAndComments();
         test.insertOverwriteDirectoryIsIgnoredBecauseThereIsNoOutputTable();
         test.selectStarExpandsColumnsFromMetadata();
+        test.selectStarAlignsToTargetMetadataWhenSourceHasExtraColumns();
         test.subqueryAliasColumnLineageResolvesToBaseTable();
         test.metadataCacheExpiresPositiveAndMissingEntries();
         test.missingTargetMetadataEmitsWarningsOnStatementAndAnalyzeResult();
         test.missingViewDefinitionEmitsWarningAndKeepsViewSource();
         test.viewExpansionDepthExceededEmitsWarningAndKeepsBoundaryView();
         test.alterViewAsSelectProducesFormalLineage();
+        test.createTableAsWithSelectProducesColumnLineage();
+        test.temporaryTableColumnLineageIsExpandedToFinalTarget();
+        test.viewColumnLineageKeepsDerivedExpressionWhenExpanded();
         test.lateralViewExplodeKeepsTableAndExplodeArgumentColumnLineage();
         test.jdbcMetadataProviderRejectsUnsafeTableName();
     }
@@ -1006,6 +1010,41 @@ public class HiveLineageAnalyzerTest {
     }
 
     @Test
+    public void selectStarAlignsToTargetMetadataWhenSourceHasExtraColumns() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("ods.user_base", "user_id", "id", "name", "user_name", "dept_id", "tags", "dt", "amount", "status")
+            .addTable("dwd.user_base_snapshot", "user_id", "user_name", "dept_id", "status", "target_only", "tags", "dt");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_star_target")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript("insert overwrite table dwd.user_base_snapshot select * from ods.user_base;")
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        List<ColumnLineage> columns = analyzer.analyzeScript(request).getStatements().get(0).getColumnLineages();
+
+        TestSupport.assertEquals(6, columns.size(), "target metadata select star column count");
+        TestSupport.assertEquals("dwd.user_base_snapshot.user_id", columns.get(0).getTargetColumn().getQualifiedName(), "target star user_id");
+        TestSupport.assertEquals("ods.user_base.user_id", columns.get(0).getSourceColumns().get(0).getQualifiedName(), "source star user_id");
+        TestSupport.assertEquals("dwd.user_base_snapshot.user_name", columns.get(1).getTargetColumn().getQualifiedName(), "target star user_name");
+        TestSupport.assertEquals("ods.user_base.user_name", columns.get(1).getSourceColumns().get(0).getQualifiedName(), "source star user_name");
+        TestSupport.assertEquals("dwd.user_base_snapshot.status", columns.get(3).getTargetColumn().getQualifiedName(), "target star status");
+        TestSupport.assertEquals("ods.user_base.status", columns.get(3).getSourceColumns().get(0).getQualifiedName(), "source star status");
+        TestSupport.assertEquals("dwd.user_base_snapshot.tags", columns.get(4).getTargetColumn().getQualifiedName(), "target star tags");
+        TestSupport.assertEquals("ods.user_base.tags", columns.get(4).getSourceColumns().get(0).getQualifiedName(), "source star tags");
+        TestSupport.assertEquals("dwd.user_base_snapshot.dt", columns.get(5).getTargetColumn().getQualifiedName(), "target star dt");
+        TestSupport.assertEquals("ods.user_base.dt", columns.get(5).getSourceColumns().get(0).getQualifiedName(), "source star dt");
+    }
+
+    @Test
     public void subqueryAliasColumnLineageResolvesToBaseTable() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
         MapMetadataProvider metadataProvider = new MapMetadataProvider()
@@ -1178,6 +1217,129 @@ public class HiveLineageAnalyzerTest {
     }
 
     @Test
+    public void createTableAsWithSelectProducesColumnLineage() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("ods.order_detail", "user_id", "order_id", "amount", "pay_time", "pay_status", "dt")
+            .addTable("dwd.user_order_summary", "user_id", "total_amount", "order_cnt", "last_pay_time");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_cte_ctas")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript(
+                "create table if not exists dwd.user_order_summary stored as parquet as "
+                    + "with paid_orders as ("
+                    + "select user_id, order_id, amount, pay_time from ods.order_detail where pay_status = 'PAID'"
+                    + ") "
+                    + "select user_id, sum(amount) as total_amount, count(*) as order_cnt, max(pay_time) as last_pay_time "
+                    + "from paid_orders group by user_id;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+
+        TestSupport.assertEquals("CREATE_TABLE_AS_SELECT", statement.getStatementType(), "ctas with cte statement type");
+        assertContainsSource(statement, "ods.order_detail");
+        List<ColumnLineage> columns = statement.getColumnLineages();
+        TestSupport.assertEquals("dwd.user_order_summary.user_id", columns.get(0).getTargetColumn().getQualifiedName(), "ctas cte user_id target");
+        TestSupport.assertEquals("ods.order_detail.user_id", columns.get(0).getSourceColumns().get(0).getQualifiedName(), "ctas cte user_id source");
+        TestSupport.assertEquals(LineageType.DIRECT, columns.get(0).getLineageType(), "ctas cte user_id type");
+        TestSupport.assertEquals("ods.order_detail.amount", columns.get(1).getSourceColumns().get(0).getQualifiedName(), "ctas cte total amount source");
+        TestSupport.assertEquals(LineageType.DERIVED, columns.get(1).getLineageType(), "ctas cte total amount type");
+        TestSupport.assertEquals("sum(amount)", columns.get(1).getExpression(), "ctas cte total amount expression");
+        TestSupport.assertEquals(LineageType.DERIVED, columns.get(2).getLineageType(), "ctas cte count type");
+        TestSupport.assertEquals("count(*)", columns.get(2).getExpression(), "ctas cte count expression");
+        TestSupport.assertEquals("ods.order_detail.pay_time", columns.get(3).getSourceColumns().get(0).getQualifiedName(), "ctas cte last pay time source");
+        TestSupport.assertEquals(LineageType.DERIVED, columns.get(3).getLineageType(), "ctas cte last pay time type");
+    }
+
+    @Test
+    public void temporaryTableColumnLineageIsExpandedToFinalTarget() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("ods.user_base", "user_id", "user_name", "dept_id", "status", "dt")
+            .addTable("ods.user_dept", "dept_id", "dept_name")
+            .addTable("dwd.user_profile_enriched", "user_id", "user_name", "dept_name", "user_status", "process_date");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_temp_columns")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript(
+                "create temporary table tmp_user_profile as "
+                    + "select u.user_id, u.user_name, u.dept_id, d.dept_name, "
+                    + "case when u.status = 1 then 'ACTIVE' else 'INACTIVE' end as user_status "
+                    + "from ods.user_base u left join ods.user_dept d on u.dept_id = d.dept_id; "
+                    + "insert overwrite table dwd.user_profile_enriched(user_id, user_name, dept_name, user_status, process_date) "
+                    + "select user_id, user_name, dept_name, user_status, '20260701' as process_date from tmp_user_profile;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .includeTemporaryLineage(true)
+                .build())
+            .build();
+
+        LineageAnalyzeResult result = analyzer.analyzeScript(request);
+        StatementLineageResult temporaryStatement = result.getStatements().get(0);
+        StatementLineageResult finalStatement = result.getStatements().get(1);
+
+        TestSupport.assertEquals("tmp_user_profile.user_id", temporaryStatement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "temporary user_id target");
+        TestSupport.assertEquals("tmp_user_profile.dept_name", temporaryStatement.getColumnLineages().get(3).getTargetColumn().getQualifiedName(), "temporary dept_name target");
+        ColumnLineage userStatus = finalStatement.getColumnLineages().get(3);
+        TestSupport.assertEquals("dwd.user_profile_enriched.user_status", userStatus.getTargetColumn().getQualifiedName(), "final user_status target");
+        TestSupport.assertEquals("ods.user_base.status", userStatus.getSourceColumns().get(0).getQualifiedName(), "final user_status source");
+        TestSupport.assertEquals(LineageType.DERIVED, userStatus.getLineageType(), "final user_status type");
+        TestSupport.assertEquals("case when u.status = 1 then 'ACTIVE' else 'INACTIVE' end", userStatus.getExpression(), "final user_status expression");
+        for (LineageWarning warning : temporaryStatement.getWarnings()) {
+            TestSupport.assertTrue(warning.getMessage().indexOf("tmp_user_profile") < 0, "temporary table should not emit metadata warning");
+        }
+    }
+
+    @Test
+    public void viewColumnLineageKeepsDerivedExpressionWhenExpanded() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("ods.user_base", "user_id", "user_name")
+            .addTable("dwd.active_user_profile", "user_id", "user_name")
+            .addView(
+                "dim.v_user_profile",
+                "select user_id, upper(user_name) as user_name from ods.user_base",
+                "user_id",
+                "user_name"
+            );
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_view_columns")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript("insert overwrite table dwd.active_user_profile(user_id, user_name) select user_id, user_name from dim.v_user_profile;")
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .expandViewLineage(true)
+                .build())
+            .build();
+
+        ColumnLineage userName = analyzer.analyzeScript(request).getStatements().get(0).getColumnLineages().get(1);
+
+        TestSupport.assertEquals("ods.user_base.user_name", userName.getSourceColumns().get(0).getQualifiedName(), "expanded view user_name source");
+        TestSupport.assertEquals(LineageType.DERIVED, userName.getLineageType(), "expanded view user_name type");
+        TestSupport.assertEquals("upper(user_name)", userName.getExpression(), "expanded view user_name expression");
+    }
+
+    @Test
     public void lateralViewExplodeKeepsTableAndExplodeArgumentColumnLineage() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
 
@@ -1202,6 +1364,8 @@ public class HiveLineageAnalyzerTest {
         assertContainsSource(statement, "ods.user_base");
         TestSupport.assertEquals("ods.user_base.user_id", statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(), "ordinary lateral source");
         assertContainsColumn(statement.getColumnLineages().get(1).getSourceColumns(), "ods.user_base.tags");
+        TestSupport.assertEquals(LineageType.DERIVED, statement.getColumnLineages().get(1).getLineageType(), "lateral explode tag type");
+        TestSupport.assertEquals("explode(tags)", statement.getColumnLineages().get(1).getExpression(), "lateral explode tag expression");
     }
 
     @Test

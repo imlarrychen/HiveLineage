@@ -80,7 +80,6 @@ where dt = '${hiveconf:bizdate}'
 | Code | Message |
 | --- | --- |
 | UNRESOLVED_VARIABLE | Unresolved variable @{run_env} |
-| METADATA_NOT_FOUND | Metadata not found for default.test_b |
 
 ### Statement 3
 
@@ -459,13 +458,13 @@ where a.type = 1
 | etl_monitor.meta_mid_bdp_user_dashboard_pms_group.user_name | etl_monitor.meta_mid_bdp_usr_info.user_name<br>etl_monitor.meta_mid_bdp_grp_usr_map.user_name | etl_monitor.bdp_meta_mcmeta_online_share_dash<br>etl_monitor.meta_mid_bdp_usr_info<br>etl_monitor.bdp_meta_mcmeta_online_dashboard<br>etl_monitor.bdp_meta_mcmeta_online_project<br>etl_monitor.bdp_meta_leviathan_t_account<br>etl_monitor.meta_mid_bdp_grp_usr_map | DERIVED | union_all(etl_monitor.meta_mid_bdp_usr_info.user_name, etl_monitor.meta_mid_bdp_grp_usr_map.user_name) | union_all | true | true |
 | etl_monitor.meta_mid_bdp_user_dashboard_pms_group.emp_name | etl_monitor.meta_mid_bdp_usr_info.emp_name<br>etl_monitor.meta_mid_bdp_grp_usr_map.emp_name | etl_monitor.bdp_meta_mcmeta_online_share_dash<br>etl_monitor.meta_mid_bdp_usr_info<br>etl_monitor.bdp_meta_mcmeta_online_dashboard<br>etl_monitor.bdp_meta_mcmeta_online_project<br>etl_monitor.bdp_meta_leviathan_t_account<br>etl_monitor.meta_mid_bdp_grp_usr_map | DERIVED | union_all(etl_monitor.meta_mid_bdp_usr_info.emp_name, etl_monitor.meta_mid_bdp_grp_usr_map.emp_name) | union_all | true | true |
 | etl_monitor.meta_mid_bdp_user_dashboard_pms_group.user_role | etl_monitor.meta_mid_bdp_usr_info.role<br>etl_monitor.meta_mid_bdp_grp_usr_map.role | etl_monitor.bdp_meta_mcmeta_online_share_dash<br>etl_monitor.meta_mid_bdp_usr_info<br>etl_monitor.bdp_meta_mcmeta_online_dashboard<br>etl_monitor.bdp_meta_mcmeta_online_project<br>etl_monitor.bdp_meta_leviathan_t_account<br>etl_monitor.meta_mid_bdp_grp_usr_map | DERIVED | union_all(etl_monitor.meta_mid_bdp_usr_info.role, etl_monitor.meta_mid_bdp_grp_usr_map.role) | union_all | true | true |
-| etl_monitor.meta_mid_bdp_user_dashboard_pms_group.proj_id | etl_monitor.bdp_meta_mcmeta_online_dashboard.proj_id | etl_monitor.bdp_meta_mcmeta_online_share_dash<br>etl_monitor.meta_mid_bdp_usr_info<br>etl_monitor.bdp_meta_mcmeta_online_dashboard<br>etl_monitor.bdp_meta_mcmeta_online_project<br>etl_monitor.bdp_meta_leviathan_t_account<br>etl_monitor.meta_mid_bdp_grp_usr_map | DERIVED | union_all(etl_monitor.bdp_meta_mcmeta_online_dashboard.proj_id) | union_all | true | true |
-| etl_monitor.meta_mid_bdp_user_dashboard_pms_group.proj_name | etl_monitor.bdp_meta_mcmeta_online_project.name | etl_monitor.bdp_meta_mcmeta_online_share_dash<br>etl_monitor.meta_mid_bdp_usr_info<br>etl_monitor.bdp_meta_mcmeta_online_dashboard<br>etl_monitor.bdp_meta_mcmeta_online_project<br>etl_monitor.bdp_meta_leviathan_t_account<br>etl_monitor.meta_mid_bdp_grp_usr_map | DERIVED | union_all(etl_monitor.bdp_meta_mcmeta_online_project.name) | union_all | true | true |
-| etl_monitor.meta_mid_bdp_user_dashboard_pms_group.dsh_id | etl_monitor.bdp_meta_mcmeta_online_share_dash.dsh_id | etl_monitor.bdp_meta_mcmeta_online_share_dash<br>etl_monitor.meta_mid_bdp_usr_info<br>etl_monitor.bdp_meta_mcmeta_online_dashboard<br>etl_monitor.bdp_meta_mcmeta_online_project<br>etl_monitor.bdp_meta_leviathan_t_account<br>etl_monitor.meta_mid_bdp_grp_usr_map | DERIVED | union_all(etl_monitor.bdp_meta_mcmeta_online_share_dash.dsh_id) | union_all | true | true |
-| etl_monitor.meta_mid_bdp_user_dashboard_pms_group.dsh_name | etl_monitor.bdp_meta_mcmeta_online_dashboard.name | etl_monitor.bdp_meta_mcmeta_online_share_dash<br>etl_monitor.meta_mid_bdp_usr_info<br>etl_monitor.bdp_meta_mcmeta_online_dashboard<br>etl_monitor.bdp_meta_mcmeta_online_project<br>etl_monitor.bdp_meta_leviathan_t_account<br>etl_monitor.meta_mid_bdp_grp_usr_map | DERIVED | union_all(etl_monitor.bdp_meta_mcmeta_online_dashboard.name) | union_all | true | true |
-| etl_monitor.meta_mid_bdp_user_dashboard_pms_group.dsh_owner | etl_monitor.bdp_meta_leviathan_t_account.name | etl_monitor.bdp_meta_mcmeta_online_share_dash<br>etl_monitor.meta_mid_bdp_usr_info<br>etl_monitor.bdp_meta_mcmeta_online_dashboard<br>etl_monitor.bdp_meta_mcmeta_online_project<br>etl_monitor.bdp_meta_leviathan_t_account<br>etl_monitor.meta_mid_bdp_grp_usr_map | DERIVED | union_all(etl_monitor.bdp_meta_leviathan_t_account.name) | union_all | true | true |
+| etl_monitor.meta_mid_bdp_user_dashboard_pms_group.proj_id | etl_monitor.bdp_meta_mcmeta_online_dashboard.proj_id | etl_monitor.bdp_meta_mcmeta_online_share_dash<br>etl_monitor.meta_mid_bdp_usr_info<br>etl_monitor.bdp_meta_mcmeta_online_dashboard<br>etl_monitor.bdp_meta_mcmeta_online_project<br>etl_monitor.bdp_meta_leviathan_t_account<br>etl_monitor.meta_mid_bdp_grp_usr_map | DERIVED | etl_monitor.bdp_meta_mcmeta_online_dashboard.proj_id |  | true | true |
+| etl_monitor.meta_mid_bdp_user_dashboard_pms_group.proj_name | etl_monitor.bdp_meta_mcmeta_online_project.name | etl_monitor.bdp_meta_mcmeta_online_share_dash<br>etl_monitor.meta_mid_bdp_usr_info<br>etl_monitor.bdp_meta_mcmeta_online_dashboard<br>etl_monitor.bdp_meta_mcmeta_online_project<br>etl_monitor.bdp_meta_leviathan_t_account<br>etl_monitor.meta_mid_bdp_grp_usr_map | DERIVED | etl_monitor.bdp_meta_mcmeta_online_project.name |  | true | true |
+| etl_monitor.meta_mid_bdp_user_dashboard_pms_group.dsh_id | etl_monitor.bdp_meta_mcmeta_online_share_dash.dsh_id | etl_monitor.bdp_meta_mcmeta_online_share_dash<br>etl_monitor.meta_mid_bdp_usr_info<br>etl_monitor.bdp_meta_mcmeta_online_dashboard<br>etl_monitor.bdp_meta_mcmeta_online_project<br>etl_monitor.bdp_meta_leviathan_t_account<br>etl_monitor.meta_mid_bdp_grp_usr_map | DERIVED | etl_monitor.bdp_meta_mcmeta_online_share_dash.dsh_id |  | true | true |
+| etl_monitor.meta_mid_bdp_user_dashboard_pms_group.dsh_name | etl_monitor.bdp_meta_mcmeta_online_dashboard.name | etl_monitor.bdp_meta_mcmeta_online_share_dash<br>etl_monitor.meta_mid_bdp_usr_info<br>etl_monitor.bdp_meta_mcmeta_online_dashboard<br>etl_monitor.bdp_meta_mcmeta_online_project<br>etl_monitor.bdp_meta_leviathan_t_account<br>etl_monitor.meta_mid_bdp_grp_usr_map | DERIVED | etl_monitor.bdp_meta_mcmeta_online_dashboard.name |  | true | true |
+| etl_monitor.meta_mid_bdp_user_dashboard_pms_group.dsh_owner | etl_monitor.bdp_meta_leviathan_t_account.name | etl_monitor.bdp_meta_mcmeta_online_share_dash<br>etl_monitor.meta_mid_bdp_usr_info<br>etl_monitor.bdp_meta_mcmeta_online_dashboard<br>etl_monitor.bdp_meta_mcmeta_online_project<br>etl_monitor.bdp_meta_leviathan_t_account<br>etl_monitor.meta_mid_bdp_grp_usr_map | DERIVED | etl_monitor.bdp_meta_leviathan_t_account.name |  | true | true |
 | etl_monitor.meta_mid_bdp_user_dashboard_pms_group.dis_type |  | etl_monitor.bdp_meta_mcmeta_online_share_dash<br>etl_monitor.meta_mid_bdp_usr_info<br>etl_monitor.bdp_meta_mcmeta_online_dashboard<br>etl_monitor.bdp_meta_mcmeta_online_project<br>etl_monitor.bdp_meta_leviathan_t_account<br>etl_monitor.meta_mid_bdp_grp_usr_map | CONSTANT | union_all(constant('按用户共享仪表盘'), constant('按分组共享仪表盘')) |  | false | true |
-| etl_monitor.meta_mid_bdp_user_dashboard_pms_group.dw_upd_tm |  | etl_monitor.bdp_meta_mcmeta_online_share_dash<br>etl_monitor.meta_mid_bdp_usr_info<br>etl_monitor.bdp_meta_mcmeta_online_dashboard<br>etl_monitor.bdp_meta_mcmeta_online_project<br>etl_monitor.bdp_meta_leviathan_t_account<br>etl_monitor.meta_mid_bdp_grp_usr_map | DERIVED | union_all(current_timestamp()) | union_all<br>current_timestamp | true | true |
+| etl_monitor.meta_mid_bdp_user_dashboard_pms_group.dw_upd_tm |  | etl_monitor.bdp_meta_mcmeta_online_share_dash<br>etl_monitor.meta_mid_bdp_usr_info<br>etl_monitor.bdp_meta_mcmeta_online_dashboard<br>etl_monitor.bdp_meta_mcmeta_online_project<br>etl_monitor.bdp_meta_leviathan_t_account<br>etl_monitor.meta_mid_bdp_grp_usr_map | DERIVED | current_timestamp() | current_timestamp | true | true |
 
 #### Warnings
 
@@ -548,7 +547,6 @@ where dt = '${bizdate}'
 | Code | Message |
 | --- | --- |
 | UNRESOLVED_VARIABLE | Unresolved variable @{run_env} |
-| METADATA_NOT_FOUND | Metadata not found for default.test_b |
 
 ## lineage_case_04.sql
 
@@ -556,7 +554,7 @@ where dt = '${bizdate}'
 
 ```sql
 -- 覆盖点：select * 元数据展开 + insert overwrite table 未显式目标字段
--- 预期：字段血缘必须依赖元数据把 ods.user_base 的 user_id,user_name,dept_id,tags,dt 展开到 dwd.user_base_snapshot。
+-- 预期：字段血缘必须依赖元数据把 ods.user_base 的 user_id,user_name,dept_id,status,tags,dt 展开到 dwd.user_base_snapshot。
 insert overwrite table dwd.user_base_snapshot
 select *
 from ods.user_base
@@ -578,7 +576,7 @@ where dt = '${bizdate}';
 
 ```sql
 -- 覆盖点：select * 元数据展开 + insert overwrite table 未显式目标字段
--- 预期：字段血缘必须依赖元数据把 ods.user_base 的 user_id,user_name,dept_id,tags,dt 展开到 dwd.user_base_snapshot。
+-- 预期：字段血缘必须依赖元数据把 ods.user_base 的 user_id,user_name,dept_id,status,tags,dt 展开到 dwd.user_base_snapshot。
 insert overwrite table dwd.user_base_snapshot
 select *
 from ods.user_base
@@ -609,16 +607,11 @@ where dt = '${bizdate}'
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | dwd.user_base_snapshot.user_id | ods.user_base.user_id | ods.user_base | DIRECT | user_id |  | false | true |
-| dwd.user_base_snapshot.id | ods.user_base.id | ods.user_base | DIRECT | id |  | false | true |
-| dwd.user_base_snapshot.name | ods.user_base.name | ods.user_base | DIRECT | name |  | false | true |
 | dwd.user_base_snapshot.user_name | ods.user_base.user_name | ods.user_base | DIRECT | user_name |  | false | true |
-| dwd.user_base_snapshot.first_name | ods.user_base.first_name | ods.user_base | DIRECT | first_name |  | false | true |
-| dwd.user_base_snapshot.last_name | ods.user_base.last_name | ods.user_base | DIRECT | last_name |  | false | true |
 | dwd.user_base_snapshot.dept_id | ods.user_base.dept_id | ods.user_base | DIRECT | dept_id |  | false | true |
-| dwd.user_base_snapshot.dt | ods.user_base.dt | ods.user_base | DIRECT | dt |  | false | true |
-| dwd.user_base_snapshot.tags | ods.user_base.tags | ods.user_base | DIRECT | tags |  | false | true |
-| dwd.user_base_snapshot.amount | ods.user_base.amount | ods.user_base | DIRECT | amount |  | false | true |
 | dwd.user_base_snapshot.status | ods.user_base.status | ods.user_base | DIRECT | status |  | false | true |
+| dwd.user_base_snapshot.tags | ods.user_base.tags | ods.user_base | DIRECT | tags |  | false | true |
+| dwd.user_base_snapshot.dt | ods.user_base.dt | ods.user_base | DIRECT | dt |  | false | true |
 
 #### Warnings
 
@@ -662,8 +655,66 @@ group by user_id;
 | taskId | lineage_case_05 |
 | taskVersion | V1 |
 | totalStatementCount | 1 |
-| ignoredStatementCount | 1 |
+| ignoredStatementCount | 0 |
 | failedStatementCount | 0 |
+
+### Statement 0
+
+```sql
+-- 覆盖点：CTAS + CTE + 聚合函数 + group by + count(*)
+-- 预期：create table as select 产生正式血缘；total_amount 来源 ods.order_detail.amount；order_cnt 是 count(*)，依赖输入对象行集。
+create table if not exists dwd.user_order_summary
+stored as parquet
+as
+with paid_orders as (
+    select
+           user_id
+          ,order_id
+          ,amount
+          ,pay_time
+    from ods.order_detail
+    where pay_status = 'PAID'
+)
+select
+       user_id
+      ,sum(amount) as total_amount
+      ,count(*) as order_cnt
+      ,max(pay_time) as last_pay_time
+from paid_orders
+group by user_id
+```
+
+| Field | Value |
+| --- | --- |
+| statementId | wf_generated_lineage_case_05_V1_0 |
+| statementType | CREATE_TABLE_AS_SELECT |
+| parseStatusCode | 0 |
+| formalLineageProduced | true |
+| parseMode | TABLE_AND_COLUMN |
+| outputObject | dwd.user_order_summary |
+| inputObjects | ods.order_detail |
+| skipReason |  |
+| failureCode |  |
+| failureMessage |  |
+
+#### Table Lineage
+
+| Target | Sources | Operation | Through Temporary Table |
+| --- | --- | --- | --- |
+| dwd.user_order_summary | ods.order_detail | CREATE_TABLE_AS_SELECT | false |
+
+#### Column Lineage
+
+| Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| dwd.user_order_summary.user_id | ods.order_detail.user_id | ods.order_detail | DIRECT | user_id |  | false | true |
+| dwd.user_order_summary.total_amount | ods.order_detail.amount | ods.order_detail | DERIVED | sum(amount) | sum | true | true |
+| dwd.user_order_summary.order_cnt |  | ods.order_detail | DERIVED | count(*) | count | true | true |
+| dwd.user_order_summary.last_pay_time | ods.order_detail.pay_time | ods.order_detail | DERIVED | max(pay_time) | max | true | true |
+
+#### Warnings
+
+_None_
 
 ## lineage_case_06.sql
 
@@ -746,10 +797,10 @@ where u.dt = '${bizdate}'
 
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| tmp_user_profile.u.user_id | ods.user_base.user_id | ods.user_base<br>ods.user_dept | DIRECT | u.user_id |  | false | true |
-| tmp_user_profile.u.user_name | ods.user_base.user_name | ods.user_base<br>ods.user_dept | DIRECT | u.user_name |  | false | true |
-| tmp_user_profile.u.dept_id | ods.user_base.dept_id | ods.user_base<br>ods.user_dept | DIRECT | u.dept_id |  | false | true |
-| tmp_user_profile.d.dept_name | ods.user_dept.dept_name | ods.user_base<br>ods.user_dept | DIRECT | d.dept_name |  | false | true |
+| tmp_user_profile.user_id | ods.user_base.user_id | ods.user_base<br>ods.user_dept | DIRECT | u.user_id |  | false | true |
+| tmp_user_profile.user_name | ods.user_base.user_name | ods.user_base<br>ods.user_dept | DIRECT | u.user_name |  | false | true |
+| tmp_user_profile.dept_id | ods.user_base.dept_id | ods.user_base<br>ods.user_dept | DIRECT | u.dept_id |  | false | true |
+| tmp_user_profile.dept_name | ods.user_dept.dept_name | ods.user_base<br>ods.user_dept | DIRECT | d.dept_name |  | false | true |
 | tmp_user_profile.user_status | ods.user_base.status | ods.user_base<br>ods.user_dept | DERIVED | case when u.status = 1 then 'ACTIVE' else 'INACTIVE' end |  | true | true |
 
 #### Warnings
@@ -757,7 +808,6 @@ where u.dt = '${bizdate}'
 | Code | Message |
 | --- | --- |
 | UNRESOLVED_VARIABLE | Unresolved variable ${bizdate} |
-| METADATA_NOT_FOUND | Metadata not found for default.tmp_user_profile |
 
 ### Statement 1
 
@@ -798,7 +848,7 @@ from tmp_user_profile
 | dwd.user_profile_enriched.user_id | ods.user_base.user_id | ods.user_base<br>ods.user_dept | DIRECT | user_id |  | false | true |
 | dwd.user_profile_enriched.user_name | ods.user_base.user_name | ods.user_base<br>ods.user_dept | DIRECT | user_name |  | false | true |
 | dwd.user_profile_enriched.dept_name | ods.user_dept.dept_name | ods.user_base<br>ods.user_dept | DIRECT | dept_name |  | false | true |
-| dwd.user_profile_enriched.user_status | ods.user_base.user_status | ods.user_base<br>ods.user_dept | DIRECT | user_status |  | false | true |
+| dwd.user_profile_enriched.user_status | ods.user_base.status | ods.user_base<br>ods.user_dept | DERIVED | case when u.status = 1 then 'ACTIVE' else 'INACTIVE' end |  | true | true |
 | dwd.user_profile_enriched.process_date |  | ods.user_base<br>ods.user_dept | CONSTANT | constant('fallback_value') |  | false | true |
 
 #### Warnings
@@ -978,7 +1028,7 @@ from dim.v_user_profile
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | dwd.active_user_profile.user_id | ods.user_base.user_id | ods.user_base<br>ods.user_dept | DIRECT | user_id |  | false | true |
-| dwd.active_user_profile.user_name | ods.user_base.user_name | ods.user_base<br>ods.user_dept | DIRECT | user_name |  | false | true |
+| dwd.active_user_profile.user_name | ods.user_base.user_name | ods.user_base<br>ods.user_dept | DERIVED | upper(u.user_name) | upper | true | true |
 | dwd.active_user_profile.dept_name | ods.user_dept.dept_name | ods.user_base<br>ods.user_dept | DIRECT | dept_name |  | false | true |
 
 #### Warnings
@@ -1053,7 +1103,7 @@ where dt = '${bizdate}'
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | dwd.user_tag_detail.user_id | ods.user_base.user_id | ods.user_base | DIRECT | user_id |  | false | true |
-| dwd.user_tag_detail.tag | ods.user_base.tags | ods.user_base | DIRECT | tag |  | false | true |
+| dwd.user_tag_detail.tag | ods.user_base.tags | ods.user_base | DERIVED | explode(tags) | explode | true | true |
 | dwd.user_tag_detail.dt | ods.user_base.dt | ods.user_base | DIRECT | dt |  | false | true |
 | dwd.user_tag_detail.source_system |  | ods.user_base | CONSTANT | constant('profile') |  | false | true |
 
@@ -1132,7 +1182,7 @@ where dt = '${bizdate}'
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | dwd.user_feature_wide.user_id | ods.user_feature.user_id | ods.user_feature | DIRECT | user_id |  | false | true |
-| dwd.user_feature_wide.valid_score | ods.user_feature.status<br>ods.user_feature.score | ods.user_feature | DERIVED | when(=(status, 1), score, 0) |  | true | true |
+| dwd.user_feature_wide.valid_score | ods.user_feature.status<br>ods.user_feature.score | ods.user_feature | DERIVED | case when status = 1 then score else 0 end |  | true | true |
 | dwd.user_feature_wide.rn | ods.user_feature.user_id<br>ods.user_feature.update_time | ods.user_feature | DERIVED | row_number(TOK_WINDOWSPEC(TOK_PARTITIONINGSPEC(TOK_DISTRIBUTEBY(user_id), TOK_ORDERBY(TOK_TABSORTCOLNAMEDESC(TOK_NULLS_FIRST(update_time)))))) | row_number<br>tok_windowspec<br>tok_partitioningspec<br>tok_distributeby<br>tok_orderby<br>tok_tabsortcolnamedesc<br>tok_nulls_first | true | true |
 | dwd.user_feature_wide.user_day_key | ods.user_feature.user_id<br>ods.user_feature.dt | ods.user_feature | DERIVED | concat(TOK_STRING(user_id), '_', dt) | concat<br>tok_string | true | true |
 | dwd.user_feature_wide.udf_score | ods.user_feature.score<br>ods.user_feature.level_code | ods.user_feature | DERIVED | my_udf(score, level_code) | my_udf | true | true |

@@ -154,6 +154,8 @@ LineageAnalyzeResult result = analyzer.analyzeScript(LineageAnalyzeRequest.build
 - 多表 join 中未带表别名的字段归属判断
 - 视图展开和视图字段映射
 
+当 `select *` 写入目标表且目标表元数据可用时，解析器优先按目标表字段顺序取“目标字段与源表字段的交集”生成字段血缘；这样不会把源表额外字段误当成目标字段，也不会为目标表独有字段凭空生成来源。
+
 元数据接口：
 
 - [HiveMetadataProvider.java](src/main/java/com/panfan/hivelineage/metadata/HiveMetadataProvider.java)

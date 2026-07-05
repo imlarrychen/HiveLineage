@@ -45,6 +45,7 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
                 selectExpressions,
                 resolveSourceAliases(root, cteAliases),
                 resolveColumnAliasSources(root),
+                resolveColumnAliasExpressions(root),
                 resolveSetOperationSourceColumns(root, cteAliases),
                 resolveSetOperationExpressions(root, cteAliases),
                 resolveStaticPartitionValues(mainInsert),
@@ -520,6 +521,31 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
                     ASTNode child = (ASTNode) selectExpression.getChild(j);
                     if (child.getType() == HiveParser.Identifier) {
                         aliases.put(stripIdentifier(child.getText()).toLowerCase(Locale.ROOT), sourceColumn);
+                    }
+                }
+            }
+        }
+        return aliases;
+    }
+
+    private Map<String, String> resolveColumnAliasExpressions(ASTNode root) {
+        Map<String, String> aliases = new HashMap<>();
+        List<ASTNode> lateralViews = astWalker.collect(root, HiveParser.TOK_LATERAL_VIEW);
+        for (ASTNode lateralView : lateralViews) {
+            ASTNode selectNode = astWalker.directChild(lateralView, HiveParser.TOK_SELECT);
+            if (selectNode == null) {
+                continue;
+            }
+            for (int i = 0; i < selectNode.getChildCount(); i++) {
+                ASTNode selectExpression = (ASTNode) selectNode.getChild(i);
+                if (selectExpression.getType() != HiveParser.TOK_SELEXPR || selectExpression.getChildCount() < 2) {
+                    continue;
+                }
+                String expression = expressionExtractor.unparse((ASTNode) selectExpression.getChild(0));
+                for (int j = 1; j < selectExpression.getChildCount(); j++) {
+                    ASTNode child = (ASTNode) selectExpression.getChild(j);
+                    if (child.getType() == HiveParser.Identifier) {
+                        aliases.put(stripIdentifier(child.getText()).toLowerCase(Locale.ROOT), expression);
                     }
                 }
             }

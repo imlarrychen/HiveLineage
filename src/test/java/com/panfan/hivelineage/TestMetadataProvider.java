@@ -14,10 +14,11 @@ final class TestMetadataProvider implements HiveMetadataProvider {
 
     TestMetadataProvider addTable(String qualifiedName, String... columns) {
         String[] parts = splitQualifiedName(qualifiedName);
+        TableIdentifier tableIdentifier = TableIdentifier.of("default", parts[0], parts[1]);
         metadataByQualifiedName.put(
-            qualifiedName,
+            tableIdentifier.getQualifiedName(),
             HiveTableMetadata.table(
-                TableIdentifier.of("default", parts[0], parts[1]),
+                tableIdentifier,
                 Arrays.asList(columns)
             )
         );
@@ -26,10 +27,11 @@ final class TestMetadataProvider implements HiveMetadataProvider {
 
     TestMetadataProvider addView(String qualifiedName, String viewOriginalSql, String... columns) {
         String[] parts = splitQualifiedName(qualifiedName);
+        TableIdentifier tableIdentifier = TableIdentifier.of("default", parts[0], parts[1]);
         metadataByQualifiedName.put(
-            qualifiedName,
+            tableIdentifier.getQualifiedName(),
             HiveTableMetadata.view(
-                TableIdentifier.of("default", parts[0], parts[1]),
+                tableIdentifier,
                 Arrays.asList(columns),
                 viewOriginalSql
             )
