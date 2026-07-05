@@ -134,15 +134,17 @@ LineageAnalyzeResult result = analyzer.analyzeScript(LineageAnalyzeRequest.build
 
 字段血缘类型：
 
-- `DIRECT`：直接字段来源，例如 `select b3 from test_b`。
-- `DERIVED`：字段经过函数或表达式加工，例如 `select b1 + b2`、`select upper(name)`。
-- `CONSTANT`：字段由常量赋值得到，例如 `select 't1' as a1` 或静态分区 `partition(dt='20260701')`。
+字段血缘只在语句同时具备输入对象和正式输出对象时产生。纯查询、`set`、普通 DDL 等没有正式输出表的语句不产生正式血缘。
+
+- `DIRECT`：目标字段直接来自源字段，例如 `insert into test_a(a1) select b3 from test_b` 产生 `test_b.b3 -> test_a.a1`。
+- `DERIVED`：目标字段由源字段经过函数或表达式加工得到，例如 `insert into test_a(a1) select b1 + b2 from test_b` 产生 `(test_b.b1, test_b.b2) -> test_a.a1`。
+- `CONSTANT`：目标字段由常量赋值得到，例如 `insert into test_a(a1) select 't1' from test_b` 产生 `constant('t1') -> test_a.a1`；静态分区 `insert overwrite table test_a partition(dt='20260701') select b1 from test_b` 产生 `constant('20260701') -> test_a.dt`。
 
 字段血缘表达式口径：
 
-- 普通常量字段不产生源字段，表达式统一记录为 `constant(...)`。例如 `select 't1' as a1` 输出 `sourceColumns = []`、`expression = constant('t1')`、`lineageType = CONSTANT`。
-- 静态分区字段按常量赋值保留在字段血缘结果中，但不产生字段到字段来源。例如 `partition(source_system='profile', dt)` 中 `source_system` 输出为 `constant('profile')`，动态分区 `dt` 则继续对齐 `select` 中的 `dt` 字段。
-- 窗口函数表达式应尽量还原为可读 SQL，不输出 Hive AST 内部 token。例如 `row_number() over(partition by user_id order by update_time desc)` 的函数名只记录 `row_number`。
+- 普通常量字段不产生源字段，表达式统一记录为 `constant(...)`。例如 `insert into test_a(a1) select 't1' from test_b` 输出 `sourceColumns = []`、`expression = constant('t1')`、`lineageType = CONSTANT`。
+- 静态分区字段按常量赋值保留在字段血缘结果中，但不产生字段到字段来源。例如 `insert overwrite table dwd.user_tag_detail partition(source_system='profile', dt) select user_id, tag, dt from ods.user_tag` 中 `source_system` 输出为 `constant('profile')`，动态分区 `dt` 则继续对齐 `select` 中的 `dt` 字段。
+- 窗口函数表达式应尽量还原为可读 SQL，不输出 Hive AST 内部 token。例如 `insert into test_a(user_id, rn) select user_id, row_number() over(partition by user_id order by update_time desc) from test_b` 中 `rn` 的函数名只记录 `row_number`。
 - 集合操作按分支聚合表达式。`union all` 使用 `union_all(...)`，plain `union` 使用 `union_distinct(...)`。字段分支示例：`union_all(table1.a1, table2.a2)`；常量分支示例：`union_all(constant('A'), constant('B'))`。
 - 字符串字面量、变量兜底后的字面量、日期格式串等不应被识别为来源字段。例如 `'fallback_value'`、`'yyyy/MM/dd'` 只作为表达式内容，不进入 `sourceColumns`。
 
@@ -218,6 +220,130 @@ LineageAnalyzeResult result = new HiveScriptLineageAnalyzer().analyzeScript(
         .build()
 );
 ```
+
+## 真实脚本试跑
+
+仓库提供了一个命令行示例入口：
+
+- [LineageAnalyzeCli.java](src/main/java/com/panfan/hivelineage/cli/LineageAnalyzeCli.java)
+- [lineage-analyzer.example.properties](config/lineage-analyzer.example.properties)
+- [run-lineage-cli.sh](scripts/run-lineage-cli.sh)
+
+### 1. 准备配置文件
+
+复制示例配置：
+
+```bash
+cp config/lineage-analyzer.example.properties config/lineage-analyzer.properties
+```
+
+核心配置项如下：
+
+```properties
+lineage.workflowId=wf_local
+lineage.taskId=samplingHql01
+lineage.taskVersion=V1
+lineage.defaultDatabase=default
+lineage.scriptPath=samplingHql01.txt
+lineage.outputPath=target/lineage-output/samplingHql01-lineage.md
+
+lineage.parseMode=TABLE_AND_COLUMN
+lineage.includeTemporaryLineage=true
+lineage.includeIgnoredStatements=false
+lineage.expandViewLineage=true
+lineage.fallbackVariableValue=fallback_value
+
+runtimeVariable.bizdate=20260701
+
+metadata.jdbc.url=jdbc:mysql://127.0.0.1:3306/hive?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+metadata.jdbc.user=root
+metadata.jdbc.password=${env:HIVE_META_PASSWORD}
+metadata.columnTable=metadata_column_v2
+metadata.viewInfoTable=hive_view_parse_info
+```
+
+`metadata.jdbc.password` 支持两种写法：
+
+- 推荐：`${env:HIVE_META_PASSWORD}`，运行前通过环境变量传入。
+- 本地临时调试：直接写明文密码。`config/lineage-analyzer.properties` 已加入 `.gitignore`，不会被提交。
+
+运行前设置密码：
+
+```bash
+export HIVE_META_PASSWORD=85418825
+```
+
+如果脚本中有运行时变量，可以按 `runtimeVariable.<变量名>=<变量值>` 增加，例如 `runtimeVariable.bizdate=20260701`。SQL 中的 `${bizdate}`、`${hivevar:bizdate}`、`${hiveconf:bizdate}` 会优先使用这些配置；残留变量会按 `lineage.fallbackVariableValue` 兜底。
+
+### 2. 准备元数据
+
+字段血缘依赖 `metadata_column_v2`：
+
+- `db_en_name`：库名
+- `tb_en_name`：表名
+- `column_name`：字段名
+- `integer_idx, id`：字段顺序
+- `is_active`：字段是否有效
+
+视图展开依赖 `hive_view_parse_info`：
+
+- `view_name`：视图名，支持 `库名.表名` 或单独表名。
+- `view_source`：视图上游表，格式为 `库名.表名`。
+- `failed_status`：`b'1'` 表示视图解析失败，会被过滤。
+
+如果只解析表血缘，可以把 `lineage.parseMode` 设置为 `TABLE_ONLY`，此时一般不需要查字段元数据。
+
+### 3. 运行
+
+使用默认配置路径：
+
+```bash
+bash scripts/run-lineage-cli.sh
+```
+
+指定配置路径：
+
+```bash
+bash scripts/run-lineage-cli.sh config/lineage-analyzer.properties
+```
+
+脚本会自动执行 Maven 编译、拼接依赖 classpath，并运行 `LineageAnalyzeCli`。如果使用 JDK 9 及以上版本，脚本会自动增加 Hive/Hadoop 依赖所需的 `--add-opens=java.base/java.net=ALL-UNNAMED`。
+
+### 4. 查看运行结果
+
+结果写入 `lineage.outputPath` 配置的 markdown 文件，例如：
+
+```text
+target/lineage-output/samplingHql01-lineage.md
+```
+
+CLI 结束时也会在终端打印：
+
+- 配置文件路径
+- SQL 脚本路径
+- 输出文件路径
+- 总语句数、忽略语句数、失败语句数
+
+如果 `failedStatementCount > 0`，命令退出码为 `2`，方便后续接入调度或流水线。
+
+### 5. 如何核对
+
+打开输出 markdown，按 `Statement N` 逐条核对：
+
+- `rawSql` 代码块是否是原始 SQL。
+- `parseStatusCode` 是否为 `0`。`2` 表示解析失败，失败原因看 `failureCode` 和 `failureMessage`。
+- `formalLineageProduced` 是否符合预期。`set`、纯查询、普通 DDL、`insert ... values` 等默认不产生正式血缘。
+- `Table Lineage` 中目标表和来源表是否完整。
+- `Column Lineage` 中目标字段、来源字段、`lineageType`、`expression` 是否合理。
+- `Warnings` 中是否有 `METADATA_NOT_FOUND`、`UNRESOLVED_VARIABLE`、视图展开失败等需要处理的问题。
+
+字段血缘核对时尤其关注：
+
+- `DIRECT`：目标字段是否直接对应正确源字段。
+- `DERIVED`：函数、计算、窗口函数、`union` 等表达式是否保留在 `expression`。
+- `CONSTANT`：常量写入目标字段时，`sourceColumns` 应为空，`expression` 应为 `constant(...)`。
+- 视图输入是否按 `hive_view_parse_info.view_source` 展开。
+- 临时表是否串联到最终真实来源表。
 
 ## 当前支持的 SQL 口径
 
