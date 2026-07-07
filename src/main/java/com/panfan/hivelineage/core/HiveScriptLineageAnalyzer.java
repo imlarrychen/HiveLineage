@@ -929,6 +929,9 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         if (lower.startsWith("select ")) {
             return "PURE_QUERY";
         }
+        if (lower.startsWith("create temporary macro ")) {
+            return "CREATE_TEMPORARY_MACRO";
+        }
         if (lower.startsWith("create table ") && !Pattern.compile("(?is)\\bas\\s+(?:with\\b.*)?select\\b").matcher(lower).find()) {
             return "CREATE_TABLE_DDL";
         }
@@ -953,6 +956,9 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         }
         if ("CREATE_TABLE_DDL".equals(skipReason)) {
             return "CREATE_TABLE";
+        }
+        if ("CREATE_TEMPORARY_MACRO".equals(skipReason)) {
+            return "CREATE_TEMPORARY_MACRO";
         }
         if ("NO_OUTPUT_TABLE".equals(skipReason)) {
             return "INSERT_DIRECTORY";

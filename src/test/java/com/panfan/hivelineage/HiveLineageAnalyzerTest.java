@@ -52,6 +52,7 @@ public class HiveLineageAnalyzerTest {
         test.staticPartitionColumnLineageRecordsConstantExpression();
         test.mixedStaticAndDynamicPartitionColumnsAreAligned();
         test.statementSplitterIgnoresSemicolonInsideStringAndComments();
+        test.createTemporaryMacroIsIgnoredBecauseItHasNoLineageOutput();
         test.insertOverwriteDirectoryIsIgnoredBecauseThereIsNoOutputTable();
         test.selectStarExpandsColumnsFromMetadata();
         test.selectStarAlignsToTargetMetadataWhenSourceHasExtraColumns();
@@ -1036,6 +1037,48 @@ public class HiveLineageAnalyzerTest {
         TestSupport.assertEquals(2, result.getStatements().size(), "comment splitter statement count");
         TestSupport.assertEquals("dwd.string_case", result.getStatements().get(0).getOutputObject().getQualifiedName(), "first target after splitter");
         TestSupport.assertEquals("dwd.next_case", result.getStatements().get(1).getOutputObject().getQualifiedName(), "second target after splitter");
+    }
+
+    @Test
+    public void createTemporaryMacroIsIgnoredBecauseItHasNoLineageOutput() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        String script = "create temporary macro CUST_AGE_MC(opn_dt string,bth_dt string) "
+            + "if(datediff(opn_dt,bth_dt)>=0,1,0);"
+            + "insert overwrite table dwd.user_profile(user_id) select user_id from ods.user_base;";
+
+        LineageAnalyzeResult result = analyzer.analyzeScript(LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_macro")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript(script)
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_ONLY)
+                .build())
+            .build());
+
+        TestSupport.assertEquals(2, result.getTotalStatementCount(), "macro total statement count");
+        TestSupport.assertEquals(1, result.getIgnoredStatementCount(), "macro ignored statement count");
+        TestSupport.assertEquals(0, result.getFailedStatementCount(), "macro failed statement count");
+        TestSupport.assertEquals(1, result.getStatements().size(), "macro returned statement count");
+        TestSupport.assertEquals("dwd.user_profile", result.getStatements().get(0).getOutputObject().getQualifiedName(), "macro following target");
+
+        LineageAnalyzeResult withIgnored = analyzer.analyzeScript(LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_macro")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript(script)
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_ONLY)
+                .includeIgnoredStatements(true)
+                .build())
+            .build());
+
+        TestSupport.assertEquals(2, withIgnored.getStatements().size(), "macro include ignored returned statement count");
+        TestSupport.assertEquals(3, withIgnored.getStatements().get(0).getParseStatusCode(), "macro ignored status");
+        TestSupport.assertEquals("CREATE_TEMPORARY_MACRO", withIgnored.getStatements().get(0).getStatementType(), "macro ignored type");
+        TestSupport.assertEquals("CREATE_TEMPORARY_MACRO", withIgnored.getStatements().get(0).getSkipReason(), "macro ignored reason");
     }
 
     @Test

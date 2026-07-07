@@ -467,6 +467,7 @@ mvn -q \
 - [samplingHql01.txt](samplingHql01.txt)
 - [samplingHql02.txt](samplingHql02.txt)
 - [samplingHql03.txt](samplingHql03.txt)
+- [samplingHql04.txt](samplingHql04.txt)
 
 补充元数据脚本：
 
