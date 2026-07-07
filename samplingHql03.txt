@@ -1,0 +1,51 @@
+set hive.support.concurrency=false;
+set hive.strict.checks.no.partition.filter = true;
+set hive.optimize.cte.materialize.threshold=2;
+set hive.vectorized.execution.enabled = true;
+set hive.vectorized.execution.reduce.enabled = true;
+
+INSERT OVERWRITE TABLE mtr_cpr_100.SLC54_T_USEROPLOG_H PARTITION (BIZ_DATE)
+SELECT
+     WRKDAT
+    ,SEQID
+    ,SUBSEQ
+    ,CZID
+    ,CZNAME
+    ,BUSTYP
+    ,IDTYP
+    ,OPTYP
+    ,OPCOD
+    ,CZRESULT
+    ,OPUSER
+    ,SBHCOD
+    ,OPTIME
+    ,PRCSTS
+    ,MSGID
+    ,NO_USEFUL_FILED
+    ,ETL_HQT.bdpdatefunc('${work_day}',1,'yyyyMMdd',-1) AS BIZ_DATE
+FROM mtr_cpr_100.SLC54_T_USEROPLOG_H
+WHERE  BIZ_DATE=ETL_HQT.bdpdatefunc('${work_day}',1,'yyyyMMdd',-2)
+
+UNION ALL
+
+SELECT
+     CAST(WRKDAT AS STRING )   WRKDAT
+    ,SEQID
+    ,SUBSEQ
+    ,CZID
+    ,CZNAME
+    ,BUSTYP
+    ,IDTYP
+    ,OPTYP
+    ,OPCOD
+    ,CASE WHEN CZRESULT='NN' THEN '05' WHEN CZRESULT='SS' THEN '06' ELSE CZRESULT END AS CZRESULT
+    ,OPUSER
+    ,SBHCOD
+    ,CAST(OPTIME AS STRING )    OPTIME
+    ,PRCSTS
+    ,MSGID
+    ,''         AS NO_USEFUL_FILED
+    ,ETL_HQT.bdpdatefunc('${work_day}',1,'yyyyMMdd',-1) AS BIZ_DATE
+FROM mtr_cpr_100.SLC54_T_USEROPLOG
+WHERE BIZ_DATE=ETL_HQT.bdpdatefunc('${work_day}',1,'yyyyMMdd',-1)
+;

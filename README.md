@@ -466,6 +466,11 @@ mvn -q \
 
 - [samplingHql01.txt](samplingHql01.txt)
 - [samplingHql02.txt](samplingHql02.txt)
+- [samplingHql03.txt](samplingHql03.txt)
+
+补充元数据脚本：
+
+- [samplingHql03_metadata.sql](scripts/metadata/samplingHql03_metadata.sql)
 
 自动生成的核心测试样例：
 

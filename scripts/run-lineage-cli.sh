@@ -19,4 +19,8 @@ if [[ "${JAVA_MAJOR}" != "1" && "${JAVA_MAJOR}" -ge 9 ]]; then
   JAVA_ARGS+=("--add-opens=java.base/java.net=ALL-UNNAMED")
 fi
 
-java "${JAVA_ARGS[@]}" -cp "${CP}" com.panfan.hivelineage.cli.LineageAnalyzeCli "${CONFIG_PATH}"
+if [[ "${#JAVA_ARGS[@]}" -gt 0 ]]; then
+  java "${JAVA_ARGS[@]}" -cp "${CP}" com.panfan.hivelineage.cli.LineageAnalyzeCli "${CONFIG_PATH}"
+else
+  java -cp "${CP}" com.panfan.hivelineage.cli.LineageAnalyzeCli "${CONFIG_PATH}"
+fi
