@@ -33,6 +33,7 @@ public final class LineageAnalyzeCli {
         Properties properties = loadProperties(configPath);
         Path scriptPath = Paths.get(required(properties, "lineage.scriptPath"));
         Path outputPath = Paths.get(get(properties, "lineage.outputPath", "target/lineage-output/lineage-result.md"));
+        String defaultDatabase = get(properties, "lineage.defaultDatabase", "default");
         String script = new String(Files.readAllBytes(scriptPath), StandardCharsets.UTF_8);
 
         LineageAnalyzeOptions options = LineageAnalyzeOptions.builder()
@@ -59,7 +60,7 @@ public final class LineageAnalyzeCli {
                 .taskId(get(properties, "lineage.taskId", taskIdFrom(scriptPath)))
                 .taskVersion(get(properties, "lineage.taskVersion", "V1"))
                 .clusterName(get(properties, "lineage.clusterName", "default"))
-                .defaultDatabase(get(properties, "lineage.defaultDatabase", "default"))
+                .defaultDatabase(defaultDatabase)
                 .runtimeVariables(runtimeVariables(properties))
                 .metadataProvider(metadataProvider)
                 .metadataCache(new HiveMetadataCache())
@@ -74,7 +75,7 @@ public final class LineageAnalyzeCli {
         }
         Files.write(
             outputPath,
-            LineageMarkdownRenderer.render(result, "Hive SQL Lineage Parse Result").getBytes(StandardCharsets.UTF_8)
+            LineageMarkdownRenderer.render(result, "Hive SQL Lineage Parse Result", defaultDatabase).getBytes(StandardCharsets.UTF_8)
         );
 
         System.out.println("Lineage parse finished.");

@@ -330,6 +330,7 @@ CLI 结束时也会在终端打印：
 
 打开输出 markdown，按 `Statement N` 逐条核对：
 
+- `Tables And Fields` 汇总节会按表列出完整表名、输入/输出角色、涉及语句编号、目标字段、来源字段和全部字段。真实脚本测试时，可以优先把这一节发给维护者，用来补充 `metadata_column_v2` 元数据。
 - `rawSql` 代码块是否是原始 SQL。
 - `parseStatusCode` 是否为 `0`。`2` 表示解析失败，失败原因看 `failureCode` 和 `failureMessage`。
 - `formalLineageProduced` 是否符合预期。`set`、纯查询、普通 DDL、`insert ... values` 等默认不产生正式血缘。

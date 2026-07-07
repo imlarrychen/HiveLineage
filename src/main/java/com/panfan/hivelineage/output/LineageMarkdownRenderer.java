@@ -7,18 +7,28 @@ import com.panfan.hivelineage.result.LineageAnalyzeResult;
 import com.panfan.hivelineage.result.LineageWarning;
 import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.result.TableLineage;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public final class LineageMarkdownRenderer {
     private LineageMarkdownRenderer() {
     }
 
     public static String render(LineageAnalyzeResult result, String title) {
+        return render(result, title, null);
+    }
+
+    public static String render(LineageAnalyzeResult result, String title, String defaultDatabase) {
         StringBuilder builder = new StringBuilder();
         builder.append("# ")
             .append(isBlank(title) ? "Hive SQL Lineage Parse Result" : title)
             .append("\n\n");
         appendSummary(builder, result);
+        appendTableFieldSummary(builder, result, defaultDatabase);
         for (StatementLineageResult statement : result.getStatements()) {
             appendStatement(builder, statement);
         }
@@ -37,6 +47,147 @@ public final class LineageMarkdownRenderer {
             .append(row("ignoredStatementCount", result.getIgnoredStatementCount()))
             .append(row("failedStatementCount", result.getFailedStatementCount()))
             .append("\n");
+    }
+
+    private static void appendTableFieldSummary(
+        StringBuilder builder,
+        LineageAnalyzeResult result,
+        String defaultDatabase
+    ) {
+        Map<String, TableFieldSummary> summaries = tableFieldSummaries(result, defaultDatabase);
+        builder.append("## Tables And Fields\n\n")
+            .append("> This section groups parsed table names and referenced fields for preparing Hive metadata.\n\n");
+        if (summaries.isEmpty()) {
+            builder.append("_None_\n\n");
+            return;
+        }
+        builder.append("| Table | Roles | Statements | Target Fields | Source Fields | All Fields |\n")
+            .append("| --- | --- | --- | --- | --- | --- |\n");
+        for (TableFieldSummary summary : summaries.values()) {
+            builder.append("| ")
+                .append(markdown(summary.tableName))
+                .append(" | ")
+                .append(markdown(joinStrings(new ArrayList<>(summary.roles))))
+                .append(" | ")
+                .append(markdown(joinIntegers(summary.statementIndexes)))
+                .append(" | ")
+                .append(markdown(joinStrings(new ArrayList<>(summary.targetFields))))
+                .append(" | ")
+                .append(markdown(joinStrings(new ArrayList<>(summary.sourceFields))))
+                .append(" | ")
+                .append(markdown(joinStrings(new ArrayList<>(summary.allFields()))))
+                .append(" |\n");
+        }
+        builder.append("\n");
+    }
+
+    private static Map<String, TableFieldSummary> tableFieldSummaries(
+        LineageAnalyzeResult result,
+        String defaultDatabase
+    ) {
+        Map<String, TableFieldSummary> summaries = new LinkedHashMap<>();
+        for (StatementLineageResult statement : result.getStatements()) {
+            addObjectSummary(summaries, statement.getOutputObject(), "OUTPUT", statement.getStatementIndex(), defaultDatabase);
+            for (DataObjectRef inputObject : statement.getInputObjects()) {
+                addObjectSummary(summaries, inputObject, "INPUT", statement.getStatementIndex(), defaultDatabase);
+            }
+            for (TableLineage tableLineage : statement.getTableLineages()) {
+                addObjectSummary(summaries, tableLineage.getTargetObject(), "OUTPUT", statement.getStatementIndex(), defaultDatabase);
+                for (DataObjectRef sourceObject : tableLineage.getSourceObjects()) {
+                    addObjectSummary(summaries, sourceObject, "INPUT", statement.getStatementIndex(), defaultDatabase);
+                }
+            }
+            for (ColumnLineage columnLineage : statement.getColumnLineages()) {
+                addColumnSummary(
+                    summaries,
+                    columnLineage.getTargetColumn().getQualifiedName(),
+                    "OUTPUT",
+                    statement.getStatementIndex(),
+                    defaultDatabase,
+                    true
+                );
+                for (ColumnRef sourceColumn : columnLineage.getSourceColumns()) {
+                    addColumnSummary(
+                        summaries,
+                        sourceColumn.getQualifiedName(),
+                        "INPUT",
+                        statement.getStatementIndex(),
+                        defaultDatabase,
+                        false
+                    );
+                }
+                for (DataObjectRef sourceObject : columnLineage.getSourceObjects()) {
+                    addObjectSummary(summaries, sourceObject, "INPUT", statement.getStatementIndex(), defaultDatabase);
+                }
+            }
+        }
+        return summaries;
+    }
+
+    private static void addObjectSummary(
+        Map<String, TableFieldSummary> summaries,
+        DataObjectRef objectRef,
+        String role,
+        int statementIndex,
+        String defaultDatabase
+    ) {
+        String tableName = objectName(objectRef);
+        if (isBlank(tableName)) {
+            return;
+        }
+        summaryFor(summaries, resolveTableName(tableName, defaultDatabase))
+            .addRole(role, statementIndex);
+    }
+
+    private static void addColumnSummary(
+        Map<String, TableFieldSummary> summaries,
+        String qualifiedColumnName,
+        String role,
+        int statementIndex,
+        String defaultDatabase,
+        boolean targetField
+    ) {
+        ColumnNameParts parts = splitColumnName(qualifiedColumnName);
+        if (parts == null) {
+            return;
+        }
+        TableFieldSummary summary = summaryFor(summaries, resolveTableName(parts.tableName, defaultDatabase));
+        summary.addRole(role, statementIndex);
+        if (targetField) {
+            summary.targetFields.add(parts.columnName);
+        } else {
+            summary.sourceFields.add(parts.columnName);
+        }
+    }
+
+    private static TableFieldSummary summaryFor(Map<String, TableFieldSummary> summaries, String tableName) {
+        TableFieldSummary summary = summaries.get(tableName);
+        if (summary == null) {
+            summary = new TableFieldSummary(tableName);
+            summaries.put(tableName, summary);
+        }
+        return summary;
+    }
+
+    private static String resolveTableName(String tableName, String defaultDatabase) {
+        if (isBlank(tableName) || tableName.contains(".") || isBlank(defaultDatabase)) {
+            return tableName;
+        }
+        return defaultDatabase + "." + tableName;
+    }
+
+    private static ColumnNameParts splitColumnName(String qualifiedColumnName) {
+        if (isBlank(qualifiedColumnName)) {
+            return null;
+        }
+        int dotIndex = qualifiedColumnName.lastIndexOf('.');
+        if (dotIndex <= 0 || dotIndex == qualifiedColumnName.length() - 1) {
+            return null;
+        }
+        return new ColumnNameParts(
+            qualifiedColumnName.substring(0, dotIndex),
+            qualifiedColumnName.substring(dotIndex + 1)
+        );
     }
 
     private static void appendStatement(StringBuilder builder, StatementLineageResult statement) {
@@ -185,6 +336,14 @@ public final class LineageMarkdownRenderer {
         return builder.toString();
     }
 
+    private static String joinIntegers(Set<Integer> values) {
+        StringBuilder builder = new StringBuilder();
+        for (Integer value : values) {
+            appendJoined(builder, String.valueOf(value));
+        }
+        return builder.toString();
+    }
+
     private static void appendJoined(StringBuilder builder, String value) {
         if (builder.length() > 0) {
             builder.append("<br>");
@@ -205,5 +364,43 @@ public final class LineageMarkdownRenderer {
 
     private static String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private static final class TableFieldSummary {
+        private final String tableName;
+        private final Set<String> roles = new LinkedHashSet<>();
+        private final Set<Integer> statementIndexes = new LinkedHashSet<>();
+        private final Set<String> targetFields = new LinkedHashSet<>();
+        private final Set<String> sourceFields = new LinkedHashSet<>();
+
+        private TableFieldSummary(String tableName) {
+            this.tableName = tableName;
+        }
+
+        private void addRole(String role, int statementIndex) {
+            roles.add(role);
+            statementIndexes.add(statementIndex);
+        }
+
+        private List<String> allFields() {
+            List<String> fields = new ArrayList<>();
+            fields.addAll(targetFields);
+            for (String sourceField : sourceFields) {
+                if (!fields.contains(sourceField)) {
+                    fields.add(sourceField);
+                }
+            }
+            return fields;
+        }
+    }
+
+    private static final class ColumnNameParts {
+        private final String tableName;
+        private final String columnName;
+
+        private ColumnNameParts(String tableName, String columnName) {
+            this.tableName = tableName;
+            this.columnName = columnName;
+        }
     }
 }
