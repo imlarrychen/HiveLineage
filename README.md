@@ -471,6 +471,7 @@ mvn -q \
 补充元数据脚本：
 
 - [samplingHql03_metadata.sql](scripts/metadata/samplingHql03_metadata.sql)
+- [samplingHql04_metadata.sql](scripts/metadata/samplingHql04_metadata.sql)
 
 自动生成的核心测试样例：
 
