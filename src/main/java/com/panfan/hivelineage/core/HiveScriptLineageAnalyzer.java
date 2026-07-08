@@ -357,8 +357,14 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         if (parseMode == LineageParseMode.COLUMN_ONLY || parseMode == LineageParseMode.TABLE_AND_COLUMN) {
             Map<String, String> sourceAliases = extractSourceAliases(normalizedStatement);
             sourceAliases.putAll(resolvedParsedStatement.getSourceAliases());
+            Map<String, String> topLevelSourceAliases = extractTopLevelSourceAliases(normalizedStatement);
+            mergeTopLevelSourceAliases(sourceAliases, topLevelSourceAliases);
+            Map<String, String> columnAliasSources = filterColumnAliasSources(
+                resolvedParsedStatement.getColumnAliasSources(),
+                topLevelSourceAliases
+            );
             Map<String, String> columnOwners = buildColumnOwners(request, inputObjects, parseMode, statementWarnings, index);
-            boolean setOperationQuery = isSetOperationQuery(normalizedStatement);
+            boolean setOperationQuery = hasCompleteSetOperationProjection(resolvedParsedStatement, selectItems.size());
             for (int i = 0; i < selectItems.size(); i++) {
                 String expression = stripAlias(selectItems.get(i));
                 String sourceExtractionExpression = expression;
@@ -401,7 +407,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                         defaultColumnSourceTable,
                         sourceAliases,
                         columnOwners,
-                        resolvedParsedStatement.getColumnAliasSources()
+                        columnAliasSources
                     );
                 }
                 if (directProjection == null) {
@@ -1317,6 +1323,170 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         return aliases;
     }
 
+    private void mergeTopLevelSourceAliases(Map<String, String> sourceAliases, Map<String, String> topLevelAliases) {
+        for (Map.Entry<String, String> alias : topLevelAliases.entrySet()) {
+            if (alias.getValue().contains(".") || !sourceAliases.containsKey(alias.getKey())) {
+                sourceAliases.put(alias.getKey(), alias.getValue());
+            }
+        }
+    }
+
+    private Map<String, String> filterColumnAliasSources(
+        Map<String, String> columnAliasSources,
+        Map<String, String> topLevelAliases
+    ) {
+        Set<String> topLevelPhysicalAliases = new LinkedHashSet<>();
+        for (Map.Entry<String, String> alias : topLevelAliases.entrySet()) {
+            if (alias.getValue().contains(".") && !alias.getKey().contains(".")) {
+                topLevelPhysicalAliases.add(alias.getKey().toLowerCase(Locale.ROOT));
+            }
+        }
+        if (topLevelPhysicalAliases.isEmpty()) {
+            return columnAliasSources;
+        }
+        Map<String, String> filtered = new HashMap<>();
+        for (Map.Entry<String, String> source : columnAliasSources.entrySet()) {
+            int dotIndex = source.getKey().indexOf('.');
+            String owner = dotIndex < 0 ? source.getKey() : source.getKey().substring(0, dotIndex);
+            if (!topLevelPhysicalAliases.contains(owner.toLowerCase(Locale.ROOT))) {
+                filtered.put(source.getKey(), source.getValue());
+            }
+        }
+        return filtered;
+    }
+
+    private Map<String, String> extractTopLevelSourceAliases(String normalizedStatement) {
+        Map<String, String> aliases = new HashMap<>();
+        int start = lastTopLevelKeywordIndex(normalizedStatement, "insert");
+        if (start < 0) {
+            start = lastTopLevelKeywordIndex(normalizedStatement, "select");
+        }
+        if (start < 0) {
+            start = 0;
+        }
+        int depth = 0;
+        char quote = 0;
+        for (int i = start; i < normalizedStatement.length(); i++) {
+            char ch = normalizedStatement.charAt(i);
+            if (quote != 0) {
+                if (ch == quote) {
+                    quote = 0;
+                }
+                continue;
+            }
+            if (ch == '\'' || ch == '"' || ch == '`') {
+                quote = ch;
+                continue;
+            }
+            if (ch == '(') {
+                depth++;
+                continue;
+            }
+            if (ch == ')') {
+                depth = Math.max(0, depth - 1);
+                continue;
+            }
+            if (depth == 0 && (matchesKeywordAt(normalizedStatement, i, "from") || matchesKeywordAt(normalizedStatement, i, "join"))) {
+                i = captureTopLevelSourceAlias(normalizedStatement, i, aliases);
+            }
+        }
+        return aliases;
+    }
+
+    private int captureTopLevelSourceAlias(String statement, int keywordIndex, Map<String, String> aliases) {
+        int position = skipWhitespace(statement, keywordIndex);
+        position = readIdentifier(statement, position);
+        position = skipWhitespace(statement, position);
+        if (position >= statement.length() || statement.charAt(position) == '(') {
+            return Math.max(keywordIndex, position - 1);
+        }
+        int tableStart = position;
+        int tableEnd = readIdentifier(statement, tableStart);
+        if (tableEnd == tableStart) {
+            return position;
+        }
+        String tableName = normalizeIdentifier(statement.substring(tableStart, tableEnd));
+        String simpleTableName = tableName.contains(".") ? tableName.substring(tableName.lastIndexOf('.') + 1) : tableName;
+        aliases.put(tableName, tableName);
+        aliases.put(simpleTableName, tableName);
+
+        position = skipWhitespace(statement, tableEnd);
+        int aliasStart = position;
+        int aliasEnd = readIdentifier(statement, aliasStart);
+        if (aliasEnd > aliasStart && "as".equalsIgnoreCase(statement.substring(aliasStart, aliasEnd))) {
+            aliasStart = skipWhitespace(statement, aliasEnd);
+            aliasEnd = readIdentifier(statement, aliasStart);
+        }
+        if (aliasEnd > aliasStart) {
+            String alias = statement.substring(aliasStart, aliasEnd);
+            if (!isAliasKeyword(alias)) {
+                aliases.put(alias.toLowerCase(Locale.ROOT), tableName);
+            }
+        }
+        return tableEnd;
+    }
+
+    private int lastTopLevelKeywordIndex(String statement, String keyword) {
+        int found = -1;
+        int depth = 0;
+        char quote = 0;
+        for (int i = 0; i < statement.length(); i++) {
+            char ch = statement.charAt(i);
+            if (quote != 0) {
+                if (ch == quote) {
+                    quote = 0;
+                }
+                continue;
+            }
+            if (ch == '\'' || ch == '"' || ch == '`') {
+                quote = ch;
+                continue;
+            }
+            if (ch == '(') {
+                depth++;
+                continue;
+            }
+            if (ch == ')') {
+                depth = Math.max(0, depth - 1);
+                continue;
+            }
+            if (depth == 0 && matchesKeywordAt(statement, i, keyword)) {
+                found = i;
+            }
+        }
+        return found;
+    }
+
+    private boolean matchesKeywordAt(String statement, int index, String keyword) {
+        int end = index + keyword.length();
+        if (index < 0 || end > statement.length()) {
+            return false;
+        }
+        if (!statement.regionMatches(true, index, keyword, 0, keyword.length())) {
+            return false;
+        }
+        return (index == 0 || !isIdentifierCharacter(statement.charAt(index - 1)))
+            && (end == statement.length() || !isIdentifierCharacter(statement.charAt(end)));
+    }
+
+    private int skipWhitespace(String statement, int position) {
+        while (position < statement.length() && Character.isWhitespace(statement.charAt(position))) {
+            position++;
+        }
+        return position;
+    }
+
+    private int readIdentifier(String statement, int position) {
+        while (position < statement.length() && isIdentifierCharacter(statement.charAt(position))) {
+            position++;
+        }
+        return position;
+    }
+
+    private boolean isIdentifierCharacter(char ch) {
+        return Character.isLetterOrDigit(ch) || ch == '_' || ch == '.';
+    }
+
     private Map<String, String> buildColumnOwners(
         LineageAnalyzeRequest request,
         List<DataObjectRef> inputObjects,
@@ -1408,8 +1578,18 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         return builder.toString();
     }
 
-    private boolean isSetOperationQuery(String normalizedStatement) {
-        return Pattern.compile("(?i)\\bunion\\b|\\bintersect\\b|\\bexcept\\b").matcher(normalizedStatement).find();
+    private boolean hasCompleteSetOperationProjection(ParsedHiveStatement parsedStatement, int selectItemCount) {
+        Map<Integer, List<String>> expressions = parsedStatement.getSetOperationExpressionsBySelectIndex();
+        if (selectItemCount <= 0 || expressions.size() != selectItemCount) {
+            return false;
+        }
+        for (int i = 0; i < selectItemCount; i++) {
+            List<String> positionExpressions = expressions.get(i);
+            if (positionExpressions == null || positionExpressions.isEmpty()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private List<ColumnRef> extractSetOperationSourceColumns(

@@ -510,6 +510,85 @@ public class HiveLineageAnalyzerTest {
     }
 
     @Test
+    public void nestedUnionInCteDoesNotOverrideTopLevelSelectLineage() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("ods.union_source_a", "id", "code")
+            .addTable("ods.union_source_b", "id", "code")
+            .addTable("ods.user_base", "user_id", "user_name")
+            .addTable("dwd.final_target", "id", "user_name");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_nested_union_cte")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript(
+                "with tmp_u as ("
+                    + "select id, code from ods.union_source_a "
+                    + "union all "
+                    + "select id, code from ods.union_source_b"
+                    + ") "
+                    + "insert overwrite table dwd.final_target "
+                    + "select u.user_id, u.user_name "
+                    + "from ods.user_base u "
+                    + "left join tmp_u t on u.user_id = t.id;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+
+        TestSupport.assertEquals(0, statement.getParseStatusCode(), "nested union cte parse status");
+        TestSupport.assertEquals("dwd.final_target.id", statement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "target id");
+        TestSupport.assertEquals("u.user_id", statement.getColumnLineages().get(0).getExpression(), "top-level id expression");
+        TestSupport.assertEquals(1, statement.getColumnLineages().get(0).getSourceColumns().size(), "target id source count");
+        assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "ods.user_base.user_id");
+        TestSupport.assertEquals("dwd.final_target.user_name", statement.getColumnLineages().get(1).getTargetColumn().getQualifiedName(), "target user_name");
+        TestSupport.assertEquals(1, statement.getColumnLineages().get(1).getSourceColumns().size(), "target user_name source count");
+        assertContainsColumn(statement.getColumnLineages().get(1).getSourceColumns(), "ods.user_base.user_name");
+    }
+
+    @Test
+    public void nestedAliasDoesNotOverrideTopLevelAliasWithSameName() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("ods.inner_source", "id")
+            .addTable("ods.user_base", "user_id")
+            .addTable("dwd.alias_target", "user_id");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_alias_scope")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript(
+                "with tmp_alias as (select t1.id from ods.inner_source t1) "
+                    + "insert overwrite table dwd.alias_target "
+                    + "select t1.user_id "
+                    + "from ods.user_base t1 "
+                    + "left join tmp_alias t2 on t1.user_id = t2.id;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+
+        TestSupport.assertEquals(0, statement.getParseStatusCode(), "alias scope parse status");
+        TestSupport.assertEquals("t1.user_id", statement.getColumnLineages().get(0).getExpression(), "top-level alias expression");
+        TestSupport.assertEquals(1, statement.getColumnLineages().get(0).getSourceColumns().size(), "top-level alias source count");
+        assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "ods.user_base.user_id");
+    }
+
+    @Test
     public void constantSelectItemProducesConstantLineage() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
 

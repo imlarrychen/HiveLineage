@@ -32,6 +32,7 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
             StatementType statementType = resolveStatementType(root);
             Set<String> cteAliases = collectCteAliases(root);
             ASTNode mainInsert = findMainInsert(root, statementType);
+            ASTNode mainSetOperation = findMainSetOperation(root, mainInsert);
             List<String> selectExpressions = resolveSelectExpressions(root, mainInsert);
             List<String> targetColumns = resolveTargetColumns(root, mainInsert, statementType, selectExpressions);
             if (targetColumns.isEmpty() && statementType == StatementType.INSERT_SELECT) {
@@ -46,8 +47,8 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
                 resolveSourceAliases(root, cteAliases),
                 resolveColumnAliasSources(root, cteAliases),
                 resolveColumnAliasExpressions(root, cteAliases),
-                resolveSetOperationSourceColumns(root, cteAliases),
-                resolveSetOperationExpressions(root, cteAliases),
+                resolveSetOperationSourceColumns(mainSetOperation, cteAliases),
+                resolveSetOperationExpressions(mainSetOperation, cteAliases),
                 resolveStaticPartitionValues(mainInsert),
                 normalizedSql
             );
@@ -175,6 +176,14 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
             }
         }
         return expressions;
+    }
+
+    private ASTNode findMainSetOperation(ASTNode root, ASTNode mainInsert) {
+        List<String> expressions = resolveDirectSelectExpressions(mainInsert);
+        if (expressions.size() == 1 && "TOK_SETCOLREF".equalsIgnoreCase(expressions.get(0))) {
+            return findUnionNode(root);
+        }
+        return null;
     }
 
     private List<String> resolveDirectSelectExpressions(ASTNode insertNode) {
