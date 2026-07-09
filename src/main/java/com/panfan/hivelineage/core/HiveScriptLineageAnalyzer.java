@@ -475,23 +475,50 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         Map<String, String> staticPartitionValues,
         List<String> dynamicPartitionColumns
     ) {
-        if (staticPartitionValues.isEmpty()) {
+        if (staticPartitionValues.isEmpty() && dynamicPartitionColumns.isEmpty()) {
             return targetColumns;
         }
-        List<String> aligned = new ArrayList<>();
+        List<String> nonStaticTargetColumns = new ArrayList<>();
         for (String targetColumn : targetColumns) {
             if (!staticPartitionValues.containsKey(targetColumn.toLowerCase(Locale.ROOT))) {
-                aligned.add(targetColumn);
+                nonStaticTargetColumns.add(targetColumn);
             }
         }
-        for (String dynamicPartitionColumn : dynamicPartitionColumns) {
-            if (!aligned.contains(dynamicPartitionColumn)) {
-                aligned.add(dynamicPartitionColumn);
+
+        if (!dynamicPartitionColumns.isEmpty()) {
+            int regularColumnCount = Math.max(0, selectItemCount - dynamicPartitionColumns.size());
+            if (nonStaticTargetColumns.size() >= regularColumnCount) {
+                List<String> aligned = new ArrayList<>(nonStaticTargetColumns.subList(0, regularColumnCount));
+                for (String dynamicPartitionColumn : dynamicPartitionColumns) {
+                    if (!containsIgnoreCase(aligned, dynamicPartitionColumn)) {
+                        aligned.add(preferredColumnCase(nonStaticTargetColumns, dynamicPartitionColumn));
+                    }
+                }
+                return aligned.size() == selectItemCount ? aligned : targetColumns;
             }
         }
-        return aligned.size() >= selectItemCount
-            ? new ArrayList<>(aligned.subList(0, selectItemCount))
+
+        return nonStaticTargetColumns.size() >= selectItemCount
+            ? new ArrayList<>(nonStaticTargetColumns.subList(0, selectItemCount))
             : targetColumns;
+    }
+
+    private boolean containsIgnoreCase(List<String> values, String value) {
+        for (String candidate : values) {
+            if (candidate.equalsIgnoreCase(value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String preferredColumnCase(List<String> candidates, String value) {
+        for (String candidate : candidates) {
+            if (candidate.equalsIgnoreCase(value)) {
+                return candidate;
+            }
+        }
+        return value;
     }
 
     private List<String> extractDynamicPartitionColumns(String normalizedStatement) {
@@ -502,7 +529,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         List<String> dynamicColumns = new ArrayList<>();
         for (String partitionItem : splitSelectItems(matcher.group(1))) {
             if (!partitionItem.contains("=")) {
-                String column = partitionItem.trim().toLowerCase(Locale.ROOT);
+                String column = partitionItem.trim();
                 if (!column.isEmpty()) {
                     dynamicColumns.add(column);
                 }

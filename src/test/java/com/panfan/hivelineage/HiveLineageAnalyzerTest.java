@@ -1091,6 +1091,42 @@ public class HiveLineageAnalyzerTest {
     }
 
     @Test
+    public void unionDynamicPartitionUsesPartitionColumnWhenTargetMetadataOmitsIt() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("dwd.union_partition_target", "id", "name")
+            .addTable("ods.union_source_a", "id", "name", "dt")
+            .addTable("ods.union_source_b", "id", "name", "dt");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_union_dynamic_partition")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript(
+                "insert overwrite table dwd.union_partition_target partition(dt) "
+                    + "select id, name, date_sub(dt, 1) as dt from ods.union_source_a "
+                    + "union all "
+                    + "select id, name, date_sub(dt, 1) as dt from ods.union_source_b;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        List<ColumnLineage> columns = analyzer.analyzeScript(request).getStatements().get(0).getColumnLineages();
+
+        TestSupport.assertEquals("dwd.union_partition_target.id", columns.get(0).getTargetColumn().getQualifiedName(), "union dynamic partition id target");
+        TestSupport.assertEquals("dwd.union_partition_target.name", columns.get(1).getTargetColumn().getQualifiedName(), "union dynamic partition name target");
+        TestSupport.assertEquals("dwd.union_partition_target.dt", columns.get(2).getTargetColumn().getQualifiedName(), "union dynamic partition target");
+        assertContainsColumn(columns.get(2).getSourceColumns(), "ods.union_source_a.dt");
+        assertContainsColumn(columns.get(2).getSourceColumns(), "ods.union_source_b.dt");
+        TestSupport.assertEquals(LineageType.DERIVED, columns.get(2).getLineageType(), "union dynamic partition type");
+    }
+
+    @Test
     public void statementSplitterIgnoresSemicolonInsideStringAndComments() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
 
