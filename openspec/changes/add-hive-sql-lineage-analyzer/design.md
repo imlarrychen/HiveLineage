@@ -377,7 +377,9 @@ analyze table t;
 特殊语句：
 
 - `insert overwrite table target values (...)` 有输出但没有输入数据对象，完全忽略，不产生正式血缘、不产生写入事件、不写图数据库边。
-- 静态分区字段来自常量，只有当该语句同时存在输入表和输出表时，才作为字段血缘中的常量字段输出，`sourceColumns = []`，`expression = constant(...)`，`lineageType = CONSTANT`。
+- 静态分区字段来自常量，只有当该语句同时存在输入表和输出表时，才作为字段赋值信息输出，`sourceColumns = []`，`expression = constant(...)`，`lineageType = CONSTANT`；因为不存在输入字段，不应写字段到字段血缘边。
+- 动态分区字段必须参与目标字段对齐，但是否产生字段血缘边取决于表达式中是否存在输入字段。若动态分区表达式只依赖运行变量、常量或无字段 UDF，例如 `ETL_HQT.bdpdatefunc('${work_day}',1,'yyyyMMdd',-1) AS BIZ_DATE`，则保留目标字段、表达式和函数名用于审计，`sourceColumns = []`，不写字段到字段血缘边。
+- 条件字段默认不作为输出字段来源。`where BIZ_DATE = ...`、`join on ...`、窗口排序字段等只影响数据范围或行选择；除非后续单独设计“条件依赖/影响血缘”，否则不写入字段血缘边。
 - `count(*)` 不依赖具体字段，但依赖输入表行集，字段血缘类型记为 `DERIVED`，并通过 `expression = "count(*)"` 和 `sourceObjects` 说明其依赖。
 
 ## Column Lineage Expression Handling
@@ -426,6 +428,7 @@ test_b.b3            -> test_a.a2, expression: b3,      lineageType: DIRECT
 - `row_number() over(partition by user_id order by create_time) as rn`：`sourceColumns = [user_id, create_time]`，`expression = "row_number() over(partition by user_id order by create_time)"`，`lineageType = DERIVED`，`functionNames = ["row_number"]`。
 - `'t1' as a1`：`sourceColumns = []`，`expression = "constant('t1')"`，`lineageType = CONSTANT`。
 - `partition(source_system='profile', dt) select user_id, tag, dt ...`：`source_system` 作为 `constant('profile')` 输出，`dt` 对齐 `select` 中的动态分区字段。
+- `partition(BIZ_DATE) select ..., ETL_HQT.bdpdatefunc('${work_day}',1,'yyyyMMdd',-1) as BIZ_DATE ...`：`BIZ_DATE` 保留为无源表达式赋值，`sourceColumns = []`，`expression = "ETL_HQT.bdpdatefunc(...)"`，但不产生字段到字段血缘边。
 - `select t1.a from t1 union all select t2.b from t2`：`sourceColumns = [t1.a, t2.b]`，`expression = "union_all(t1.a, t2.b)"`，`lineageType = DERIVED`。
 - `select t1.a from t1 union select t2.b from t2`：`sourceColumns = [t1.a, t2.b]`，`expression = "union_distinct(t1.a, t2.b)"`，`lineageType = DERIVED`。
 - `select 'A' from t1 union all select 'B' from t2`：`sourceColumns = []`，`expression = "union_all(constant('A'), constant('B'))"`，`lineageType = CONSTANT`。

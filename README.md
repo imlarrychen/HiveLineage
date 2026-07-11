@@ -138,12 +138,15 @@ LineageAnalyzeResult result = analyzer.analyzeScript(LineageAnalyzeRequest.build
 
 - `DIRECT`：目标字段直接来自源字段，例如 `insert into test_a(a1) select b3 from test_b` 产生 `test_b.b3 -> test_a.a1`。
 - `DERIVED`：目标字段由源字段经过函数或表达式加工得到，例如 `insert into test_a(a1) select b1 + b2 from test_b` 产生 `(test_b.b1, test_b.b2) -> test_a.a1`。
-- `CONSTANT`：目标字段由常量赋值得到，例如 `insert into test_a(a1) select 't1' from test_b` 产生 `constant('t1') -> test_a.a1`；静态分区 `insert overwrite table test_a partition(dt='20260701') select b1 from test_b` 产生 `constant('20260701') -> test_a.dt`。
+- `CONSTANT`：目标字段由常量赋值得到，例如 `insert into test_a(a1) select 't1' from test_b` 会在解析结果中保留 `expression = constant('t1')`、`sourceColumns = []`；静态分区 `insert overwrite table test_a partition(dt='20260701') select b1 from test_b` 会保留 `dt` 的常量赋值信息。
 
 字段血缘表达式口径：
 
 - 普通常量字段不产生源字段，表达式统一记录为 `constant(...)`。例如 `insert into test_a(a1) select 't1' from test_b` 输出 `sourceColumns = []`、`expression = constant('t1')`、`lineageType = CONSTANT`。
 - 静态分区字段按常量赋值保留在字段血缘结果中，但不产生字段到字段来源。例如 `insert overwrite table dwd.user_tag_detail partition(source_system='profile', dt) select user_id, tag, dt from ods.user_tag` 中 `source_system` 输出为 `constant('profile')`，动态分区 `dt` 则继续对齐 `select` 中的 `dt` 字段。
+- 字段血缘边的落库/写图口径以“同时存在输入字段和输出字段”为准。`sourceColumns = []` 的字段记录只表示目标字段赋值或表达式审计信息，不应写成字段到字段血缘边。
+- 动态分区字段如果对应的 `select` 表达式只依赖运行变量、常量或无字段 UDF，例如 `ETL_HQT.bdpdatefunc('${work_day}',1,'yyyyMMdd',-1) AS BIZ_DATE`，解析结果可以保留 `targetColumn = ...BIZ_DATE`、`expression = ETL_HQT.bdpdatefunc(...)`、`sourceColumns = []`，但不产生字段血缘边。
+- `where`、`join on`、窗口排序等条件中的字段默认不作为输出字段来源写入字段血缘边；后续如果需要表达“条件依赖/影响血缘”，应单独建模。
 - 窗口函数表达式应尽量还原为可读 SQL，不输出 Hive AST 内部 token。例如 `insert into test_a(user_id, rn) select user_id, row_number() over(partition by user_id order by update_time desc) from test_b` 中 `rn` 的函数名只记录 `row_number`。
 - 集合操作按分支聚合表达式。`union all` 使用 `union_all(...)`，plain `union` 使用 `union_distinct(...)`。字段分支示例：`union_all(table1.a1, table2.a2)`；常量分支示例：`union_all(constant('A'), constant('B'))`。
 - 字符串字面量、变量兜底后的字面量、日期格式串等不应被识别为来源字段。例如 `'fallback_value'`、`'yyyy/MM/dd'` 只作为表达式内容，不进入 `sourceColumns`。
@@ -375,6 +378,7 @@ CLI 结束时也会在终端打印：
 
 - 静态分区字段不从 `select` 列取来源字段，按常量字段血缘输出，例如 `partition(source_system='profile')` 输出 `source_system <- constant('profile')`。
 - 动态分区字段参与 `select` 列对齐，例如 `partition(source_system='profile', dt) select user_id, tag, dt ...` 中，`dt` 对齐 `select` 的第三列，`source_system` 作为静态常量单独输出。
+- 动态分区字段并不天然产生字段血缘边。只有当动态分区表达式能解析出输入字段时，才产生字段到字段血缘；如果动态分区表达式仅由变量、常量、无字段函数组成，例如 `ETL_HQT.bdpdatefunc('${work_day}',1,'yyyyMMdd',-1) AS BIZ_DATE`，则只保留赋值表达式，`sourceColumns` 为空，写图时不写字段边。
 
 集合操作处理：
 

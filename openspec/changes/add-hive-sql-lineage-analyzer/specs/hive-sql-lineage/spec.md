@@ -261,6 +261,24 @@ from ods.user_base;
 - **并且** `dwd.user_tag_detail.source_system` 的表达式必须为 `constant('profile')`
 - **并且** `dwd.user_tag_detail.source_system` 的血缘类型必须为 `CONSTANT`
 
+#### 场景：无源动态分区表达式不产生字段血缘边
+
+- **假设** 测试 SQL 为：
+
+```sql
+insert overwrite table dwd.partition_target partition(BIZ_DATE)
+select id,
+       ETL_HQT.bdpdatefunc('${work_day}', 1, 'yyyyMMdd', -1) as BIZ_DATE
+from ods.source_table;
+```
+
+- **并且** `BIZ_DATE` 的表达式只依赖运行变量、常量或无字段 UDF
+- **当** 字段血缘被解析
+- **那么** 解析结果可以保留 `dwd.partition_target.BIZ_DATE` 的目标字段和表达式信息
+- **并且** `dwd.partition_target.BIZ_DATE` 的源字段集合必须为空
+- **并且** 写入图数据库字段血缘边时不得生成任何 `sourceColumn -> dwd.partition_target.BIZ_DATE` 的字段边
+- **并且** `where BIZ_DATE = ...` 中的过滤字段不得作为 `dwd.partition_target.BIZ_DATE` 的来源字段
+
 #### 场景：Union 分支字段表达式
 
 - **假设** 测试 SQL 为：
