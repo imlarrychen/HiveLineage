@@ -26,8 +26,10 @@ public class HiveLineageAnalyzerTest {
         test.pureQueryJoinConditionIsReturnedWithoutFormalLineage();
         test.joinConditionKeepsExpressionAndDirectColumns();
         test.unqualifiedJoinColumnsUseMetadataToResolveOwners();
+        test.unqualifiedImplicitWhereJoinColumnsUseMetadataToResolveOwners();
         test.consecutiveJoinConditionsAreReturnedInOneStatement();
-        test.implicitWhereJoinIsNotReturnedAsJoinCondition();
+        test.implicitWhereJoinIsReturnedAsJoinCondition();
+        test.implicitWhereJoinDoesNotIncludeSingleTableFilters();
         test.existsSubqueryJoinConditionIsReturnedWithQueryBlockPath();
         test.unresolvedCteJoinColumnDoesNotBecomePhysicalJoinColumn();
         test.cteJoinConditionSeparatesDirectAndPhysicalObjects();
@@ -363,6 +365,39 @@ public class HiveLineageAnalyzerTest {
     }
 
     @Test
+    public void unqualifiedImplicitWhereJoinColumnsUseMetadataToResolveOwners() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        TestMetadataProvider metadataProvider = new TestMetadataProvider()
+            .addTable("ods.join_left", "user_id", "name")
+            .addTable("ods.join_right", "manager_id", "dept_name");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_join")
+            .taskId("task_join_where_unqualified")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript("select * from ods.join_left l, ods.join_right r where user_id = manager_id;")
+            .options(LineageAnalyzeOptions.builder()
+                .parseJoinConditions(true)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+        JoinCondition condition = statement.getJoinConditions().get(0);
+
+        TestSupport.assertEquals("IMPLICIT_JOIN", condition.getJoinTypeName(), "unqualified implicit join type");
+        TestSupport.assertEquals("user_id = manager_id", condition.getJoinExpression(), "unqualified implicit join expression");
+        assertContainsColumn(condition.getDirectJoinColumns(), "user_id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "manager_id");
+        assertContainsSource(condition.getDirectJoinObjects(), "ods.join_left");
+        assertContainsSource(condition.getDirectJoinObjects(), "ods.join_right");
+        assertContainsColumn(condition.getJoinColumns(), "ods.join_left.user_id");
+        assertContainsColumn(condition.getJoinColumns(), "ods.join_right.manager_id");
+    }
+
+    @Test
     public void consecutiveJoinConditionsAreReturnedInOneStatement() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
 
@@ -403,7 +438,7 @@ public class HiveLineageAnalyzerTest {
     }
 
     @Test
-    public void implicitWhereJoinIsNotReturnedAsJoinCondition() {
+    public void implicitWhereJoinIsReturnedAsJoinCondition() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
 
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
@@ -419,8 +454,49 @@ public class HiveLineageAnalyzerTest {
 
         LineageAnalyzeResult result = analyzer.analyzeScript(request);
 
-        TestSupport.assertEquals(0, result.getStatements().size(), "implicit where join statement count");
-        TestSupport.assertEquals(1, result.getIgnoredStatementCount(), "implicit where join ignored count");
+        TestSupport.assertEquals(1, result.getStatements().size(), "implicit where join statement count");
+        TestSupport.assertEquals(0, result.getIgnoredStatementCount(), "implicit where join ignored count");
+        StatementLineageResult statement = result.getStatements().get(0);
+        TestSupport.assertTrue(!statement.isFormalLineageProduced(), "implicit where join should not produce formal lineage");
+        TestSupport.assertEquals(1, statement.getJoinConditions().size(), "implicit where join condition count");
+        JoinCondition condition = statement.getJoinConditions().get(0);
+        TestSupport.assertEquals(7, condition.getJoinType(), "implicit where join type");
+        TestSupport.assertEquals("IMPLICIT_JOIN", condition.getJoinTypeName(), "implicit where join type name");
+        TestSupport.assertEquals("a.id = b.id", condition.getJoinExpression(), "implicit where join expression");
+        assertContainsSource(condition.getDirectJoinObjects(), "ods.a");
+        assertContainsSource(condition.getDirectJoinObjects(), "ods.b");
+        assertContainsColumn(condition.getDirectJoinColumns(), "a.id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "b.id");
+        assertContainsSource(condition.getJoinTables(), "ods.a");
+        assertContainsSource(condition.getJoinTables(), "ods.b");
+        assertContainsColumn(condition.getJoinColumns(), "ods.a.id");
+        assertContainsColumn(condition.getJoinColumns(), "ods.b.id");
+    }
+
+    @Test
+    public void implicitWhereJoinDoesNotIncludeSingleTableFilters() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_join")
+            .taskId("task_join_where_filter")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript("select * from ods.a a, ods.b b where a.id = b.id and a.dt = '20260710';")
+            .options(LineageAnalyzeOptions.builder()
+                .parseJoinConditions(true)
+                .build())
+            .build();
+
+        LineageAnalyzeResult result = analyzer.analyzeScript(request);
+
+        TestSupport.assertEquals(1, result.getStatements().size(), "implicit where filter statement count");
+        StatementLineageResult statement = result.getStatements().get(0);
+        TestSupport.assertEquals(1, statement.getJoinConditions().size(), "implicit where filter join condition count");
+        JoinCondition condition = statement.getJoinConditions().get(0);
+        TestSupport.assertEquals("IMPLICIT_JOIN", condition.getJoinTypeName(), "implicit where filter join type");
+        TestSupport.assertEquals("a.id = b.id", condition.getJoinExpression(), "single table filter should be excluded");
+        TestSupport.assertTrue(!containsColumn(condition.getDirectJoinColumns(), "a.dt"), "single table filter column should be excluded");
     }
 
     @Test

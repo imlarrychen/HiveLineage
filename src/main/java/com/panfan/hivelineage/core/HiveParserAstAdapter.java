@@ -776,6 +776,133 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
         }
         Map<String, String> directAliases = resolveDirectSourceAliases(queryNode, cteAliases);
         collectJoinConditionsFromNode(fromNode, queryBlockPath, directAliases, joinIndex, conditions);
+        collectImplicitWhereJoinCondition(queryNode, fromNode, queryBlockPath, directAliases, joinIndex, conditions);
+    }
+
+    private void collectImplicitWhereJoinCondition(
+        ASTNode queryNode,
+        ASTNode fromNode,
+        String queryBlockPath,
+        Map<String, String> directAliases,
+        int[] joinIndex,
+        List<ParsedJoinCondition> conditions
+    ) {
+        if (containsJoinConditionNode(fromNode) || topLevelFromSourceCount(fromNode) < 2) {
+            return;
+        }
+        ASTNode whereCondition = directWhereCondition(queryNode);
+        if (whereCondition == null) {
+            return;
+        }
+        List<ASTNode> joinConjuncts = new ArrayList<>();
+        collectImplicitJoinConjuncts(whereCondition, directAliases, joinConjuncts);
+        if (joinConjuncts.isEmpty()) {
+            return;
+        }
+        LinkedHashSet<String> directColumnSet = new LinkedHashSet<>();
+        List<String> expressions = new ArrayList<>();
+        for (ASTNode joinConjunct : joinConjuncts) {
+            expressions.add(expressionExtractor.unparse(joinConjunct));
+            directColumnSet.addAll(collectDirectColumnReferences(joinConjunct));
+        }
+        List<String> directColumns = new ArrayList<>(directColumnSet);
+        List<String> directObjects = directObjectsForColumns(directColumns, directAliases);
+        conditions.add(new ParsedJoinCondition(
+            joinIndex[0]++,
+            queryBlockPath,
+            7,
+            "IMPLICIT_JOIN",
+            directObjects,
+            directColumns,
+            joinWithAnd(expressions)
+        ));
+    }
+
+    private boolean containsJoinConditionNode(ASTNode node) {
+        if (node == null) {
+            return false;
+        }
+        if (isJoinNode(node) && joinConditionNode(node) != null) {
+            return true;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            if (containsJoinConditionNode((ASTNode) node.getChild(i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private int topLevelFromSourceCount(ASTNode fromNode) {
+        if (fromNode == null) {
+            return 0;
+        }
+        int count = 0;
+        for (int i = 0; i < fromNode.getChildCount(); i++) {
+            count += sourceLeafCount((ASTNode) fromNode.getChild(i));
+        }
+        return count;
+    }
+
+    private int sourceLeafCount(ASTNode node) {
+        if (node == null) {
+            return 0;
+        }
+        if (node.getType() == HiveParser.TOK_TABREF || node.getType() == HiveParser.TOK_SUBQUERY) {
+            return 1;
+        }
+        int count = 0;
+        for (int i = 0; i < node.getChildCount(); i++) {
+            count += sourceLeafCount((ASTNode) node.getChild(i));
+        }
+        return count;
+    }
+
+    private ASTNode directWhereCondition(ASTNode queryNode) {
+        ASTNode insertNode = astWalker.directChild(queryNode, HiveParser.TOK_INSERT);
+        ASTNode whereNode = astWalker.directChild(insertNode, HiveParser.TOK_WHERE);
+        if (whereNode == null || whereNode.getChildCount() == 0) {
+            return null;
+        }
+        return (ASTNode) whereNode.getChild(0);
+    }
+
+    private void collectImplicitJoinConjuncts(
+        ASTNode node,
+        Map<String, String> directAliases,
+        List<ASTNode> joinConjuncts
+    ) {
+        if (node == null) {
+            return;
+        }
+        if ("and".equalsIgnoreCase(node.getText()) && node.getChildCount() == 2) {
+            collectImplicitJoinConjuncts((ASTNode) node.getChild(0), directAliases, joinConjuncts);
+            collectImplicitJoinConjuncts((ASTNode) node.getChild(1), directAliases, joinConjuncts);
+            return;
+        }
+        if (isImplicitJoinExpression(node, directAliases)) {
+            joinConjuncts.add(node);
+        }
+    }
+
+    private boolean isImplicitJoinExpression(ASTNode expressionNode, Map<String, String> directAliases) {
+        List<String> directColumns = collectDirectColumnReferences(expressionNode);
+        if (directColumns.size() < 2) {
+            return false;
+        }
+        Set<String> owners = new LinkedHashSet<>();
+        boolean hasUnqualifiedColumn = false;
+        for (String directColumn : directColumns) {
+            int dotIndex = directColumn.indexOf('.');
+            if (dotIndex <= 0) {
+                hasUnqualifiedColumn = true;
+                continue;
+            }
+            String owner = directColumn.substring(0, dotIndex).toLowerCase(Locale.ROOT);
+            String sourceObject = directAliases.get(owner);
+            owners.add(sourceObject == null ? owner : sourceObject.toLowerCase(Locale.ROOT));
+        }
+        return owners.size() >= 2 || hasUnqualifiedColumn;
     }
 
     private void collectJoinConditionsFromNode(
@@ -1071,6 +1198,17 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
         for (String part : parts) {
             if (builder.length() > 0) {
                 builder.append('.');
+            }
+            builder.append(part);
+        }
+        return builder.toString();
+    }
+
+    private String joinWithAnd(List<String> parts) {
+        StringBuilder builder = new StringBuilder();
+        for (String part : parts) {
+            if (builder.length() > 0) {
+                builder.append(" and ");
             }
             builder.append(part);
         }

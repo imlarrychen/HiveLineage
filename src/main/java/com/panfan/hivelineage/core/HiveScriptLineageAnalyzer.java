@@ -95,7 +95,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             if (skipReason != null) {
                 if (request.getOptions().isParseJoinConditions()
                     && "PURE_QUERY".equals(skipReason)
-                    && hasExplicitJoinCondition(normalized)) {
+                    && hasJoinConditionCandidate(normalized)) {
                     results.add(joinConditionOnlyResult(
                         request,
                         statement,
@@ -647,8 +647,9 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         );
     }
 
-    private boolean hasExplicitJoinCondition(String statement) {
-        return Pattern.compile("(?is)\\bjoin\\b.+\\bon\\b").matcher(statement).find();
+    private boolean hasJoinConditionCandidate(String statement) {
+        return Pattern.compile("(?is)\\bjoin\\b.+\\bon\\b").matcher(statement).find()
+            || Pattern.compile("(?is)\\bfrom\\b[^;]+,[^;]+\\bwhere\\b").matcher(statement).find();
     }
 
     private List<DataObjectRef> joinInputObjects(List<JoinCondition> joinConditions) {
@@ -679,7 +680,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         Map<String, Map<String, ColumnLineageProjection>> viewColumnLineageCache,
         List<LineageWarning> warnings
     ) {
-        if (!hasExplicitJoinCondition(normalizedStatement)) {
+        if (!hasJoinConditionCandidate(normalizedStatement)) {
             return Collections.emptyList();
         }
         CteExtraction cteExtraction = extractCtes(normalizedStatement);

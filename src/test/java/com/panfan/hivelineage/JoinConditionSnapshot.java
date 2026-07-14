@@ -210,6 +210,13 @@ public final class JoinConditionSnapshot {
                 true
             ),
             new JoinCase(
+                "join_implicit_unqualified_columns",
+                "逗号连接未带别名字段通过元数据归属",
+                "select * from ods.join_left l, ods.join_right r\n"
+                    + "where user_id = manager_id;",
+                true
+            ),
+            new JoinCase(
                 "join_consecutive",
                 "连续 Join",
                 "select * from ods.a a\n"
@@ -219,8 +226,14 @@ public final class JoinConditionSnapshot {
             ),
             new JoinCase(
                 "join_implicit_where",
-                "隐式 Where 关联不作为 JoinCondition",
+                "逗号连接 Where 关联解析为 IMPLICIT_JOIN",
                 "select * from ods.a a, ods.b b where a.id = b.id;",
+                true
+            ),
+            new JoinCase(
+                "join_implicit_where_filter",
+                "逗号连接 Where 关联排除单表过滤",
+                "select * from ods.a a, ods.b b where a.id = b.id and a.dt = '20260710';",
                 true
             ),
             new JoinCase(

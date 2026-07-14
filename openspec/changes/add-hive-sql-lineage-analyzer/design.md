@@ -95,7 +95,7 @@ public enum LineageParseMode {
 
 `includeIgnoredStatements` 默认为 `false`。默认情况下，成功执行解析但不产生血缘的语句，例如 `set`、`use`、纯查询语句、`insert ... values (...)`，只在解析器内部影响 Session 或被忽略，不返回 `StatementLineageResult`，也不建议落 TDSQL。若排查问题需要完整语句审计，可临时打开该选项。
 
-当 `JOIN_CONDITION` 开启时，纯查询语句即使不产生正式血缘，只要包含显式 `JOIN ... ON ...`，也应返回语句级解析结果。该结果的 `formalLineageProduced = false`，但 `joinConditions` 不为空，便于后续单独落 Join 条件表。
+当 `JOIN_CONDITION` 开启时，纯查询语句即使不产生正式血缘，只要包含显式 `JOIN ... ON ...`，或逗号连接中写在同一查询块 `WHERE` 后的跨来源关联条件，也应返回语句级解析结果。该结果的 `formalLineageProduced = false`，但 `joinConditions` 不为空，便于后续单独落 Join 条件表。
 
 `expandViewLineage` 默认为 `false`。默认关闭是为了保证表级解析不额外访问元数据服务；当调用方明确需要追溯视图时，可开启该选项。开启后，解析器应通过元数据获取视图定义 SQL，并把视图血缘展开到真实上游表或上游视图。`maxViewExpandDepth` 用于限制视图递归展开深度，防止嵌套过深或异常循环。
 
@@ -146,7 +146,7 @@ public interface HiveAstParserAdapter {
 - 输入对象：`from`、`join`、子查询、CTE、union 分支中涉及的表或视图。
 - 查询结构：select item、目标字段、where、group by、union、join、lateral view、partition 信息。
 - 字段表达式：表达式文本、表达式 AST、函数名、字段引用集合。
-- Join 条件：显式 `JOIN ... ON ...` 子句、Join 类型、所在查询块路径、ON 条件表达式文本、ON 条件字段引用集合。
+- Join 条件：显式 `JOIN ... ON ...` 子句、逗号连接的跨来源 `WHERE` 关联条件、Join 类型、所在查询块路径、关联条件表达式文本、关联条件字段引用集合。
 
 业务血缘逻辑只消费 `ParsedHiveStatement`，不直接遍历 Hive parser AST。这样如果后续 Hive 4.0.1 与生产 Hive 版本存在差异，只需要替换 adapter。
 
@@ -625,7 +625,7 @@ public enum StatementParseStatus {
 - `skipReason`：当 `parseStatusCode = 3` 时记录忽略原因，例如 `SESSION_SET`、`USE_DATABASE`、`PURE_QUERY`、`INSERT_VALUES`。
 - `failureCode` / `failureMessage`：当 `parseStatusCode = 2` 或 `1` 时记录失败类型和原因。
 - `tableLineages` 和 `columnLineages` 只保存当前语句按 `parseMode` 产生的正式血缘。若当前语句读取临时表，结果应已经展开到真实上游对象。
-- `joinConditions` 保存当前语句中的显式 `JOIN ... ON ...` 条件解析结果。Join 条件解析不是正式血缘，可以单独落库，并通过 `statementId + joinIndex` 唯一定位。
+- `joinConditions` 保存当前语句中的显式 `JOIN ... ON ...` 条件解析结果，以及逗号连接中从 `WHERE` 提取出的跨来源关联条件。Join 条件解析不是正式血缘，可以单独落库，并通过 `statementId + joinIndex` 唯一定位。
 - 临时表语句可以保留自身语句级血缘，用于审计和后续串联。写图数据库时，如果不希望图中出现临时节点，可以由图写入层跳过临时表目标，或仅写后续语句展开后的真实源表到目标表边。
 
 建议血缘唯一键：

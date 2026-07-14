@@ -59,11 +59,11 @@ Join 条件解析不属于正式表血缘或字段血缘。解析器必须把 Jo
 
 ### 需求：语句级结果包含 Join 条件集合
 
-解析结果必须保持一条 SQL 语句对应一个语句级解析结果。一个语句中的多个显式 Join 子句必须作为该语句结果中的子集合返回。
+解析结果必须保持一条 SQL 语句对应一个语句级解析结果。一个语句中的多个关联关系必须作为该语句结果中的子集合返回。
 
 推荐结果字段命名为 `joinConditions`，单条 Join 条件记录命名为 `JoinCondition`。
 
-一个 `JoinCondition` 表示一个完整的显式 `JOIN ... ON ...` 关联关系，而不是单个字段等值条件或单个 `and` 子条件。一条 SQL 语句可以包含多个 `JoinCondition`，这些关联关系可以连续出现，也可以分布在主查询、CTE、子查询、派生表等不同查询块中。
+一个 `JoinCondition` 表示一个完整的关联关系。对于显式 Join，它对应一个完整的 `JOIN ... ON ...`；对于逗号连接，它对应同一查询块 `WHERE` 中提取出的跨来源关联条件集合，而不是单个字段等值条件或单个 `and` 子条件。一条 SQL 语句可以包含多个 `JoinCondition`，这些关联关系可以连续出现，也可以分布在主查询、CTE、子查询、派生表等不同查询块中。
 
 `JoinCondition` 必须包含 `queryBlockPath`，用于标识该 Join 条件所在的查询块。`joinIndex` 是当前语句内全局递增序号，不能只在单个查询块内重新计数。
 
@@ -462,7 +462,7 @@ where exists (
 
 ### 需求：Join 条件表达式提取
 
-解析器必须以显式 `JOIN ... ON ...` 子句为解析对象，保留 `ON` 后面的完整条件表达式。
+解析器必须以显式 `JOIN ... ON ...` 子句和逗号连接的跨来源 `WHERE` 条件为解析对象。显式 Join 必须保留 `ON` 后面的完整条件表达式；逗号连接必须保留跨来源关联条件表达式。
 
 #### 场景：保留完整 ON 条件表达式
 
@@ -624,17 +624,33 @@ join y
 
 ### 需求：不支持范围
 
-第一版 Join 条件解析只要求覆盖显式 `JOIN ... ON ...`。
+第一版 Join 条件解析要求覆盖显式 `JOIN ... ON ...`，以及逗号连接中写在同一查询块 `WHERE` 后的跨来源关联条件。
 
 显式 `cross join` 没有 `ON` 条件时，第一版不要求输出 `JoinCondition`。枚举中的 `CROSS_JOIN` 仅作为类型预留，或用于后续支持带条件的方言扩展。
 
-#### 场景：第一版不要求识别隐式 Join
+#### 场景：逗号连接的 Where 关联条件必须输出
 
 - **假设** SQL 为 `select * from ods.t1 a, ods.t2 b where a.id = b.id`
 - **并且** 请求开启 Join 条件解析
 - **当** SQL 被解析
-- **那么** 第一版不要求把 `where a.id = b.id` 解析为 Join 条件
-- **并且** 解析器不得把该 where 条件写入 `joinConditions`
+- **那么** 结果中必须只有一个语句级解析结果
+- **并且** 该语句级解析结果必须包含一个 `JoinCondition`
+- **并且** 该 `JoinCondition.joinType` 必须为 `7`
+- **并且** 该 `JoinCondition.joinTypeName` 必须为 `IMPLICIT_JOIN`
+- **并且** 该 `JoinCondition.queryBlockPath` 必须为 `root`
+- **并且** 该 `JoinCondition.joinExpression` 必须为 `a.id = b.id`
+- **并且** 该 `JoinCondition.directJoinObjects` 必须包含 `ods.t1` 和 `ods.t2`
+- **并且** 该 `JoinCondition.directJoinColumns` 必须包含 `a.id` 和 `b.id`
+- **并且** 该 `JoinCondition.joinColumns` 必须包含 `ods.t1.id` 和 `ods.t2.id`
+- **并且** 该 `JoinCondition.joinTables` 必须包含 `ods.t1` 和 `ods.t2`
+
+#### 场景：逗号连接中的普通过滤条件不单独输出
+
+- **假设** SQL 为 `select * from ods.t1 a, ods.t2 b where a.id = b.id and a.dt = '20260710'`
+- **并且** 请求开启 Join 条件解析
+- **当** SQL 被解析
+- **那么** `JoinCondition.joinExpression` 必须为 `a.id = b.id`
+- **并且** 解析器不得把单表过滤条件 `a.dt = '20260710'` 单独写入 `joinConditions`
 
 #### 场景：第一版不要求拆分 Join 条件字段对
 
