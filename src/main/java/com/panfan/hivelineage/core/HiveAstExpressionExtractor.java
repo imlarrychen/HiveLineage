@@ -110,7 +110,8 @@ final class HiveAstExpressionExtractor {
     private boolean isBinaryOperator(String text) {
         return "+".equals(text) || "-".equals(text) || "*".equals(text) || "/".equals(text) || "%".equals(text)
             || "=".equals(text) || "==".equals(text) || "<>".equals(text) || "!=".equals(text)
-            || "<".equals(text) || "<=".equals(text) || ">".equals(text) || ">=".equals(text);
+            || "<".equals(text) || "<=".equals(text) || ">".equals(text) || ">=".equals(text)
+            || "and".equalsIgnoreCase(text) || "or".equalsIgnoreCase(text);
     }
 
     private boolean isUnaryOperator(String text) {

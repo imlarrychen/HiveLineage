@@ -22,6 +22,15 @@ public class HiveLineageAnalyzerTest {
         test.sessionSetVariableIsAppliedAndIgnoredStatementsAreNotReturned();
         test.includeIgnoredStatementsReturnsIgnoredResults();
         test.parseModeCanReturnOnlyTableOrOnlyColumnLineage();
+        test.parseJoinConditionsDefaultOffKeepsPureQueryIgnored();
+        test.pureQueryJoinConditionIsReturnedWithoutFormalLineage();
+        test.joinConditionKeepsExpressionAndDirectColumns();
+        test.consecutiveJoinConditionsAreReturnedInOneStatement();
+        test.implicitWhereJoinIsNotReturnedAsJoinCondition();
+        test.existsSubqueryJoinConditionIsReturnedWithQueryBlockPath();
+        test.unresolvedCteJoinColumnDoesNotBecomePhysicalJoinColumn();
+        test.cteJoinConditionSeparatesDirectAndPhysicalObjects();
+        test.temporaryTableJoinConditionExpandsToPhysicalColumns();
         test.failedStatementIsReturnedWithNumericStatusAndRawSql();
         test.columnLineageUsesMetadataCacheToInferTargetColumns();
         test.tableOnlyModeDoesNotLoadMetadata();
@@ -216,6 +225,311 @@ public class HiveLineageAnalyzerTest {
         StatementLineageResult columnOnly = analyzer.analyzeScript(columnOnlyRequest).getStatements().get(0);
         TestSupport.assertTrue(columnOnly.getTableLineages().isEmpty(), "column only table lineage count");
         TestSupport.assertEquals(1, columnOnly.getColumnLineages().size(), "column only column lineage count");
+    }
+
+    @Test
+    public void parseJoinConditionsDefaultOffKeepsPureQueryIgnored() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_join")
+            .taskId("task_join_off")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript("select * from ods.t1 a left join ods.t2 b on a.id = b.id;")
+            .options(LineageAnalyzeOptions.builder().build())
+            .build();
+
+        LineageAnalyzeResult result = analyzer.analyzeScript(request);
+
+        TestSupport.assertEquals(0, result.getStatements().size(), "join parse default off statement count");
+        TestSupport.assertEquals(1, result.getIgnoredStatementCount(), "join parse default off ignored count");
+    }
+
+    @Test
+    public void pureQueryJoinConditionIsReturnedWithoutFormalLineage() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_join")
+            .taskId("task_join_001")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript("select * from ods.t1 a left join ods.t2 b on a.id = b.id;")
+            .options(LineageAnalyzeOptions.builder()
+                .parseJoinConditions(true)
+                .build())
+            .build();
+
+        LineageAnalyzeResult result = analyzer.analyzeScript(request);
+
+        TestSupport.assertEquals(1, result.getStatements().size(), "join condition statement count");
+        StatementLineageResult statement = result.getStatements().get(0);
+        TestSupport.assertEquals(0, statement.getParseStatusCode(), "join condition parse status");
+        TestSupport.assertTrue(!statement.isFormalLineageProduced(), "pure query should not produce formal lineage");
+        TestSupport.assertTrue(statement.getTableLineages().isEmpty(), "pure query table lineage");
+        TestSupport.assertTrue(statement.getColumnLineages().isEmpty(), "pure query column lineage");
+        TestSupport.assertEquals(1, statement.getJoinConditions().size(), "join condition count");
+
+        JoinCondition condition = statement.getJoinConditions().get(0);
+        TestSupport.assertEquals(1, condition.getJoinIndex(), "join index");
+        TestSupport.assertEquals("root", condition.getQueryBlockPath(), "query block path");
+        TestSupport.assertEquals(2, condition.getJoinType(), "join type");
+        TestSupport.assertEquals("LEFT_JOIN", condition.getJoinTypeName(), "join type name");
+        TestSupport.assertEquals("a.id = b.id", condition.getJoinExpression(), "join expression");
+        assertContainsSource(condition.getDirectJoinObjects(), "ods.t1");
+        assertContainsSource(condition.getDirectJoinObjects(), "ods.t2");
+        assertContainsColumn(condition.getDirectJoinColumns(), "a.id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "b.id");
+        assertContainsSource(condition.getJoinTables(), "ods.t1");
+        assertContainsSource(condition.getJoinTables(), "ods.t2");
+        assertContainsColumn(condition.getJoinColumns(), "ods.t1.id");
+        assertContainsColumn(condition.getJoinColumns(), "ods.t2.id");
+    }
+
+    @Test
+    public void joinConditionKeepsExpressionAndDirectColumns() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_join")
+            .taskId("task_join_002")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript(
+                "select a.log_id, b.meta_name "
+                    + "from ods_op_logs a "
+                    + "left join dim_meta_info b "
+                    + "on split(a.biz_trace_id, '_')[1] = cast(b.meta_id as string) "
+                    + "where a.dt = '20260710' and b.dt = '20260710';"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseJoinConditions(true)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+        JoinCondition condition = statement.getJoinConditions().get(0);
+
+        TestSupport.assertEquals("LEFT_JOIN", condition.getJoinTypeName(), "expression join type");
+        TestSupport.assertEquals(
+            "split(a.biz_trace_id, '_')[1] = cast(b.meta_id as string)",
+            condition.getJoinExpression(),
+            "expression join condition"
+        );
+        assertContainsSource(condition.getDirectJoinObjects(), "ods_op_logs");
+        assertContainsSource(condition.getDirectJoinObjects(), "dim_meta_info");
+        assertContainsColumn(condition.getDirectJoinColumns(), "a.biz_trace_id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "b.meta_id");
+        assertContainsColumn(condition.getJoinColumns(), "ods_op_logs.biz_trace_id");
+        assertContainsColumn(condition.getJoinColumns(), "dim_meta_info.meta_id");
+        TestSupport.assertTrue(!containsColumn(condition.getDirectJoinColumns(), "a.dt"), "where column should not be direct join column");
+        TestSupport.assertTrue(!containsColumn(condition.getDirectJoinColumns(), "b.dt"), "where column should not be direct join column");
+    }
+
+    @Test
+    public void consecutiveJoinConditionsAreReturnedInOneStatement() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_join")
+            .taskId("task_join_multi")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript(
+                "select * from ods.a a "
+                    + "join ods.b b on a.id = b.id "
+                    + "left join ods.c c on b.cid = c.id and c.dt = '20260710';"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseJoinConditions(true)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+
+        TestSupport.assertEquals(2, statement.getJoinConditions().size(), "consecutive join condition count");
+        JoinCondition first = statement.getJoinConditions().get(0);
+        TestSupport.assertEquals(1, first.getJoinIndex(), "first join index");
+        TestSupport.assertEquals("a.id = b.id", first.getJoinExpression(), "first join expression");
+        assertContainsColumn(first.getJoinColumns(), "ods.a.id");
+        assertContainsColumn(first.getJoinColumns(), "ods.b.id");
+
+        JoinCondition second = statement.getJoinConditions().get(1);
+        TestSupport.assertEquals(2, second.getJoinIndex(), "second join index");
+        TestSupport.assertEquals("LEFT_JOIN", second.getJoinTypeName(), "second join type");
+        TestSupport.assertEquals("b.cid = c.id and c.dt = '20260710'", second.getJoinExpression(), "second join expression");
+        assertContainsColumn(second.getDirectJoinColumns(), "b.cid");
+        assertContainsColumn(second.getDirectJoinColumns(), "c.id");
+        assertContainsColumn(second.getDirectJoinColumns(), "c.dt");
+        assertContainsColumn(second.getJoinColumns(), "ods.b.cid");
+        assertContainsColumn(second.getJoinColumns(), "ods.c.id");
+        assertContainsColumn(second.getJoinColumns(), "ods.c.dt");
+    }
+
+    @Test
+    public void implicitWhereJoinIsNotReturnedAsJoinCondition() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_join")
+            .taskId("task_join_where")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript("select * from ods.a a, ods.b b where a.id = b.id;")
+            .options(LineageAnalyzeOptions.builder()
+                .parseJoinConditions(true)
+                .build())
+            .build();
+
+        LineageAnalyzeResult result = analyzer.analyzeScript(request);
+
+        TestSupport.assertEquals(0, result.getStatements().size(), "implicit where join statement count");
+        TestSupport.assertEquals(1, result.getIgnoredStatementCount(), "implicit where join ignored count");
+    }
+
+    @Test
+    public void existsSubqueryJoinConditionIsReturnedWithQueryBlockPath() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_join")
+            .taskId("task_join_exists")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript(
+                "select * from ods.a a join ods.b b on a.id = b.id "
+                    + "where exists ("
+                    + "select 1 from ods.c c join ods.d d on c.id = d.id "
+                    + "where c.id = a.id"
+                    + ");"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseJoinConditions(true)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+
+        TestSupport.assertEquals(2, statement.getJoinConditions().size(), "exists join condition count");
+        JoinCondition rootJoin = statement.getJoinConditions().get(0);
+        TestSupport.assertEquals("root", rootJoin.getQueryBlockPath(), "root join path");
+        TestSupport.assertEquals("a.id = b.id", rootJoin.getJoinExpression(), "root join expression");
+
+        JoinCondition existsJoin = statement.getJoinConditions().get(1);
+        TestSupport.assertEquals("root.where.exists[1]", existsJoin.getQueryBlockPath(), "exists join path");
+        TestSupport.assertEquals("c.id = d.id", existsJoin.getJoinExpression(), "exists join expression");
+        assertContainsColumn(existsJoin.getJoinColumns(), "ods.c.id");
+        assertContainsColumn(existsJoin.getJoinColumns(), "ods.d.id");
+        TestSupport.assertTrue(!containsColumn(existsJoin.getDirectJoinColumns(), "a.id"), "outer where correlation should not be join column");
+    }
+
+    @Test
+    public void unresolvedCteJoinColumnDoesNotBecomePhysicalJoinColumn() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_join")
+            .taskId("task_join_unresolved_cte")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript(
+                "with x as ("
+                    + "select * from ods.a a join ods.b b on a.id = b.id"
+                    + "), y as ("
+                    + "select id from ods.c"
+                    + ") "
+                    + "select * from x join y on x.id = y.id;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseJoinConditions(true)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+        JoinCondition rootJoin = findJoinCondition(statement, "x.id = y.id");
+
+        TestSupport.assertEquals("x.id = y.id", rootJoin.getJoinExpression(), "unresolved cte root expression");
+        assertContainsColumn(rootJoin.getDirectJoinColumns(), "x.id");
+        assertContainsColumn(rootJoin.getDirectJoinColumns(), "y.id");
+        TestSupport.assertTrue(!containsColumn(rootJoin.getJoinColumns(), "x.id"), "unresolved cte column should not be physical join column");
+        TestSupport.assertTrue(!containsSource(rootJoin.getJoinTables(), "x"), "unresolved cte should not be physical join table");
+        assertContainsColumn(rootJoin.getJoinColumns(), "ods.c.id");
+        assertContainsWarning(statement.getWarnings(), WarningCode.UNKNOWN_COLUMN_LINEAGE);
+    }
+
+    @Test
+    public void cteJoinConditionSeparatesDirectAndPhysicalObjects() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_join")
+            .taskId("task_join_003")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript(
+                "with x as ("
+                    + "select a.id as id from ods.a a join ods.b b on a.id = b.id"
+                    + "), y as ("
+                    + "select c.id as id from ods.c c join ods.d d on c.id = d.id"
+                    + ") "
+                    + "select * from x join y on x.id = y.id;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseJoinConditions(true)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+        TestSupport.assertEquals(3, statement.getJoinConditions().size(), "cte join condition count");
+
+        JoinCondition rootJoin = statement.getJoinConditions().get(2);
+        TestSupport.assertEquals(3, rootJoin.getJoinIndex(), "root cte join index");
+        TestSupport.assertEquals("root", rootJoin.getQueryBlockPath(), "root cte query block path");
+        TestSupport.assertEquals("x.id = y.id", rootJoin.getJoinExpression(), "root cte expression");
+        assertContainsSource(rootJoin.getDirectJoinObjects(), "x");
+        assertContainsSource(rootJoin.getDirectJoinObjects(), "y");
+        assertContainsColumn(rootJoin.getDirectJoinColumns(), "x.id");
+        assertContainsColumn(rootJoin.getDirectJoinColumns(), "y.id");
+        assertContainsSource(rootJoin.getJoinTables(), "ods.a");
+        assertContainsSource(rootJoin.getJoinTables(), "ods.c");
+        assertContainsColumn(rootJoin.getJoinColumns(), "ods.a.id");
+        assertContainsColumn(rootJoin.getJoinColumns(), "ods.c.id");
+    }
+
+    @Test
+    public void temporaryTableJoinConditionExpandsToPhysicalColumns() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_join")
+            .taskId("task_join_004")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript(
+                "create temporary table tmp_user as "
+                    + "select user_id, dept_id from ods.user_base; "
+                    + "select * from tmp_user t join dim.dept d on t.dept_id = d.dept_id;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseJoinConditions(true)
+                .build())
+            .build();
+
+        LineageAnalyzeResult result = analyzer.analyzeScript(request);
+
+        TestSupport.assertEquals(1, result.getStatements().size(), "temporary join returned statement count");
+        StatementLineageResult statement = result.getStatements().get(0);
+        JoinCondition condition = statement.getJoinConditions().get(0);
+        TestSupport.assertEquals("t.dept_id = d.dept_id", condition.getJoinExpression(), "temporary join expression");
+        assertContainsSource(condition.getDirectJoinObjects(), "tmp_user");
+        assertContainsSource(condition.getDirectJoinObjects(), "dim.dept");
+        assertContainsColumn(condition.getDirectJoinColumns(), "t.dept_id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "d.dept_id");
+        assertContainsSource(condition.getJoinTables(), "ods.user_base");
+        assertContainsSource(condition.getJoinTables(), "dim.dept");
+        assertContainsColumn(condition.getJoinColumns(), "ods.user_base.dept_id");
+        assertContainsColumn(condition.getJoinColumns(), "dim.dept.dept_id");
     }
 
     @Test
@@ -1876,6 +2190,33 @@ public class HiveLineageAnalyzerTest {
             }
         }
         throw new AssertionError("Expected source column " + qualifiedName + ", actual: [" + actualColumns + "]");
+    }
+
+    private static boolean containsColumn(List<ColumnRef> columns, String qualifiedName) {
+        for (ColumnRef column : columns) {
+            if (qualifiedName.equals(column.getQualifiedName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsSource(List<DataObjectRef> inputObjects, String qualifiedName) {
+        for (DataObjectRef sourceObject : inputObjects) {
+            if (qualifiedName.equals(sourceObject.getQualifiedName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static JoinCondition findJoinCondition(StatementLineageResult statement, String expression) {
+        for (JoinCondition joinCondition : statement.getJoinConditions()) {
+            if (expression.equals(joinCondition.getJoinExpression())) {
+                return joinCondition;
+            }
+        }
+        throw new AssertionError("Expected join expression " + expression);
     }
 
     private static void assertContainsWarning(List<LineageWarning> warnings, WarningCode warningCode) {

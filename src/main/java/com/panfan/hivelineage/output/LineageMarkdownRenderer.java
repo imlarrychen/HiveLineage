@@ -3,6 +3,7 @@ package com.panfan.hivelineage.output;
 import com.panfan.hivelineage.result.ColumnLineage;
 import com.panfan.hivelineage.result.ColumnRef;
 import com.panfan.hivelineage.result.DataObjectRef;
+import com.panfan.hivelineage.result.JoinCondition;
 import com.panfan.hivelineage.result.LineageAnalyzeResult;
 import com.panfan.hivelineage.result.LineageWarning;
 import com.panfan.hivelineage.result.StatementLineageResult;
@@ -120,6 +121,21 @@ public final class LineageMarkdownRenderer {
                     addObjectSummary(summaries, sourceObject, "INPUT", statement.getStatementIndex(), defaultDatabase);
                 }
             }
+            for (JoinCondition joinCondition : statement.getJoinConditions()) {
+                for (DataObjectRef joinTable : joinCondition.getJoinTables()) {
+                    addObjectSummary(summaries, joinTable, "JOIN", statement.getStatementIndex(), defaultDatabase);
+                }
+                for (ColumnRef joinColumn : joinCondition.getJoinColumns()) {
+                    addColumnSummary(
+                        summaries,
+                        joinColumn.getQualifiedName(),
+                        "JOIN",
+                        statement.getStatementIndex(),
+                        defaultDatabase,
+                        false
+                    );
+                }
+            }
         }
         return summaries;
     }
@@ -212,6 +228,7 @@ public final class LineageMarkdownRenderer {
             .append("\n");
         appendTableLineage(builder, statement);
         appendColumnLineage(builder, statement);
+        appendJoinConditions(builder, statement);
         appendStatementWarnings(builder, statement);
     }
 
@@ -262,6 +279,36 @@ public final class LineageMarkdownRenderer {
                 .append(columnLineage.isComplexExpression())
                 .append(" | ")
                 .append(columnLineage.isExpressionExtracted())
+                .append(" |\n");
+        }
+        builder.append("\n");
+    }
+
+    private static void appendJoinConditions(StringBuilder builder, StatementLineageResult statement) {
+        builder.append("### Join Conditions\n\n");
+        if (statement.getJoinConditions().isEmpty()) {
+            builder.append("_None_\n\n");
+            return;
+        }
+        builder.append("| Index | Query Block | Type | Direct Objects | Direct Columns | Join Tables | Join Columns | Expression |\n")
+            .append("| --- | --- | --- | --- | --- | --- | --- | --- |\n");
+        for (JoinCondition joinCondition : statement.getJoinConditions()) {
+            builder.append("| ")
+                .append(joinCondition.getJoinIndex())
+                .append(" | ")
+                .append(markdown(joinCondition.getQueryBlockPath()))
+                .append(" | ")
+                .append(markdown(joinCondition.getJoinTypeName()))
+                .append(" | ")
+                .append(markdown(joinObjects(joinCondition.getDirectJoinObjects())))
+                .append(" | ")
+                .append(markdown(joinColumns(joinCondition.getDirectJoinColumns())))
+                .append(" | ")
+                .append(markdown(joinObjects(joinCondition.getJoinTables())))
+                .append(" | ")
+                .append(markdown(joinColumns(joinCondition.getJoinColumns())))
+                .append(" | ")
+                .append(markdown(joinCondition.getJoinExpression()))
                 .append(" |\n");
         }
         builder.append("\n");

@@ -50,6 +50,7 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
                 resolveSetOperationSourceColumns(mainSetOperation, cteAliases),
                 resolveSetOperationExpressions(mainSetOperation, cteAliases),
                 resolveStaticPartitionValues(mainInsert),
+                resolveJoinConditions(root, cteAliases),
                 normalizedSql
             );
         } catch (ParseException ex) {
@@ -653,6 +654,309 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
             }
         }
         return aliases;
+    }
+
+    private List<ParsedJoinCondition> resolveJoinConditions(ASTNode root, Set<String> cteAliases) {
+        List<ParsedJoinCondition> conditions = new ArrayList<>();
+        int[] joinIndex = new int[] {1};
+        ASTNode cteNode = astWalker.first(root, HiveParser.TOK_CTE);
+        if (cteNode != null) {
+            for (int i = 0; i < cteNode.getChildCount(); i++) {
+                ASTNode subquery = (ASTNode) cteNode.getChild(i);
+                if (subquery.getType() != HiveParser.TOK_SUBQUERY || subquery.getChildCount() < 2) {
+                    continue;
+                }
+                String cteAlias = stripIdentifier(subquery.getChild(subquery.getChildCount() - 1).getText()).toLowerCase(Locale.ROOT);
+                ASTNode queryNode = astWalker.directChild(subquery, HiveParser.TOK_QUERY);
+                collectJoinConditionsFromQuery(queryNode, "cte." + cteAlias, cteAliases, joinIndex, conditions);
+                collectNestedSubqueryJoinConditionsFromChildren(queryNode, "cte." + cteAlias, cteAliases, joinIndex, conditions);
+            }
+        }
+        ASTNode rootQuery = astWalker.first(root, HiveParser.TOK_QUERY);
+        collectJoinConditionsFromQuery(rootQuery, "root", cteAliases, joinIndex, conditions);
+        collectNestedSubqueryJoinConditionsFromChildren(rootQuery, "root", cteAliases, joinIndex, conditions);
+        return conditions;
+    }
+
+    private void collectNestedSubqueryJoinConditionsFromChildren(
+        ASTNode queryNode,
+        String parentPath,
+        Set<String> cteAliases,
+        int[] joinIndex,
+        List<ParsedJoinCondition> conditions
+    ) {
+        if (queryNode == null) {
+            return;
+        }
+        int[] subqueryIndex = new int[] {1};
+        for (int i = 0; i < queryNode.getChildCount(); i++) {
+            collectNestedSubqueryJoinConditions(
+                (ASTNode) queryNode.getChild(i),
+                parentPath,
+                cteAliases,
+                joinIndex,
+                conditions,
+                subqueryIndex,
+                false
+            );
+        }
+    }
+
+    private void collectNestedSubqueryJoinConditions(
+        ASTNode node,
+        String parentPath,
+        Set<String> cteAliases,
+        int[] joinIndex,
+        List<ParsedJoinCondition> conditions,
+        int[] subqueryIndex,
+        boolean inWhere
+    ) {
+        if (node == null) {
+            return;
+        }
+        if (node.getType() == HiveParser.TOK_CTE) {
+            return;
+        }
+        boolean childInWhere = inWhere || node.getType() == HiveParser.TOK_WHERE;
+        if (node.getType() == HiveParser.TOK_QUERY) {
+            String queryBlockPath = childInWhere
+                ? parentPath + ".where.exists[" + subqueryIndex[0]++ + "]"
+                : parentPath + ".subquery[" + subqueryIndex[0]++ + "]";
+            collectJoinConditionsFromQuery(node, queryBlockPath, cteAliases, joinIndex, conditions);
+            for (int i = 0; i < node.getChildCount(); i++) {
+                collectNestedSubqueryJoinConditions(
+                    (ASTNode) node.getChild(i),
+                    queryBlockPath,
+                    cteAliases,
+                    joinIndex,
+                    conditions,
+                    new int[] {1},
+                    false
+                );
+            }
+            return;
+        }
+        if (node.getType() == HiveParser.TOK_SUBQUERY) {
+            ASTNode queryNode = astWalker.directChild(node, HiveParser.TOK_QUERY);
+            if (queryNode != null) {
+                String queryBlockPath = childInWhere
+                    ? parentPath + ".where.exists[" + subqueryIndex[0]++ + "]"
+                    : parentPath + ".subquery[" + subqueryIndex[0]++ + "]";
+                collectJoinConditionsFromQuery(queryNode, queryBlockPath, cteAliases, joinIndex, conditions);
+                collectNestedSubqueryJoinConditions(queryNode, queryBlockPath, cteAliases, joinIndex, conditions, new int[] {1}, false);
+                return;
+            }
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            collectNestedSubqueryJoinConditions(
+                (ASTNode) node.getChild(i),
+                parentPath,
+                cteAliases,
+                joinIndex,
+                conditions,
+                subqueryIndex,
+                childInWhere
+            );
+        }
+    }
+
+    private void collectJoinConditionsFromQuery(
+        ASTNode queryNode,
+        String queryBlockPath,
+        Set<String> cteAliases,
+        int[] joinIndex,
+        List<ParsedJoinCondition> conditions
+    ) {
+        if (queryNode == null) {
+            return;
+        }
+        ASTNode fromNode = astWalker.directChild(queryNode, HiveParser.TOK_FROM);
+        if (fromNode == null) {
+            return;
+        }
+        Map<String, String> directAliases = resolveDirectSourceAliases(queryNode, cteAliases);
+        collectJoinConditionsFromNode(fromNode, queryBlockPath, directAliases, joinIndex, conditions);
+    }
+
+    private void collectJoinConditionsFromNode(
+        ASTNode node,
+        String queryBlockPath,
+        Map<String, String> directAliases,
+        int[] joinIndex,
+        List<ParsedJoinCondition> conditions
+    ) {
+        if (node == null) {
+            return;
+        }
+        if (isJoinNode(node)) {
+            ASTNode conditionNode = joinConditionNode(node);
+            for (int i = 0; i < node.getChildCount(); i++) {
+                ASTNode child = (ASTNode) node.getChild(i);
+                if (isJoinNode(child)) {
+                    collectJoinConditionsFromNode(child, queryBlockPath, directAliases, joinIndex, conditions);
+                }
+            }
+            if (conditionNode != null) {
+                String expression = expressionExtractor.unparse(conditionNode);
+                List<String> directColumns = collectDirectColumnReferences(conditionNode);
+                List<String> directObjects = directObjectsForColumns(directColumns, directAliases);
+                conditions.add(new ParsedJoinCondition(
+                    joinIndex[0]++,
+                    queryBlockPath,
+                    joinTypeCode(node),
+                    joinTypeName(node),
+                    directObjects,
+                    directColumns,
+                    expression
+                ));
+            }
+            for (int i = 0; i < node.getChildCount(); i++) {
+                ASTNode child = (ASTNode) node.getChild(i);
+                if (child != conditionNode && !isJoinNode(child)) {
+                    collectJoinConditionsFromNode(child, queryBlockPath, directAliases, joinIndex, conditions);
+                }
+            }
+            return;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            collectJoinConditionsFromNode((ASTNode) node.getChild(i), queryBlockPath, directAliases, joinIndex, conditions);
+        }
+    }
+
+    private boolean isJoinNode(ASTNode node) {
+        int type = node.getType();
+        return type == HiveParser.TOK_JOIN
+            || type == HiveParser.TOK_LEFTOUTERJOIN
+            || type == HiveParser.TOK_RIGHTOUTERJOIN
+            || type == HiveParser.TOK_FULLOUTERJOIN
+            || type == HiveParser.TOK_LEFTSEMIJOIN
+            || type == HiveParser.TOK_LEFTANTISEMIJOIN;
+    }
+
+    private ASTNode joinConditionNode(ASTNode joinNode) {
+        for (int i = joinNode.getChildCount() - 1; i >= 0; i--) {
+            ASTNode child = (ASTNode) joinNode.getChild(i);
+            if (child.getType() != HiveParser.TOK_TABREF
+                && child.getType() != HiveParser.TOK_SUBQUERY
+                && !isJoinNode(child)) {
+                return child;
+            }
+        }
+        return null;
+    }
+
+    private int joinTypeCode(ASTNode joinNode) {
+        int type = joinNode.getType();
+        if (type == HiveParser.TOK_JOIN) {
+            return 1;
+        }
+        if (type == HiveParser.TOK_LEFTOUTERJOIN) {
+            return 2;
+        }
+        if (type == HiveParser.TOK_RIGHTOUTERJOIN) {
+            return 3;
+        }
+        if (type == HiveParser.TOK_FULLOUTERJOIN) {
+            return 4;
+        }
+        if (type == HiveParser.TOK_LEFTSEMIJOIN) {
+            return 5;
+        }
+        if (type == HiveParser.TOK_LEFTANTISEMIJOIN) {
+            return 6;
+        }
+        return 0;
+    }
+
+    private String joinTypeName(ASTNode joinNode) {
+        int type = joinNode.getType();
+        if (type == HiveParser.TOK_JOIN) {
+            return "INNER_JOIN";
+        }
+        if (type == HiveParser.TOK_LEFTOUTERJOIN) {
+            return "LEFT_JOIN";
+        }
+        if (type == HiveParser.TOK_RIGHTOUTERJOIN) {
+            return "RIGHT_JOIN";
+        }
+        if (type == HiveParser.TOK_FULLOUTERJOIN) {
+            return "FULL_JOIN";
+        }
+        if (type == HiveParser.TOK_LEFTSEMIJOIN) {
+            return "LEFT_SEMI_JOIN";
+        }
+        if (type == HiveParser.TOK_LEFTANTISEMIJOIN) {
+            return "LEFT_ANTI_JOIN";
+        }
+        return "UNKNOWN";
+    }
+
+    private Map<String, String> resolveDirectSourceAliases(ASTNode queryNode, Set<String> cteAliases) {
+        Map<String, String> aliases = new HashMap<>();
+        List<ASTNode> tabRefs = astWalker.collect(queryNode, HiveParser.TOK_TABREF);
+        for (ASTNode tabRef : tabRefs) {
+            ASTNode tableNameNode = astWalker.first(tabRef, HiveParser.TOK_TABNAME);
+            if (tableNameNode == null) {
+                continue;
+            }
+            String tableName = tableNameText(tableNameNode);
+            aliases.put(tableName, tableName);
+            aliases.put(simpleName(tableName), tableName);
+            String alias = tableAlias(tabRef, tableNameNode);
+            if (alias != null) {
+                aliases.put(alias, tableName);
+            }
+        }
+        List<ASTNode> subqueries = astWalker.collect(queryNode, HiveParser.TOK_SUBQUERY);
+        for (ASTNode subquery : subqueries) {
+            if (subquery.getChildCount() < 2) {
+                continue;
+            }
+            String alias = stripIdentifier(subquery.getChild(subquery.getChildCount() - 1).getText()).toLowerCase(Locale.ROOT);
+            aliases.put(alias, alias);
+        }
+        for (String cteAlias : cteAliases) {
+            aliases.put(cteAlias, cteAlias);
+        }
+        return aliases;
+    }
+
+    private List<String> collectDirectColumnReferences(ASTNode expressionNode) {
+        LinkedHashSet<String> columns = new LinkedHashSet<>();
+        collectDirectColumnReferences(expressionNode, columns);
+        return new ArrayList<>(columns);
+    }
+
+    private void collectDirectColumnReferences(ASTNode node, Set<String> columns) {
+        if (node == null) {
+            return;
+        }
+        if (node.getType() == HiveParser.TOK_TABLE_OR_COL && node.getChildCount() == 1) {
+            columns.add(stripIdentifier(node.getChild(0).getText()));
+            return;
+        }
+        if (".".equals(node.getText()) && node.getChildCount() == 2) {
+            String owner = expressionExtractor.unparse((ASTNode) node.getChild(0));
+            columns.add(stripIdentifier(owner) + "." + stripIdentifier(node.getChild(1).getText()));
+            return;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            collectDirectColumnReferences((ASTNode) node.getChild(i), columns);
+        }
+    }
+
+    private List<String> directObjectsForColumns(List<String> directColumns, Map<String, String> directAliases) {
+        LinkedHashSet<String> objects = new LinkedHashSet<>();
+        for (String column : directColumns) {
+            int dotIndex = column.indexOf('.');
+            if (dotIndex <= 0) {
+                continue;
+            }
+            String owner = column.substring(0, dotIndex).toLowerCase(Locale.ROOT);
+            String object = directAliases.get(owner);
+            objects.add(object == null ? owner : object);
+        }
+        return new ArrayList<>(objects);
     }
 
     private Set<String> collectCteAliases(ASTNode root) {

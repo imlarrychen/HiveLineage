@@ -57,12 +57,21 @@ public class LineageAnalyzeRequest {
 
 ```java
 public class LineageAnalyzeOptions {
+    private EnumSet<AnalyzeFeature> analyzeFeatures =
+        EnumSet.of(AnalyzeFeature.TABLE_LINEAGE, AnalyzeFeature.COLUMN_LINEAGE);
     private LineageParseMode parseMode = LineageParseMode.TABLE_AND_COLUMN;
+    private boolean parseJoinConditions = false;
     private boolean includeTemporaryLineage;
     private boolean includeIgnoredStatements;
     private boolean expandViewLineage = false;
     private int maxViewExpandDepth = 5;
     private boolean failFast;
+}
+
+public enum AnalyzeFeature {
+    TABLE_LINEAGE,
+    COLUMN_LINEAGE,
+    JOIN_CONDITION
 }
 
 public enum LineageParseMode {
@@ -78,9 +87,15 @@ public enum LineageParseMode {
 - `COLUMN_ONLY`：只输出字段级血缘，不输出表级血缘；需要按需加载源表和目标表字段元数据。
 - `TABLE_AND_COLUMN`：同时输出表级血缘和字段级血缘；字段解析阶段按需加载元数据。
 
+`AnalyzeFeature` 是更贴近功能的按需解析开关。`TABLE_LINEAGE`、`COLUMN_LINEAGE` 和 `JOIN_CONDITION` 彼此独立；其中 `JOIN_CONDITION` 表示 Join 条件解析，不属于正式血缘。调用方如果只需要解析 Join 条件，可以设置 `analyzeFeatures = [JOIN_CONDITION]`。
+
+`parseJoinConditions` 是兼容式布尔开关，语义等价于在 `analyzeFeatures` 中包含 `JOIN_CONDITION`。如果同时存在 `analyzeFeatures` 和 `parseJoinConditions`，实现时应以 `analyzeFeatures` 为准，或在构造选项时统一归一化为 `AnalyzeFeature` 集合。
+
 即使选择 `COLUMN_ONLY`，解析器内部仍需要识别输入表和输出表，用于判断语句是否满足“有输入 + 有输出”的正式血缘口径，并用于字段归属解析。但最终结果中的 `tableLineages` 应为空。
 
 `includeIgnoredStatements` 默认为 `false`。默认情况下，成功执行解析但不产生血缘的语句，例如 `set`、`use`、纯查询语句、`insert ... values (...)`，只在解析器内部影响 Session 或被忽略，不返回 `StatementLineageResult`，也不建议落 TDSQL。若排查问题需要完整语句审计，可临时打开该选项。
+
+当 `JOIN_CONDITION` 开启时，纯查询语句即使不产生正式血缘，只要包含显式 `JOIN ... ON ...`，也应返回语句级解析结果。该结果的 `formalLineageProduced = false`，但 `joinConditions` 不为空，便于后续单独落 Join 条件表。
 
 `expandViewLineage` 默认为 `false`。默认关闭是为了保证表级解析不额外访问元数据服务；当调用方明确需要追溯视图时，可开启该选项。开启后，解析器应通过元数据获取视图定义 SQL，并把视图血缘展开到真实上游表或上游视图。`maxViewExpandDepth` 用于限制视图递归展开深度，防止嵌套过深或异常循环。
 
@@ -100,7 +115,8 @@ HiveScriptLineageAnalyzer
   │   ├── extractInputObjects(ast)
   │   ├── extractOutputObject(ast)
   │   ├── extractTableLineage(ast)
-  │   └── extractColumnLineage(ast, metadata, session)
+  │   ├── extractColumnLineage(ast, metadata, session)
+  │   └── extractJoinConditions(ast, metadata, session)
   ├── MetadataProvider
   │   └── CachedMetadataProvider
   ├── SessionContext
@@ -130,6 +146,7 @@ public interface HiveAstParserAdapter {
 - 输入对象：`from`、`join`、子查询、CTE、union 分支中涉及的表或视图。
 - 查询结构：select item、目标字段、where、group by、union、join、lateral view、partition 信息。
 - 字段表达式：表达式文本、表达式 AST、函数名、字段引用集合。
+- Join 条件：显式 `JOIN ... ON ...` 子句、Join 类型、所在查询块路径、ON 条件表达式文本、ON 条件字段引用集合。
 
 业务血缘逻辑只消费 `ParsedHiveStatement`，不直接遍历 Hive parser AST。这样如果后续 Hive 4.0.1 与生产 Hive 版本存在差异，只需要替换 adapter。
 
@@ -581,6 +598,7 @@ public class StatementLineageResult {
     private String failureMessage;
     private List<TableLineage> tableLineages;
     private List<ColumnLineage> columnLineages;
+    private List<JoinCondition> joinConditions;
     private List<LineageWarning> warnings;
 }
 ```
@@ -607,6 +625,7 @@ public enum StatementParseStatus {
 - `skipReason`：当 `parseStatusCode = 3` 时记录忽略原因，例如 `SESSION_SET`、`USE_DATABASE`、`PURE_QUERY`、`INSERT_VALUES`。
 - `failureCode` / `failureMessage`：当 `parseStatusCode = 2` 或 `1` 时记录失败类型和原因。
 - `tableLineages` 和 `columnLineages` 只保存当前语句按 `parseMode` 产生的正式血缘。若当前语句读取临时表，结果应已经展开到真实上游对象。
+- `joinConditions` 保存当前语句中的显式 `JOIN ... ON ...` 条件解析结果。Join 条件解析不是正式血缘，可以单独落库，并通过 `statementId + joinIndex` 唯一定位。
 - 临时表语句可以保留自身语句级血缘，用于审计和后续串联。写图数据库时，如果不希望图中出现临时节点，可以由图写入层跳过临时表目标，或仅写后续语句展开后的真实源表到目标表边。
 
 建议血缘唯一键：
@@ -636,6 +655,7 @@ lineage_statement_result
   output_object_json
   table_lineages_json
   column_lineages_json
+  join_conditions_json
   warnings_json
   created_at
 ```
@@ -645,6 +665,28 @@ lineage_statement_result
 ```text
 table edge:  source_table -> target_table, properties: statement_id, operation, task_version
 column edge: source_column -> target_column, properties: statement_id, expression, lineage_type, task_version
+```
+
+如果 Join 条件解析结果单独落库，建议一条 `JoinCondition` 对应一行：
+
+```text
+sql_join_condition_result
+  statement_id
+  workflow_id
+  task_id
+  task_version
+  statement_index
+  join_index
+  query_block_path
+  join_type
+  join_type_name
+  join_expression
+  direct_join_objects_json
+  direct_join_columns_json
+  join_tables_json
+  join_columns_json
+  raw_sql
+  created_at
 ```
 
 表血缘：
@@ -674,6 +716,36 @@ public class ColumnLineage {
     private int statementIndex;
 }
 ```
+
+Join 条件：
+
+```java
+public class JoinCondition {
+    private String workflowId;
+    private String taskId;
+    private String taskVersion;
+    private int statementIndex;
+    private String statementId;
+    private int joinIndex;
+    private String queryBlockPath;
+    private int joinType;
+    private String joinTypeName;
+    private List<DataObjectRef> directJoinObjects;
+    private List<ColumnRef> directJoinColumns;
+    private List<DataObjectRef> joinTables;
+    private List<ColumnRef> joinColumns;
+    private String joinExpression;
+    private String rawSql;
+}
+```
+
+`joinIndex` 在同一条 SQL 语句内全局递增，即使 Join 条件分布在 CTE、子查询、派生表和主查询中也不能在各查询块内重新计数。`queryBlockPath` 用于标识 Join 条件所在查询块，例如 `root`、`cte.x`、`root.where.exists[1]`。
+
+`directJoinObjects` 表示当前查询块中 `ON` 表达式直接引用到的对象。若直接对象是物理表，则输出完整物理表名；若直接对象是视图，则输出视图名；若直接对象是 CTE、临时表或派生表，则输出当前查询块中的名称或别名。`directJoinColumns` 表示当前查询块中 `ON` 表达式直接引用的字段，例如 `x.id`、`a.id`。`joinTables` 和 `joinColumns` 表示尽量追溯后的物理表和物理字段集合。四个集合都必须按完整名称去重，并保留首次出现顺序。
+
+如果视图、CTE、临时表或派生表字段无法唯一追溯到物理字段，解析器必须保留 `directJoinObjects`、`directJoinColumns` 和原始 `joinExpression`，并返回字段追溯不明确的 warning。`joinTables` 和 `joinColumns` 可以只包含已成功追溯的物理对象和字段。
+
+当 `directJoinObjects` 命中 `SessionContext.temporaryTables` 时，Join 条件解析必须优先使用当前 Session 中登记的临时表字段映射进行追溯，不应查询 Hive Metastore。临时表字段能唯一映射到物理字段时，`joinTables` 和 `joinColumns` 输出物理表与物理字段；无法唯一映射时，保留临时表名和直接字段，并返回临时表字段追溯 warning。
 
 类型：
 

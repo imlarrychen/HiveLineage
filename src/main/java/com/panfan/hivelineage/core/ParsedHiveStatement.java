@@ -19,6 +19,7 @@ public final class ParsedHiveStatement {
     private final Map<Integer, List<String>> setOperationSourceColumnsBySelectIndex;
     private final Map<Integer, List<String>> setOperationExpressionsBySelectIndex;
     private final Map<String, String> staticPartitionValues;
+    private final List<ParsedJoinCondition> joinConditions;
     private final String normalizedSql;
 
     public ParsedHiveStatement(
@@ -62,6 +63,7 @@ public final class ParsedHiveStatement {
             Collections.<Integer, List<String>>emptyMap(),
             Collections.<Integer, List<String>>emptyMap(),
             staticPartitionValues,
+            Collections.<ParsedJoinCondition>emptyList(),
             normalizedSql
         );
     }
@@ -107,6 +109,38 @@ public final class ParsedHiveStatement {
         Map<String, String> staticPartitionValues,
         String normalizedSql
     ) {
+        this(
+            statementType,
+            outputObject,
+            inputObjects,
+            targetColumns,
+            selectExpressions,
+            sourceAliases,
+            columnAliasSources,
+            columnAliasExpressions,
+            setOperationSourceColumnsBySelectIndex,
+            setOperationExpressionsBySelectIndex,
+            staticPartitionValues,
+            Collections.<ParsedJoinCondition>emptyList(),
+            normalizedSql
+        );
+    }
+
+    public ParsedHiveStatement(
+        StatementType statementType,
+        DataObjectRef outputObject,
+        List<DataObjectRef> inputObjects,
+        List<String> targetColumns,
+        List<String> selectExpressions,
+        Map<String, String> sourceAliases,
+        Map<String, String> columnAliasSources,
+        Map<String, String> columnAliasExpressions,
+        Map<Integer, List<String>> setOperationSourceColumnsBySelectIndex,
+        Map<Integer, List<String>> setOperationExpressionsBySelectIndex,
+        Map<String, String> staticPartitionValues,
+        List<ParsedJoinCondition> joinConditions,
+        String normalizedSql
+    ) {
         this.statementType = statementType;
         this.outputObject = outputObject;
         this.inputObjects = Collections.unmodifiableList(new ArrayList<>(inputObjects));
@@ -118,6 +152,7 @@ public final class ParsedHiveStatement {
         this.setOperationSourceColumnsBySelectIndex = unmodifiableNestedListMap(setOperationSourceColumnsBySelectIndex);
         this.setOperationExpressionsBySelectIndex = unmodifiableNestedListMap(setOperationExpressionsBySelectIndex);
         this.staticPartitionValues = Collections.unmodifiableMap(new HashMap<>(staticPartitionValues));
+        this.joinConditions = Collections.unmodifiableList(new ArrayList<>(joinConditions));
         this.normalizedSql = normalizedSql;
     }
 
@@ -163,6 +198,10 @@ public final class ParsedHiveStatement {
 
     public Map<String, String> getStaticPartitionValues() {
         return staticPartitionValues;
+    }
+
+    public List<ParsedJoinCondition> getJoinConditions() {
+        return joinConditions;
     }
 
     public String getNormalizedSql() {

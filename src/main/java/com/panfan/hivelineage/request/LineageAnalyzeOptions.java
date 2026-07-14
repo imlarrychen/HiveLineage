@@ -5,6 +5,7 @@ public final class LineageAnalyzeOptions {
     private final boolean includeTemporaryLineage;
     private final boolean includeIgnoredStatements;
     private final boolean expandViewLineage;
+    private final boolean parseJoinConditions;
     private final int maxViewExpandDepth;
     private final boolean failFast;
     private final String fallbackVariableValue;
@@ -14,6 +15,7 @@ public final class LineageAnalyzeOptions {
         this.includeTemporaryLineage = builder.includeTemporaryLineage;
         this.includeIgnoredStatements = builder.includeIgnoredStatements;
         this.expandViewLineage = builder.expandViewLineage;
+        this.parseJoinConditions = builder.parseJoinConditions;
         this.maxViewExpandDepth = builder.maxViewExpandDepth;
         this.failFast = builder.failFast;
         this.fallbackVariableValue = builder.fallbackVariableValue;
@@ -39,6 +41,10 @@ public final class LineageAnalyzeOptions {
         return expandViewLineage;
     }
 
+    public boolean isParseJoinConditions() {
+        return parseJoinConditions;
+    }
+
     public int getMaxViewExpandDepth() {
         return maxViewExpandDepth;
     }
@@ -56,6 +62,7 @@ public final class LineageAnalyzeOptions {
         private boolean includeTemporaryLineage;
         private boolean includeIgnoredStatements;
         private boolean expandViewLineage;
+        private boolean parseJoinConditions;
         private int maxViewExpandDepth = 5;
         private boolean failFast;
         private String fallbackVariableValue = "__HIVE_LINEAGE_DEFAULT__";
@@ -77,6 +84,11 @@ public final class LineageAnalyzeOptions {
 
         public Builder expandViewLineage(boolean expandViewLineage) {
             this.expandViewLineage = expandViewLineage;
+            return this;
+        }
+
+        public Builder parseJoinConditions(boolean parseJoinConditions) {
+            this.parseJoinConditions = parseJoinConditions;
             return this;
         }
 

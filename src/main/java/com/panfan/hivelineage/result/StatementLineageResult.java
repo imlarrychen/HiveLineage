@@ -24,6 +24,7 @@ public final class StatementLineageResult {
     private final String failureMessage;
     private final List<TableLineage> tableLineages;
     private final List<ColumnLineage> columnLineages;
+    private final List<JoinCondition> joinConditions;
     private final List<LineageWarning> warnings;
 
     public StatementLineageResult(
@@ -65,6 +66,7 @@ public final class StatementLineageResult {
             failureMessage,
             tableLineages,
             columnLineages,
+            Collections.<JoinCondition>emptyList(),
             Collections.<LineageWarning>emptyList()
         );
     }
@@ -90,6 +92,52 @@ public final class StatementLineageResult {
         List<ColumnLineage> columnLineages,
         List<LineageWarning> warnings
     ) {
+        this(
+            workflowId,
+            taskId,
+            taskVersion,
+            statementIndex,
+            statementId,
+            statementType,
+            rawSql,
+            normalizedSql,
+            parseStatusCode,
+            formalLineageProduced,
+            outputObject,
+            inputObjects,
+            parseMode,
+            skipReason,
+            failureCode,
+            failureMessage,
+            tableLineages,
+            columnLineages,
+            Collections.<JoinCondition>emptyList(),
+            warnings
+        );
+    }
+
+    public StatementLineageResult(
+        String workflowId,
+        String taskId,
+        String taskVersion,
+        int statementIndex,
+        String statementId,
+        String statementType,
+        String rawSql,
+        String normalizedSql,
+        Integer parseStatusCode,
+        boolean formalLineageProduced,
+        DataObjectRef outputObject,
+        List<DataObjectRef> inputObjects,
+        LineageParseMode parseMode,
+        String skipReason,
+        String failureCode,
+        String failureMessage,
+        List<TableLineage> tableLineages,
+        List<ColumnLineage> columnLineages,
+        List<JoinCondition> joinConditions,
+        List<LineageWarning> warnings
+    ) {
         this.workflowId = workflowId;
         this.taskId = taskId;
         this.taskVersion = taskVersion;
@@ -108,6 +156,7 @@ public final class StatementLineageResult {
         this.failureMessage = failureMessage;
         this.tableLineages = Collections.unmodifiableList(new ArrayList<>(tableLineages));
         this.columnLineages = Collections.unmodifiableList(new ArrayList<>(columnLineages));
+        this.joinConditions = Collections.unmodifiableList(new ArrayList<>(joinConditions));
         this.warnings = Collections.unmodifiableList(new ArrayList<>(warnings));
     }
 
@@ -181,6 +230,10 @@ public final class StatementLineageResult {
 
     public List<ColumnLineage> getColumnLineages() {
         return columnLineages;
+    }
+
+    public List<JoinCondition> getJoinConditions() {
+        return joinConditions;
     }
 
     public List<LineageWarning> getWarnings() {
