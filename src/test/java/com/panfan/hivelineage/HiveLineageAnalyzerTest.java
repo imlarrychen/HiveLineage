@@ -43,6 +43,7 @@ public class HiveLineageAnalyzerTest {
         test.productionSample02ExtractsUnionAndJoinSourceTables();
         test.generatedCoreLineageCasesParseWithoutFailure();
         test.unionAllColumnLineageUsesBranchSelectColumns();
+        test.nestedUnionAllColumnLineageMergesBranchColumnsThroughSubquery();
         test.plainUnionColumnLineageUsesDistinctExpression();
         test.constantSelectItemProducesConstantLineage();
         test.unionAllConstantExpressionsAreMerged();
@@ -58,6 +59,7 @@ public class HiveLineageAnalyzerTest {
         test.fallbackParserAdapterUsesHeuristicWhenPrimaryFails();
         test.viewInputIsExpandedAndViewMetadataIsCached();
         test.commonTableExpressionUsesRealSourcesAndColumnLineage();
+        test.commonTableExpressionWithTableAliasExpandsColumnProjection();
         test.createViewAsSelectProducesFormalLineage();
         test.viewColumnLineageExpandsToBaseColumns();
         test.dynamicPartitionColumnLineageUsesSelectField();
@@ -69,6 +71,7 @@ public class HiveLineageAnalyzerTest {
         test.selectStarExpandsColumnsFromMetadata();
         test.selectStarAlignsToTargetMetadataWhenSourceHasExtraColumns();
         test.subqueryAliasColumnLineageResolvesToBaseTable();
+        test.inlineSubqueryAliasScopeDoesNotLeakOuterAlias();
         test.subqueryAliasDerivedColumnKeepsProjectionExpression();
         test.metadataCacheExpiresPositiveAndMissingEntries();
         test.missingTargetMetadataEmitsWarningsOnStatementAndAnalyzeResult();
@@ -901,6 +904,53 @@ public class HiveLineageAnalyzerTest {
     }
 
     @Test
+    public void nestedUnionAllColumnLineageMergesBranchColumnsThroughSubquery() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("ods.vrf_t", "vrf_clt_nbr", "vrf_iac_nbr", "vrf_chk_rlt", "biz_date")
+            .addTable("ods.vrf_h", "cust_id", "iac_id", "vrf_rst_cd", "dw_upd_tm", "biz_date")
+            .addTable("dwd.vrf_target", "cust_id", "iac_id", "vrf_rst_cd", "dw_upd_tm");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_nested_union")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript(
+                "insert overwrite table dwd.vrf_target(cust_id, iac_id, vrf_rst_cd, dw_upd_tm) "
+                    + "select cust_id, iac_id, vrf_rst_cd, dw_upd_tm "
+                    + "from ("
+                    + "  select cust_id, iac_id, vrf_rst_cd, dw_upd_tm, "
+                    + "         row_number() over(partition by cust_id order by dw_upd_tm desc) as rn "
+                    + "  from ("
+                    + "    select vrf_clt_nbr as cust_id, vrf_iac_nbr as iac_id, "
+                    + "           vrf_chk_rlt as vrf_rst_cd, current_timestamp() as dw_upd_tm "
+                    + "    from ods.vrf_t "
+                    + "    union all "
+                    + "    select cust_id, iac_id, vrf_rst_cd, dw_upd_tm from ods.vrf_h"
+                    + "  ) t"
+                    + ") t0 where t0.rn = 1;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+        ColumnLineage custId = statement.getColumnLineages().get(0);
+        ColumnLineage updateTime = statement.getColumnLineages().get(3);
+
+        assertContainsColumn(custId.getSourceColumns(), "ods.vrf_t.vrf_clt_nbr");
+        assertContainsColumn(custId.getSourceColumns(), "ods.vrf_h.cust_id");
+        TestSupport.assertEquals("union_all(ods.vrf_t.vrf_clt_nbr, ods.vrf_h.cust_id)", custId.getExpression(), "nested union cust_id expression");
+        assertContainsColumn(updateTime.getSourceColumns(), "ods.vrf_h.dw_upd_tm");
+        TestSupport.assertTrue(!containsColumn(updateTime.getSourceColumns(), "ods.vrf_t.dw_upd_tm"), "current_timestamp branch should not invent source column");
+        TestSupport.assertEquals("union_all(current_timestamp(), ods.vrf_h.dw_upd_tm)", updateTime.getExpression(), "nested union dw_upd_tm expression");
+    }
+
+    @Test
     public void plainUnionColumnLineageUsesDistinctExpression() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
         MapMetadataProvider metadataProvider = new MapMetadataProvider()
@@ -1380,6 +1430,43 @@ public class HiveLineageAnalyzerTest {
     }
 
     @Test
+    public void commonTableExpressionWithTableAliasExpandsColumnProjection() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("ods.main_eac", "eac_id")
+            .addTable("ods.eac_inf", "eac_id", "eac_seq_nbr")
+            .addTable("dwd.cte_alias_target", "pre_eac_seq_nbr");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_cte_table_alias")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript(
+                "with tmp1 as ("
+                    + "select eac_id as eaceacshr, eac_seq_nbr as pre_eac_seq_nbr from ods.eac_inf"
+                    + ") "
+                    + "insert overwrite table dwd.cte_alias_target "
+                    + "select t3.pre_eac_seq_nbr "
+                    + "from ods.main_eac t1 left join tmp1 t3 on t1.eac_id = t3.eaceacshr;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+        TestSupport.assertEquals(1, statement.getColumnLineages().size(), "cte alias column lineage count");
+        ColumnLineage preSeq = statement.getColumnLineages().get(0);
+
+        assertContainsColumn(preSeq.getSourceColumns(), "ods.eac_inf.eac_seq_nbr");
+        TestSupport.assertTrue(!containsColumn(preSeq.getSourceColumns(), "tmp1.pre_eac_seq_nbr"), "cte alias should not remain as physical source");
+        TestSupport.assertTrue(statement.getWarnings().isEmpty(), "cte alias should not emit tmp metadata warning");
+    }
+
+    @Test
     public void createViewAsSelectProducesFormalLineage() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
 
@@ -1732,6 +1819,45 @@ public class HiveLineageAnalyzerTest {
 
         assertContainsSource(statement, "ods.user_base");
         TestSupport.assertEquals("ods.user_base.user_id", statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(), "subquery source column");
+    }
+
+    @Test
+    public void inlineSubqueryAliasScopeDoesNotLeakOuterAlias() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("ods.main_account", "id")
+            .addTable("ods.outer_conflict", "id", "vrf_rst_cd")
+            .addTable("ods.inner_base", "id")
+            .addTable("ods.inner_vrf", "cust_id", "vrf_rst_cd")
+            .addTable("dwd.alias_scope_target", "vrf_rst_cd");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_subquery_alias_scope")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript(
+                "insert overwrite table dwd.alias_scope_target(vrf_rst_cd) "
+                    + "select t5.vrf_rst_cd "
+                    + "from ods.main_account t1 "
+                    + "left join ods.outer_conflict t2 on t1.id = t2.id "
+                    + "left join ("
+                    + "  select t2.cust_id, t2.vrf_rst_cd "
+                    + "  from ods.inner_base t1 join ods.inner_vrf t2 on t1.id = t2.cust_id"
+                    + ") t5 on t1.id = t5.cust_id;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+        ColumnLineage vrfResult = statement.getColumnLineages().get(0);
+
+        assertContainsColumn(vrfResult.getSourceColumns(), "ods.inner_vrf.vrf_rst_cd");
+        TestSupport.assertTrue(!containsColumn(vrfResult.getSourceColumns(), "ods.outer_conflict.vrf_rst_cd"), "outer alias t2 should not leak into inline subquery");
     }
 
     @Test

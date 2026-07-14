@@ -1633,7 +1633,7 @@ where x.order_cnt > 0
 
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| dwd.inline_subquery_target.user_id | ods.order_detail.user_id | ods.order_detail | DIRECT | user_id |  | false | true |
+| dwd.inline_subquery_target.user_id | ods.order_detail.user_id | ods.order_detail | DIRECT | x.user_id |  | false | true |
 | dwd.inline_subquery_target.order_cnt |  | ods.order_detail | DERIVED | count(*) | count | true | true |
 
 #### Warnings

@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -353,8 +354,10 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             return failedResult(request, rawStatement, normalizedStatement, index, "COLUMN_COUNT_MISMATCH", "Target columns and select items do not align", statementWarnings);
         }
 
+        Map<String, Map<String, ColumnLineageProjection>> statementProjectionTables = extractStatementProjectionTables(normalizedStatement);
         boolean throughTemporaryTable = containsTemporaryTable(originalInputObjects, temporaryTableSources);
         List<DataObjectRef> columnReferenceInputObjects = expandTemporaryInputObjects(originalInputObjects, temporaryTableSources);
+        columnReferenceInputObjects = filterProjectionInputObjects(columnReferenceInputObjects, statementProjectionTables);
         List<DataObjectRef> inputObjects = expandViewInputObjects(request, columnReferenceInputObjects, 0, new LinkedHashSet<String>(), statementWarnings, index);
         String defaultColumnSourceTable = columnReferenceInputObjects.get(0).getQualifiedName();
 
@@ -375,6 +378,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             sourceAliases.putAll(resolvedParsedStatement.getSourceAliases());
             Map<String, String> topLevelSourceAliases = extractTopLevelSourceAliases(normalizedStatement);
             mergeTopLevelSourceAliases(sourceAliases, topLevelSourceAliases);
+            Map<String, String> topLevelProjectionSourceAliases = extractProjectionSourceAliases(normalizedStatement);
+            sourceAliases.putAll(topLevelProjectionSourceAliases);
             Map<String, String> columnAliasSources = filterColumnAliasSources(
                 resolvedParsedStatement.getColumnAliasSources(),
                 topLevelSourceAliases
@@ -397,6 +402,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                         expression,
                         originalInputObjects,
                         sourceAliases,
+                        topLevelProjectionSourceAliases,
+                        statementProjectionTables,
                         temporaryTableColumns,
                         viewColumnLineageCache,
                         statementWarnings,
@@ -429,7 +436,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 if (directProjection == null) {
                     sourceColumns = expandViewSourceColumns(request, sourceColumns, viewColumnLineageCache, 0, new LinkedHashSet<String>(), statementWarnings, index);
                 }
-                if (sourceColumns.isEmpty() && mayContainColumnReference(sourceExtractionExpression)) {
+                if (sourceColumns.isEmpty() && directProjection == null && mayContainColumnReference(sourceExtractionExpression)) {
                     addWarning(statementWarnings, WarningCode.UNKNOWN_COLUMN_LINEAGE, "Unable to resolve source columns for expression: " + sourceExtractionExpression, index);
                 }
                 LineageType lineageType = directProjection == null
@@ -1374,6 +1381,34 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             }
         }
         return expanded;
+    }
+
+    private List<DataObjectRef> filterProjectionInputObjects(
+        List<DataObjectRef> inputObjects,
+        Map<String, Map<String, ColumnLineageProjection>> statementProjectionTables
+    ) {
+        if (statementProjectionTables.isEmpty()) {
+            return inputObjects;
+        }
+        List<DataObjectRef> filtered = new ArrayList<>();
+        for (DataObjectRef inputObject : inputObjects) {
+            if (!isStatementProjectionObject(inputObject.getQualifiedName(), statementProjectionTables)) {
+                filtered.add(inputObject);
+            }
+        }
+        return filtered.isEmpty() ? inputObjects : filtered;
+    }
+
+    private boolean isStatementProjectionObject(
+        String tableName,
+        Map<String, Map<String, ColumnLineageProjection>> statementProjectionTables
+    ) {
+        String normalized = tableName.toLowerCase(Locale.ROOT);
+        if (statementProjectionTables.containsKey(normalized)) {
+            return true;
+        }
+        int dotIndex = normalized.lastIndexOf('.');
+        return dotIndex >= 0 && statementProjectionTables.containsKey(normalized.substring(dotIndex + 1));
     }
 
     private List<DataObjectRef> expandViewInputObjects(
@@ -2398,6 +2433,319 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         return true;
     }
 
+    private Map<String, Map<String, ColumnLineageProjection>> extractStatementProjectionTables(String statement) {
+        Map<String, Map<String, ColumnLineageProjection>> projections = new HashMap<>();
+        CteExtraction cteExtraction = extractCtes(statement);
+        for (CteBlock cteBlock : cteExtraction.getCteBlocks()) {
+            projections.putAll(extractInlineProjectionTables(cteBlock.getSql(), projections));
+            projections.put(cteBlock.getName().toLowerCase(Locale.ROOT), extractProjectionTable(cteBlock.getSql(), projections));
+        }
+        projections.putAll(extractInlineProjectionTables(cteExtraction.getRootSql(), projections));
+        return projections;
+    }
+
+    private Map<String, Map<String, ColumnLineageProjection>> extractInlineProjectionTables(
+        String sql,
+        Map<String, Map<String, ColumnLineageProjection>> existingProjections
+    ) {
+        Map<String, Map<String, ColumnLineageProjection>> projections = new HashMap<>();
+        int depth = 0;
+        char quote = 0;
+        for (int i = 0; i < sql.length(); i++) {
+            char ch = sql.charAt(i);
+            if (quote != 0) {
+                if (ch == quote) {
+                    quote = 0;
+                }
+                continue;
+            }
+            if (ch == '\'' || ch == '"' || ch == '`') {
+                quote = ch;
+                continue;
+            }
+            if (ch == '(') {
+                if (depth == 0) {
+                    int closeIndex = findMatchingParen(sql, i);
+                    if (closeIndex > i) {
+                        String body = sql.substring(i + 1, closeIndex).trim();
+                        if (isQueryBody(body)) {
+                            Map<String, Map<String, ColumnLineageProjection>> combined = combinedProjectionTables(existingProjections, projections);
+                            Map<String, Map<String, ColumnLineageProjection>> nested = extractInlineProjectionTables(body, combined);
+                            projections.putAll(nested);
+                            combined = combinedProjectionTables(existingProjections, projections);
+                            String alias = readAliasAfter(sql, closeIndex + 1);
+                            if (alias != null) {
+                                projections.put(alias, extractProjectionTable(body, combined));
+                            }
+                        }
+                        i = closeIndex;
+                        continue;
+                    }
+                }
+                depth++;
+                continue;
+            }
+            if (ch == ')') {
+                depth = Math.max(0, depth - 1);
+            }
+        }
+        return projections;
+    }
+
+    private Map<String, Map<String, ColumnLineageProjection>> combinedProjectionTables(
+        Map<String, Map<String, ColumnLineageProjection>> first,
+        Map<String, Map<String, ColumnLineageProjection>> second
+    ) {
+        Map<String, Map<String, ColumnLineageProjection>> combined = new HashMap<>(first);
+        combined.putAll(second);
+        return combined;
+    }
+
+    private boolean isQueryBody(String body) {
+        String lower = body.trim().toLowerCase(Locale.ROOT);
+        return (lower.startsWith("select")
+            && (lower.length() == 6 || !isIdentifierCharacter(lower.charAt(6))))
+            || (lower.startsWith("with")
+            && (lower.length() == 4 || !isIdentifierCharacter(lower.charAt(4))));
+    }
+
+    private String readAliasAfter(String sql, int start) {
+        int position = skipWhitespace(sql, start);
+        int asEnd = readIdentifier(sql, position);
+        if (asEnd > position && "as".equalsIgnoreCase(sql.substring(position, asEnd))) {
+            position = skipWhitespace(sql, asEnd);
+        }
+        int aliasEnd = readIdentifier(sql, position);
+        if (aliasEnd <= position) {
+            return null;
+        }
+        String alias = sql.substring(position, aliasEnd);
+        return isAliasKeyword(alias) ? null : alias.toLowerCase(Locale.ROOT);
+    }
+
+    private Map<String, ColumnLineageProjection> extractProjectionTable(
+        String sql,
+        Map<String, Map<String, ColumnLineageProjection>> existingProjections
+    ) {
+        CteExtraction cteExtraction = extractCtes(sql);
+        Map<String, Map<String, ColumnLineageProjection>> projections = new HashMap<>(existingProjections);
+        for (CteBlock cteBlock : cteExtraction.getCteBlocks()) {
+            projections.put(cteBlock.getName().toLowerCase(Locale.ROOT), extractProjectionTable(cteBlock.getSql(), projections));
+        }
+        SetOperationParts setOperationParts = splitTopLevelSetOperation(cteExtraction.getRootSql());
+        if (setOperationParts != null) {
+            return extractSetOperationProjectionTable(setOperationParts, projections);
+        }
+        return extractSimpleProjectionTable(cteExtraction.getRootSql(), projections);
+    }
+
+    private Map<String, ColumnLineageProjection> extractSetOperationProjectionTable(
+        SetOperationParts setOperationParts,
+        Map<String, Map<String, ColumnLineageProjection>> existingProjections
+    ) {
+        List<Map<String, ColumnLineageProjection>> branchProjections = new ArrayList<>();
+        for (String branchSql : setOperationParts.getBranches()) {
+            branchProjections.add(extractProjectionTable(branchSql, existingProjections));
+        }
+        if (branchProjections.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<String> outputColumns = new ArrayList<>(branchProjections.get(0).keySet());
+        Map<String, ColumnLineageProjection> merged = new LinkedHashMap<>();
+        for (int i = 0; i < outputColumns.size(); i++) {
+            String outputColumn = outputColumns.get(i);
+            List<ColumnRef> sourceColumns = new ArrayList<>();
+            Set<String> seen = new LinkedHashSet<>();
+            List<String> expressions = new ArrayList<>();
+            for (Map<String, ColumnLineageProjection> branchProjection : branchProjections) {
+                if (i >= branchProjection.size()) {
+                    continue;
+                }
+                ColumnLineageProjection projection = new ArrayList<>(branchProjection.values()).get(i);
+                for (ColumnRef sourceColumn : projection.getSourceColumns()) {
+                    addColumn(sourceColumns, seen, sourceColumn);
+                }
+                expressions.add(projection.getExpression());
+            }
+            merged.put(
+                outputColumn,
+                new ColumnLineageProjection(
+                    sourceColumns,
+                    setOperationParts.getFunctionName() + "(" + joinWithComma(expressions) + ")",
+                    LineageType.DERIVED
+                )
+            );
+        }
+        return merged;
+    }
+
+    private Map<String, ColumnLineageProjection> extractSimpleProjectionTable(
+        String sql,
+        Map<String, Map<String, ColumnLineageProjection>> existingProjections
+    ) {
+        int selectIndex = topLevelKeywordIndex(sql, "select", 0);
+        int fromIndex = topLevelKeywordIndex(sql, "from", selectIndex < 0 ? 0 : selectIndex);
+        if (selectIndex < 0 || fromIndex < 0 || fromIndex <= selectIndex) {
+            return Collections.emptyMap();
+        }
+        String selectList = sql.substring(selectIndex + 6, fromIndex);
+        Map<String, String> sourceAliases = extractProjectionSourceAliases(sql);
+        String defaultSourceTable = firstAliasTarget(sourceAliases);
+        Map<String, ColumnLineageProjection> projections = new LinkedHashMap<>();
+        for (String selectItem : splitSelectItems(selectList)) {
+            String outputColumn = extractAlias(selectItem);
+            String expression = stripAlias(selectItem);
+            if (outputColumn == null && isDirectExpression(expression)) {
+                outputColumn = columnNameOf(expression);
+                if (outputColumn == null) {
+                    outputColumn = expression;
+                }
+            }
+            if (outputColumn == null) {
+                continue;
+            }
+            projections.put(
+                outputColumn.toLowerCase(Locale.ROOT),
+                projectionForExpression(expression, defaultSourceTable, sourceAliases, existingProjections)
+            );
+        }
+        return projections;
+    }
+
+    private ColumnLineageProjection projectionForExpression(
+        String expression,
+        String defaultSourceTable,
+        Map<String, String> sourceAliases,
+        Map<String, Map<String, ColumnLineageProjection>> existingProjections
+    ) {
+        List<ColumnRef> rawSourceColumns = extractSourceColumns(
+            expression,
+            defaultSourceTable,
+            sourceAliases,
+            Collections.<String, String>emptyMap(),
+            Collections.<String, String>emptyMap()
+        );
+        List<ColumnRef> expandedSourceColumns = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        ColumnLineageProjection singleProjection = null;
+        for (ColumnRef rawSourceColumn : rawSourceColumns) {
+            String sourceTable = tableNameOfColumn(rawSourceColumn.getQualifiedName());
+            String sourceColumnName = columnNameOf(rawSourceColumn.getQualifiedName());
+            ColumnLineageProjection projection = sourceTable == null || sourceColumnName == null
+                ? null
+                : columnProjection(sourceTable, sourceColumnName, existingProjections);
+            if (projection == null) {
+                addColumn(expandedSourceColumns, seen, rawSourceColumn);
+                continue;
+            }
+            singleProjection = rawSourceColumns.size() == 1 ? projection : null;
+            for (ColumnRef projectedSourceColumn : projection.getSourceColumns()) {
+                addColumn(expandedSourceColumns, seen, projectedSourceColumn);
+            }
+        }
+        String lineageExpression;
+        LineageType lineageType;
+        if (singleProjection != null) {
+            lineageExpression = singleProjection.getExpression();
+            lineageType = singleProjection.getLineageType();
+        } else if (isDirectExpression(expression) && expandedSourceColumns.size() == 1) {
+            lineageExpression = expandedSourceColumns.get(0).getQualifiedName();
+            lineageType = LineageType.DIRECT;
+        } else {
+            lineageExpression = normalizeLineageExpression(expression);
+            lineageType = resolveLineageType(lineageExpression, expression, expandedSourceColumns);
+        }
+        return new ColumnLineageProjection(expandedSourceColumns, lineageExpression, lineageType);
+    }
+
+    private Map<String, String> extractProjectionSourceAliases(String sql) {
+        Map<String, String> aliases = extractTopLevelSourceAliases(sql);
+        int depth = 0;
+        char quote = 0;
+        int start = topLevelKeywordIndex(sql, "from", 0);
+        if (start < 0) {
+            return aliases;
+        }
+        for (int i = start; i < sql.length(); i++) {
+            char ch = sql.charAt(i);
+            if (quote != 0) {
+                if (ch == quote) {
+                    quote = 0;
+                }
+                continue;
+            }
+            if (ch == '\'' || ch == '"' || ch == '`') {
+                quote = ch;
+                continue;
+            }
+            if (ch == '(') {
+                if (depth == 0) {
+                    int closeIndex = findMatchingParen(sql, i);
+                    if (closeIndex > i) {
+                        String alias = readAliasAfter(sql, closeIndex + 1);
+                        if (alias != null) {
+                            aliases.put(alias, alias);
+                        }
+                        i = closeIndex;
+                        continue;
+                    }
+                }
+                depth++;
+                continue;
+            }
+            if (ch == ')') {
+                depth = Math.max(0, depth - 1);
+            }
+        }
+        return aliases;
+    }
+
+    private SetOperationParts splitTopLevelSetOperation(String sql) {
+        List<String> branches = new ArrayList<>();
+        int depth = 0;
+        char quote = 0;
+        int branchStart = 0;
+        String functionName = null;
+        for (int i = 0; i < sql.length(); i++) {
+            char ch = sql.charAt(i);
+            if (quote != 0) {
+                if (ch == quote) {
+                    quote = 0;
+                }
+                continue;
+            }
+            if (ch == '\'' || ch == '"' || ch == '`') {
+                quote = ch;
+                continue;
+            }
+            if (ch == '(') {
+                depth++;
+                continue;
+            }
+            if (ch == ')') {
+                depth = Math.max(0, depth - 1);
+                continue;
+            }
+            if (depth == 0 && matchesKeywordAt(sql, i, "union")) {
+                branches.add(sql.substring(branchStart, i).trim());
+                int next = skipWhitespace(sql, i + 5);
+                if (matchesKeywordAt(sql, next, "all")) {
+                    functionName = "union_all";
+                    branchStart = skipWhitespace(sql, next + 3);
+                } else {
+                    functionName = "union_distinct";
+                    branchStart = next;
+                }
+                i = branchStart - 1;
+            }
+        }
+        if (functionName == null) {
+            return null;
+        }
+        branches.add(sql.substring(branchStart).trim());
+        return new SetOperationParts(functionName, branches);
+    }
+
     private List<ColumnRef> extractSetOperationSourceColumns(
         LineageAnalyzeRequest request,
         String expression,
@@ -2424,6 +2772,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         String expression,
         List<DataObjectRef> originalInputObjects,
         Map<String, String> sourceAliases,
+        Map<String, String> topLevelProjectionSourceAliases,
+        Map<String, Map<String, ColumnLineageProjection>> statementProjectionTables,
         Map<String, Map<String, ColumnLineageProjection>> temporaryTableColumns,
         Map<String, Map<String, ColumnLineageProjection>> viewColumnLineageCache,
         List<LineageWarning> warnings,
@@ -2435,21 +2785,49 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         }
         String tableName = null;
         if (directColumn.getOwner() != null) {
+            ColumnLineageProjection ownerProjection = columnProjection(
+                directColumn.getOwner(),
+                directColumn.getColumn(),
+                statementProjectionTables
+            );
+            if (ownerProjection != null) {
+                return ownerProjection;
+            }
             tableName = sourceAliases.get(directColumn.getOwner());
             if (tableName == null) {
                 tableName = directColumn.getOwner();
             }
-        } else if (originalInputObjects.size() == 1) {
-            tableName = originalInputObjects.get(0).getQualifiedName();
+        } else {
+            tableName = singleProjectionTable(topLevelProjectionSourceAliases, statementProjectionTables);
+            if (tableName == null && originalInputObjects.size() == 1) {
+                tableName = originalInputObjects.get(0).getQualifiedName();
+            }
         }
         if (tableName == null) {
             return null;
+        }
+        ColumnLineageProjection statementProjection = columnProjection(tableName, directColumn.getColumn(), statementProjectionTables);
+        if (statementProjection != null) {
+            return statementProjection;
         }
         ColumnLineageProjection temporaryProjection = columnProjection(tableName, directColumn.getColumn(), temporaryTableColumns);
         if (temporaryProjection != null) {
             return temporaryProjection;
         }
         return viewColumnProjection(request, tableName, directColumn.getColumn(), viewColumnLineageCache, warnings, statementIndex);
+    }
+
+    private String singleProjectionTable(
+        Map<String, String> sourceAliases,
+        Map<String, Map<String, ColumnLineageProjection>> statementProjectionTables
+    ) {
+        Set<String> projectionTables = new LinkedHashSet<>();
+        for (String sourceAlias : sourceAliases.values()) {
+            if (statementProjectionTables.containsKey(sourceAlias)) {
+                projectionTables.add(sourceAlias);
+            }
+        }
+        return projectionTables.size() == 1 ? projectionTables.iterator().next() : null;
     }
 
     private ColumnLineageProjection columnProjection(
@@ -2935,6 +3313,24 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
 
         private LineageType getLineageType() {
             return lineageType;
+        }
+    }
+
+    private static final class SetOperationParts {
+        private final String functionName;
+        private final List<String> branches;
+
+        private SetOperationParts(String functionName, List<String> branches) {
+            this.functionName = functionName;
+            this.branches = Collections.unmodifiableList(new ArrayList<>(branches));
+        }
+
+        private String getFunctionName() {
+            return functionName;
+        }
+
+        private List<String> getBranches() {
+            return branches;
         }
     }
 
