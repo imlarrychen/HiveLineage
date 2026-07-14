@@ -3,11 +3,15 @@ package com.panfan.hivelineage;
 import com.panfan.hivelineage.core.HiveLineageAnalyzer;
 import com.panfan.hivelineage.core.HiveScriptLineageAnalyzer;
 import com.panfan.hivelineage.metadata.HiveMetadataCache;
-import com.panfan.hivelineage.output.LineageMarkdownRenderer;
 import com.panfan.hivelineage.request.LineageAnalyzeOptions;
 import com.panfan.hivelineage.request.LineageAnalyzeRequest;
 import com.panfan.hivelineage.request.LineageParseMode;
+import com.panfan.hivelineage.result.ColumnRef;
+import com.panfan.hivelineage.result.DataObjectRef;
+import com.panfan.hivelineage.result.JoinCondition;
 import com.panfan.hivelineage.result.LineageAnalyzeResult;
+import com.panfan.hivelineage.result.LineageWarning;
+import com.panfan.hivelineage.result.StatementLineageResult;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -52,14 +56,126 @@ public final class JoinConditionSnapshot {
             builder.append("## ")
                 .append(joinCase.title)
                 .append("\n\n")
-                .append("### Test SQL\n\n")
+                .append("### 测试 SQL\n\n")
                 .append("```sql\n")
                 .append(joinCase.sql.trim())
                 .append("\n```\n\n")
-                .append(LineageMarkdownRenderer.render(result, joinCase.title + " Parse Result", "default"))
-                .append("\n");
+                .append("### 解析结果\n\n");
+            appendResult(builder, result);
+            builder.append("\n");
         }
         return builder.toString();
+    }
+
+    private static void appendResult(StringBuilder builder, LineageAnalyzeResult result) {
+        builder.append("| Field | Value |\n")
+            .append("| --- | --- |\n")
+            .append(row("taskId", result.getTaskId()))
+            .append(row("totalStatementCount", result.getTotalStatementCount()))
+            .append(row("ignoredStatementCount", result.getIgnoredStatementCount()))
+            .append(row("failedStatementCount", result.getFailedStatementCount()))
+            .append("\n");
+
+        for (StatementLineageResult statement : result.getStatements()) {
+            builder.append("#### Statement ")
+                .append(statement.getStatementIndex())
+                .append("\n\n")
+                .append("| Field | Value |\n")
+                .append("| --- | --- |\n")
+                .append(row("statementType", statement.getStatementType()))
+                .append(row("parseStatusCode", statement.getParseStatusCode()))
+                .append(row("formalLineageProduced", statement.isFormalLineageProduced()))
+                .append(row("inputObjects", joinObjects(statement.getInputObjects())))
+                .append(row("outputObject", statement.getOutputObject() == null ? "" : statement.getOutputObject().getQualifiedName()))
+                .append("\n");
+
+            appendJoinConditions(builder, statement);
+            appendWarnings(builder, statement);
+        }
+    }
+
+    private static void appendJoinConditions(StringBuilder builder, StatementLineageResult statement) {
+        builder.append("##### Join Conditions\n\n");
+        if (statement.getJoinConditions().isEmpty()) {
+            builder.append("_None_\n\n");
+            return;
+        }
+        builder.append("| Index | Query Block | Type | Direct Objects | Direct Columns | Join Tables | Join Columns | Expression |\n")
+            .append("| --- | --- | --- | --- | --- | --- | --- | --- |\n");
+        for (JoinCondition condition : statement.getJoinConditions()) {
+            builder.append("| ")
+                .append(condition.getJoinIndex())
+                .append(" | ")
+                .append(markdown(condition.getQueryBlockPath()))
+                .append(" | ")
+                .append(markdown(condition.getJoinTypeName()))
+                .append(" | ")
+                .append(markdown(joinObjects(condition.getDirectJoinObjects())))
+                .append(" | ")
+                .append(markdown(joinColumns(condition.getDirectJoinColumns())))
+                .append(" | ")
+                .append(markdown(joinObjects(condition.getJoinTables())))
+                .append(" | ")
+                .append(markdown(joinColumns(condition.getJoinColumns())))
+                .append(" | ")
+                .append(markdown(condition.getJoinExpression()))
+                .append(" |\n");
+        }
+        builder.append("\n");
+    }
+
+    private static void appendWarnings(StringBuilder builder, StatementLineageResult statement) {
+        builder.append("##### Warnings\n\n");
+        if (statement.getWarnings().isEmpty()) {
+            builder.append("_None_\n\n");
+            return;
+        }
+        builder.append("| Code | Message |\n")
+            .append("| --- | --- |\n");
+        for (LineageWarning warning : statement.getWarnings()) {
+            builder.append("| ")
+                .append(markdown(warning.getWarningCode()))
+                .append(" | ")
+                .append(markdown(warning.getMessage()))
+                .append(" |\n");
+        }
+        builder.append("\n");
+    }
+
+    private static String row(String field, Object value) {
+        return "| " + markdown(field) + " | " + markdown(value) + " |\n";
+    }
+
+    private static String joinObjects(List<DataObjectRef> objects) {
+        StringBuilder builder = new StringBuilder();
+        for (DataObjectRef object : objects) {
+            appendJoined(builder, object.getQualifiedName());
+        }
+        return builder.toString();
+    }
+
+    private static String joinColumns(List<ColumnRef> columns) {
+        StringBuilder builder = new StringBuilder();
+        for (ColumnRef column : columns) {
+            appendJoined(builder, column.getQualifiedName());
+        }
+        return builder.toString();
+    }
+
+    private static void appendJoined(StringBuilder builder, String value) {
+        if (builder.length() > 0) {
+            builder.append("<br>");
+        }
+        builder.append(value);
+    }
+
+    private static String markdown(Object value) {
+        return value == null
+            ? ""
+            : String.valueOf(value)
+                .replace("|", "\\|")
+                .replace("\r\n", "<br>")
+                .replace("\n", "<br>");
     }
 
     private static List<JoinCase> joinCases() {
