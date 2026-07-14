@@ -25,6 +25,7 @@ public class HiveLineageAnalyzerTest {
         test.parseJoinConditionsDefaultOffKeepsPureQueryIgnored();
         test.pureQueryJoinConditionIsReturnedWithoutFormalLineage();
         test.joinConditionKeepsExpressionAndDirectColumns();
+        test.unqualifiedJoinColumnsUseMetadataToResolveOwners();
         test.consecutiveJoinConditionsAreReturnedInOneStatement();
         test.implicitWhereJoinIsNotReturnedAsJoinCondition();
         test.existsSubqueryJoinConditionIsReturnedWithQueryBlockPath();
@@ -325,6 +326,40 @@ public class HiveLineageAnalyzerTest {
         assertContainsColumn(condition.getJoinColumns(), "dim_meta_info.meta_id");
         TestSupport.assertTrue(!containsColumn(condition.getDirectJoinColumns(), "a.dt"), "where column should not be direct join column");
         TestSupport.assertTrue(!containsColumn(condition.getDirectJoinColumns(), "b.dt"), "where column should not be direct join column");
+    }
+
+    @Test
+    public void unqualifiedJoinColumnsUseMetadataToResolveOwners() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        TestMetadataProvider metadataProvider = new TestMetadataProvider()
+            .addTable("ods.join_left", "user_id", "name")
+            .addTable("ods.join_right", "manager_id", "dept_name");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_join")
+            .taskId("task_join_unqualified")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript("select * from ods.join_left l join ods.join_right r on user_id = manager_id;")
+            .options(LineageAnalyzeOptions.builder()
+                .parseJoinConditions(true)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+        JoinCondition condition = statement.getJoinConditions().get(0);
+
+        TestSupport.assertEquals("user_id = manager_id", condition.getJoinExpression(), "unqualified join expression");
+        assertContainsColumn(condition.getDirectJoinColumns(), "user_id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "manager_id");
+        assertContainsSource(condition.getDirectJoinObjects(), "ods.join_left");
+        assertContainsSource(condition.getDirectJoinObjects(), "ods.join_right");
+        assertContainsSource(condition.getJoinTables(), "ods.join_left");
+        assertContainsSource(condition.getJoinTables(), "ods.join_right");
+        assertContainsColumn(condition.getJoinColumns(), "ods.join_left.user_id");
+        assertContainsColumn(condition.getJoinColumns(), "ods.join_right.manager_id");
     }
 
     @Test

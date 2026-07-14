@@ -541,12 +541,16 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 request,
                 directColumns,
                 sourceAliases,
+                parsedStatement.getInputObjects(),
                 cteColumnProjections,
                 temporaryTableColumns,
                 viewColumnLineageCache,
                 warnings,
                 statementIndex
             );
+            if (directObjects.isEmpty() && hasUnqualifiedColumns(directColumns)) {
+                directObjects = joinTables(joinColumns, directObjects);
+            }
             conditions.add(new JoinCondition(
                 parsedJoinCondition.getJoinIndex(),
                 parsedJoinCondition.getQueryBlockPath(),
@@ -739,6 +743,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 request,
                 directColumns,
                 sourceAliases,
+                inputObjectsFromSourceAliases(sourceAliases),
                 cteColumnProjections,
                 temporaryTableColumns,
                 viewColumnLineageCache,
@@ -905,6 +910,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         LineageAnalyzeRequest request,
         List<ColumnRef> directColumns,
         Map<String, String> sourceAliases,
+        List<DataObjectRef> inputObjects,
         Map<String, Map<String, List<ColumnRef>>> cteColumnProjections,
         Map<String, Map<String, ColumnLineageProjection>> temporaryTableColumns,
         Map<String, Map<String, ColumnLineageProjection>> viewColumnLineageCache,
@@ -915,29 +921,84 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         Set<String> seen = new LinkedHashSet<>();
         for (ColumnRef directColumn : directColumns) {
             String owner = tableNameOfColumn(directColumn.getQualifiedName());
-            String columnName = columnNameOf(directColumn.getQualifiedName());
-            if (owner == null || columnName == null) {
+            String columnName = owner == null ? directColumn.getQualifiedName() : columnNameOf(directColumn.getQualifiedName());
+            if (columnName == null) {
                 continue;
             }
-            String sourceObject = sourceAliases.get(owner.toLowerCase(Locale.ROOT));
-            if (sourceObject == null) {
-                sourceObject = owner;
-            }
-            List<ColumnRef> expanded = expandJoinColumn(
-                request,
-                sourceObject,
-                columnName,
-                cteColumnProjections,
-                temporaryTableColumns,
-                viewColumnLineageCache,
-                warnings,
-                statementIndex
-            );
-            for (ColumnRef expandedColumn : expanded) {
-                addColumn(resolvedColumns, seen, expandedColumn);
+            List<String> sourceObjects = owner == null
+                ? resolveUnqualifiedJoinColumnOwners(request, columnName, inputObjects, warnings, statementIndex)
+                : Collections.singletonList(resolveSourceObject(owner, sourceAliases));
+            for (String sourceObject : sourceObjects) {
+                List<ColumnRef> expanded = expandJoinColumn(
+                    request,
+                    sourceObject,
+                    columnName,
+                    cteColumnProjections,
+                    temporaryTableColumns,
+                    viewColumnLineageCache,
+                    warnings,
+                    statementIndex
+                );
+                for (ColumnRef expandedColumn : expanded) {
+                    addColumn(resolvedColumns, seen, expandedColumn);
+                }
             }
         }
         return resolvedColumns;
+    }
+
+    private String resolveSourceObject(String owner, Map<String, String> sourceAliases) {
+        String sourceObject = sourceAliases.get(owner.toLowerCase(Locale.ROOT));
+        return sourceObject == null ? owner : sourceObject;
+    }
+
+    private List<String> resolveUnqualifiedJoinColumnOwners(
+        LineageAnalyzeRequest request,
+        String columnName,
+        List<DataObjectRef> inputObjects,
+        List<LineageWarning> warnings,
+        int statementIndex
+    ) {
+        if (inputObjects.isEmpty()) {
+            addWarning(warnings, WarningCode.UNKNOWN_COLUMN_LINEAGE, "Unable to resolve unqualified join column " + columnName, statementIndex);
+            return Collections.emptyList();
+        }
+        List<String> owners = new ArrayList<>();
+        String normalizedColumn = columnName.toLowerCase(Locale.ROOT);
+        for (DataObjectRef inputObject : inputObjects) {
+            HiveTableMetadata metadata = loadTableMetadata(request, inputObject.getQualifiedName(), warnings, statementIndex);
+            if (metadata != null && containsColumn(metadata, normalizedColumn)) {
+                owners.add(inputObject.getQualifiedName());
+            }
+        }
+        if (owners.size() == 1) {
+            return owners;
+        }
+        String message = owners.isEmpty()
+            ? "Unable to resolve unqualified join column " + columnName
+            : "Ambiguous unqualified join column " + columnName + " in " + joinWithComma(owners);
+        addWarning(warnings, WarningCode.UNKNOWN_COLUMN_LINEAGE, message, statementIndex);
+        return Collections.emptyList();
+    }
+
+    private boolean hasUnqualifiedColumns(List<ColumnRef> columns) {
+        for (ColumnRef column : columns) {
+            if (tableNameOfColumn(column.getQualifiedName()) == null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<DataObjectRef> inputObjectsFromSourceAliases(Map<String, String> sourceAliases) {
+        List<DataObjectRef> inputObjects = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (String sourceObject : sourceAliases.values()) {
+            if (sourceObject.contains(".")) {
+                addInputObject(inputObjects, seen, new DataObjectRef(sourceObject));
+            }
+        }
+        return inputObjects;
     }
 
     private List<ColumnRef> expandJoinColumn(

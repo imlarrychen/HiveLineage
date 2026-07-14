@@ -37,7 +37,7 @@ public final class JoinConditionSnapshot {
                 .taskId(joinCase.taskId)
                 .taskVersion("V1")
                 .defaultDatabase("default")
-                .metadataProvider(GeneratedSqlTestSetTest.generatedMetadataProvider())
+                .metadataProvider(joinMetadataProvider())
                 .metadataCache(new HiveMetadataCache())
                 .rawScript(joinCase.sql)
                 .options(LineageAnalyzeOptions.builder()
@@ -84,6 +84,13 @@ public final class JoinConditionSnapshot {
                     + "left join dim_meta_info b\n"
                     + "on split(a.biz_trace_id, '_')[1] = cast(b.meta_id as string)\n"
                     + "where a.dt = '20260710' and b.dt = '20260710';",
+                true
+            ),
+            new JoinCase(
+                "join_unqualified_columns",
+                "未带别名字段通过元数据归属",
+                "select * from ods.join_left l\n"
+                    + "join ods.join_right r on user_id = manager_id;",
                 true
             ),
             new JoinCase(
@@ -141,6 +148,12 @@ public final class JoinConditionSnapshot {
                 true
             )
         );
+    }
+
+    private static TestMetadataProvider joinMetadataProvider() {
+        return GeneratedSqlTestSetTest.generatedMetadataProvider()
+            .addTable("ods.join_left", "user_id", "name")
+            .addTable("ods.join_right", "manager_id", "dept_name");
     }
 
     private static final class JoinCase {
