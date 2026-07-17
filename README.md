@@ -123,6 +123,7 @@ LineageAnalyzeResult result = analyzer.analyzeScript(LineageAnalyzeRequest.build
 - `inputObjects`：输入对象。
 - `tableLineages`：表血缘。
 - `columnLineages`：字段血缘。
+- `joinConditions`：Join/隐式关联条件解析结果。开启 `parseJoinConditions` 后返回，纯查询语句也可以只解析 join 条件。
 - `warnings`：语句级 warning。
 
 解析状态枚举：
@@ -150,6 +151,41 @@ LineageAnalyzeResult result = analyzer.analyzeScript(LineageAnalyzeRequest.build
 - 窗口函数表达式应尽量还原为可读 SQL，不输出 Hive AST 内部 token。例如 `insert into test_a(user_id, rn) select user_id, row_number() over(partition by user_id order by update_time desc) from test_b` 中 `rn` 的函数名只记录 `row_number`。
 - 集合操作按分支聚合表达式。`union all` 使用 `union_all(...)`，plain `union` 使用 `union_distinct(...)`。字段分支示例：`union_all(table1.a1, table2.a2)`；常量分支示例：`union_all(constant('A'), constant('B'))`。
 - 字符串字面量、变量兜底后的字面量、日期格式串等不应被识别为来源字段。例如 `'fallback_value'`、`'yyyy/MM/dd'` 只作为表达式内容，不进入 `sourceColumns`。
+
+Join 条件解析结果：
+
+Join 解析结果保存在语句级 `joinConditions` 中。它不是血缘边，建议后续单独落表；一条 SQL 语句可能包含多个 `JoinCondition`，例如连续 join、CTE 内 join 和主查询 join 并存时会返回多条。
+
+单个 `JoinCondition` 主要字段包括：
+
+- `joinIndex`：当前语句内的关联序号。
+- `queryBlock`：关联所在查询块，例如 `root`、`cte.tmp1`、`subquery.t1`。
+- `joinTypeCode` / `joinTypeName`：关联形式枚举，例如 `INNER_JOIN`、`LEFT_JOIN`、`LEFT_SEMI_JOIN`。
+- `directObjects` / `directColumns`：SQL 表达式中直接出现的关联对象和字段，可能是别名、CTE、临时表。
+- `joinObjects` / `joinColumns`：尽量追溯后的真实物理表和字段。
+- `expression`：`on` 后面的完整关联表达式；隐式逗号 join 会记录从 `where` 中提取出的等值关联表达式。
+- `rawSql`：当前单条原始 SQL。
+
+示例 SQL：
+
+```sql
+select *
+from ods_op_logs a
+left join dim_meta_info b
+on split(a.biz_trace_id, '_')[1] = cast(b.meta_id as string)
+and b.dt = '20260710';
+```
+
+解析结果示例：
+
+```text
+joinTypeName = LEFT_JOIN
+directObjects = [ods_op_logs, dim_meta_info]
+directColumns = [ods_op_logs.biz_trace_id, dim_meta_info.meta_id]
+joinObjects = [ods_op_logs, dim_meta_info]
+joinColumns = [ods_op_logs.biz_trace_id, dim_meta_info.meta_id]
+expression = split(a.biz_trace_id, '_')[1] = cast(b.meta_id as string) and b.dt = '20260710'
+```
 
 ## 元数据查询与缓存
 
@@ -339,6 +375,7 @@ CLI 结束时也会在终端打印：
 - `formalLineageProduced` 是否符合预期。`set`、纯查询、普通 DDL、`insert ... values` 等默认不产生正式血缘。
 - `Table Lineage` 中目标表和来源表是否完整。
 - `Column Lineage` 中目标字段、来源字段、`lineageType`、`expression` 是否合理。
+- `Join Conditions` 中关联类型、关联表达式、直接字段和追溯后的物理字段是否合理。
 - `Warnings` 中是否有 `METADATA_NOT_FOUND`、`UNRESOLVED_VARIABLE`、视图展开失败等需要处理的问题。
 
 字段血缘核对时尤其关注：
@@ -484,6 +521,7 @@ mvn -q \
 - [lineage_case_01.sql](src/test/resources/hql/generated/lineage_case_01.sql) 到 [lineage_case_10.sql](src/test/resources/hql/generated/lineage_case_10.sql)
 - [lineage_case_metadata.md](src/test/resources/hql/generated/lineage_case_metadata.md)
 - [lineage_parse_results.md](src/test/resources/hql/generated/lineage_parse_results.md)
+- Join 条件人工核验报告运行后输出到 `target/lineage-output/join-condition-parse-results.md`。
 
 [GeneratedSqlTestSetTest.java](src/test/java/com/panfan/hivelineage/GeneratedSqlTestSetTest.java) 会扫描 `src/test/resources/hql/generated` 下的 `.sql` 文件并逐个调用 `HiveScriptLineageAnalyzer`，断言生成测试集不出现解析失败。后续新增 SQL 测试集时，只要放到该目录即可被纳入这条测试链路。
 
@@ -492,6 +530,12 @@ mvn -q \
 ```bash
 mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=/tmp/hive-lineage-cp.txt
 java -cp "target/test-classes:target/classes:$(cat /tmp/hive-lineage-cp.txt)" com.panfan.hivelineage.GeneratedSqlLineageSnapshot
+```
+
+Join 条件解析结果可以运行下面的生成器刷新：
+
+```bash
+java -cp "target/test-classes:target/classes:$(cat /tmp/hive-lineage-cp.txt)" com.panfan.hivelineage.JoinConditionSnapshot
 ```
 
 如果使用 JDK 9 及以上版本直接运行 `java` 命令，需要额外加入 `--add-opens=java.base/java.net=ALL-UNNAMED`。
