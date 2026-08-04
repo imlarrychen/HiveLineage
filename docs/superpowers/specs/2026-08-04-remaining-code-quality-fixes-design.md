@@ -17,10 +17,11 @@
 `HiveAstExpressionExtractor` 保留当前字符串比较方式，把二元操作符按语义拆成三个私有谓词：
 
 - 算术操作符：`+`、`-`、`*`、`/`、`%`。
-- 比较操作符：`=`、`==`、`<>`、`!=`、`<`、`<=`、`>`、`>=`。
+- 比较操作符：顶层比较谓词再委托给等值谓词（`=`、`==`、`<>`、`!=`）和顺序谓词（`<`、`<=`、`>`、`>=`）。
 - 逻辑操作符：`and`、`or`，保持大小写不敏感。
 
-顶层 `isBinaryOperator` 只组合三个谓词。每个 boolean 表达式复杂度均不超过 4，操作符集合和匹配语义保持不变。
+顶层 `isBinaryOperator` 只组合算术、比较、逻辑三个语义谓词；比较谓词继续组合两个更小的谓词。
+每个 boolean 表达式复杂度均不超过 4，操作符集合和匹配语义保持不变。
 
 ### 字面量 token 判断
 
@@ -34,9 +35,9 @@
 
 ### JDBC 资源管理
 
-`JdbcMetadataColumnV2Provider.getTableMetadata` 将 `Connection` 与 `PreparedStatement` 放在同一个
-`try-with-resources` 资源声明中，保留一层 `ResultSet` 资源块。资源仍按 ResultSet、PreparedStatement、Connection 的逆序关闭，
-SQL 参数设置、视图查询时机、SQLException 包装和返回逻辑均不改变。
+`JdbcMetadataColumnV2Provider.getTableMetadata` 仅管理 `Connection`，将列查询提取到私有方法。
+列查询方法管理 `PreparedStatement`，并保留一层 `ResultSet` 资源块。这样既满足 try 最多嵌套一层，
+又保持列查询的 ResultSet、PreparedStatement 在视图查询开始前关闭；SQL 参数设置、SQLException 包装和返回逻辑均不改变。
 
 规则文档新增 CQ-11：`try` 或 `try-with-resources` 最多嵌套一层；同一生命周期资源优先合并声明，不同职责优先提取方法。
 

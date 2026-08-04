@@ -319,13 +319,16 @@ final class HiveAstProjectionExtractor {
 
     private boolean isLiteralNode(ASTNode node) {
         int type = node.getType();
-        return type == HiveParser.StringLiteral
-            || type == HiveParser.Number
-            || type == HiveParser.NumberLiteral
-            || type == HiveParser.IntegralLiteral
-            || type == HiveParser.KW_TRUE
-            || type == HiveParser.KW_FALSE
-            || type == HiveParser.KW_NULL;
+        return isTextOrNumericLiteral(type) || isBooleanLiteral(type) || type == HiveParser.KW_NULL;
+    }
+
+    private boolean isTextOrNumericLiteral(int type) {
+        return type == HiveParser.StringLiteral || type == HiveParser.Number
+            || type == HiveParser.NumberLiteral || type == HiveParser.IntegralLiteral;
+    }
+
+    private boolean isBooleanLiteral(int type) {
+        return type == HiveParser.KW_TRUE || type == HiveParser.KW_FALSE;
     }
 
     private List<String> resolveSelectAliases(ASTNode selectNode) {

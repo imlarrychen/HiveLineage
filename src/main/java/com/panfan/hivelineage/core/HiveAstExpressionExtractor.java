@@ -108,10 +108,28 @@ final class HiveAstExpressionExtractor {
     }
 
     private boolean isBinaryOperator(String text) {
-        return "+".equals(text) || "-".equals(text) || "*".equals(text) || "/".equals(text) || "%".equals(text)
-            || "=".equals(text) || "==".equals(text) || "<>".equals(text) || "!=".equals(text)
-            || "<".equals(text) || "<=".equals(text) || ">".equals(text) || ">=".equals(text)
-            || "and".equalsIgnoreCase(text) || "or".equalsIgnoreCase(text);
+        return isArithmeticOperator(text) || isComparisonOperator(text) || isLogicalOperator(text);
+    }
+
+    private boolean isArithmeticOperator(String text) {
+        return "+".equals(text) || "-".equals(text) || "*".equals(text)
+            || "/".equals(text) || "%".equals(text);
+    }
+
+    private boolean isComparisonOperator(String text) {
+        return isEqualityOperator(text) || isOrderingOperator(text);
+    }
+
+    private boolean isEqualityOperator(String text) {
+        return "=".equals(text) || "==".equals(text) || "<>".equals(text) || "!=".equals(text);
+    }
+
+    private boolean isOrderingOperator(String text) {
+        return "<".equals(text) || "<=".equals(text) || ">".equals(text) || ">=".equals(text);
+    }
+
+    private boolean isLogicalOperator(String text) {
+        return "and".equalsIgnoreCase(text) || "or".equalsIgnoreCase(text);
     }
 
     private boolean isUnaryOperator(String text) {

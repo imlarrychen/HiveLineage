@@ -43,22 +43,13 @@ public final class JdbcMetadataColumnV2Provider implements HiveMetadataProvider 
 
     @Override
     public HiveTableMetadata getTableMetadata(TableIdentifier tableIdentifier) {
-        List<String> columns = new ArrayList<>();
         String sql = "select column_name from " + tableName
             + " where lower(db_en_name) = lower(?)"
             + " and lower(tb_en_name) = lower(?)"
             + " and (is_active is null or is_active <> b'0')"
             + " order by integer_idx asc, id asc";
         try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password)) {
-            try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                statement.setString(1, tableIdentifier.getDatabaseName());
-                statement.setString(2, tableIdentifier.getTableName());
-                try (ResultSet resultSet = statement.executeQuery()) {
-                    while (resultSet.next()) {
-                        columns.add(resultSet.getString("column_name"));
-                    }
-                }
-            }
+            List<String> columns = queryColumns(connection, sql, tableIdentifier);
             List<String> viewSources = queryViewSources(connection, tableIdentifier);
             if (!viewSources.isEmpty()) {
                 return HiveTableMetadata.view(tableIdentifier, columns, buildViewOriginalSql(columns, viewSources));
@@ -70,6 +61,24 @@ public final class JdbcMetadataColumnV2Provider implements HiveMetadataProvider 
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed to query Hive metadata for " + tableIdentifier.getQualifiedName(), ex);
         }
+    }
+
+    private List<String> queryColumns(
+        Connection connection,
+        String sql,
+        TableIdentifier tableIdentifier
+    ) throws SQLException {
+        List<String> columns = new ArrayList<>();
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, tableIdentifier.getDatabaseName());
+            statement.setString(2, tableIdentifier.getTableName());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    columns.add(resultSet.getString("column_name"));
+                }
+            }
+        }
+        return columns;
     }
 
     private List<String> queryViewSources(Connection connection, TableIdentifier tableIdentifier) throws SQLException {
