@@ -1,0 +1,206 @@
+package com.panfan.hivelineage.core;
+
+import com.panfan.hivelineage.result.LineageWarning;
+import com.panfan.hivelineage.result.WarningCode;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+final class HiveScriptPreprocessor {
+    boolean isSetStatement(String statement) {
+        return statement.trim().toLowerCase(Locale.ROOT).startsWith("set ");
+    }
+
+    void applySetStatement(String statement, Map<String, String> sessionVariables) {
+        String assignment = statement.trim().substring(3).trim();
+        int equalsIndex = assignment.indexOf('=');
+        if (equalsIndex < 1) {
+            return;
+        }
+        String key = assignment.substring(0, equalsIndex).trim();
+        String value = stripQuotedValue(assignment.substring(equalsIndex + 1).trim());
+        sessionVariables.put(key, value);
+        sessionVariables.put("hiveconf:" + key, value);
+        sessionVariables.put("hivevar:" + key, value);
+    }
+
+    private String stripQuotedValue(String value) {
+        if (value.length() >= 2) {
+            char first = value.charAt(0);
+            char last = value.charAt(value.length() - 1);
+            if ((first == '\'' && last == '\'') || (first == '"' && last == '"')) {
+                return value.substring(1, value.length() - 1);
+            }
+        }
+        return value;
+    }
+
+    String resolveVariables(String statement, Map<String, String> sessionVariables, String fallbackVariableValue) {
+        return resolveVariables(
+            statement,
+            sessionVariables,
+            fallbackVariableValue,
+            new ArrayList<LineageWarning>(),
+            -1
+        );
+    }
+
+    String resolveVariables(
+        String statement,
+        Map<String, String> sessionVariables,
+        String fallbackVariableValue,
+        List<LineageWarning> warnings,
+        int statementIndex
+    ) {
+        String resolved = statement;
+        for (Map.Entry<String, String> entry : sessionVariables.entrySet()) {
+            resolved = resolved.replace("${" + entry.getKey() + "}", entry.getValue());
+        }
+        resolved = replaceUnresolvedVariables(resolved, Pattern.compile("\\$\\{[^}]+}"), fallbackVariableValue, warnings, statementIndex);
+        return replaceUnresolvedVariables(resolved, Pattern.compile("@\\{[^}]+}"), fallbackVariableValue, warnings, statementIndex);
+    }
+
+    private String replaceUnresolvedVariables(
+        String statement,
+        Pattern variablePattern,
+        String fallbackVariableValue,
+        List<LineageWarning> warnings,
+        int statementIndex
+    ) {
+        Matcher matcher = variablePattern.matcher(statement);
+        StringBuffer buffer = new StringBuffer();
+        while (matcher.find()) {
+            addWarning(warnings, WarningCode.UNRESOLVED_VARIABLE, "Unresolved variable " + matcher.group(), statementIndex);
+            matcher.appendReplacement(buffer, Matcher.quoteReplacement(fallbackVariableValue));
+        }
+        matcher.appendTail(buffer);
+        return buffer.toString();
+    }
+
+    List<String> splitStatements(String rawScript) {
+        if (rawScript == null || rawScript.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> statements = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inSingleQuote = false;
+        boolean inDoubleQuote = false;
+        boolean inLineComment = false;
+        boolean inBlockComment = false;
+        for (int i = 0; i < rawScript.length(); i++) {
+            char ch = rawScript.charAt(i);
+            char next = i + 1 < rawScript.length() ? rawScript.charAt(i + 1) : '\0';
+
+            if (inLineComment) {
+                current.append(ch);
+                if (ch == '\n' || ch == '\r') {
+                    inLineComment = false;
+                }
+                continue;
+            }
+            if (inBlockComment) {
+                current.append(ch);
+                if (ch == '*' && next == '/') {
+                    current.append(next);
+                    i++;
+                    inBlockComment = false;
+                }
+                continue;
+            }
+
+            if (!inSingleQuote && !inDoubleQuote && ch == '-' && next == '-') {
+                current.append(ch).append(next);
+                i++;
+                inLineComment = true;
+                continue;
+            }
+            if (!inSingleQuote && !inDoubleQuote && ch == '/' && next == '*') {
+                current.append(ch).append(next);
+                i++;
+                inBlockComment = true;
+                continue;
+            }
+
+            if (!inDoubleQuote && ch == '\'') {
+                current.append(ch);
+                if (inSingleQuote && next == '\'') {
+                    current.append(next);
+                    i++;
+                    continue;
+                }
+                inSingleQuote = !inSingleQuote;
+                continue;
+            }
+            if (!inSingleQuote && ch == '"') {
+                current.append(ch);
+                inDoubleQuote = !inDoubleQuote;
+                continue;
+            }
+
+            if (!inSingleQuote && !inDoubleQuote && ch == ';') {
+                addStatement(statements, current);
+                current.setLength(0);
+                continue;
+            }
+            current.append(ch);
+        }
+        addStatement(statements, current);
+        return statements;
+    }
+
+    String stripLeadingComments(String statement) {
+        String remaining = statement == null ? "" : statement;
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            remaining = remaining.trim();
+            if (remaining.startsWith("--")) {
+                int lineEnd = indexOfLineEnd(remaining);
+                remaining = lineEnd < 0 ? "" : remaining.substring(lineEnd + 1);
+                changed = true;
+            } else if (remaining.startsWith("/*")) {
+                int blockEnd = remaining.indexOf("*/");
+                remaining = blockEnd < 0 ? "" : remaining.substring(blockEnd + 2);
+                changed = true;
+            }
+        }
+        return remaining;
+    }
+
+    private int indexOfLineEnd(String value) {
+        int newline = value.indexOf('\n');
+        int carriageReturn = value.indexOf('\r');
+        if (newline < 0) {
+            return carriageReturn;
+        }
+        if (carriageReturn < 0) {
+            return newline;
+        }
+        return Math.min(newline, carriageReturn);
+    }
+
+    private void addStatement(List<String> statements, StringBuilder statement) {
+        String trimmed = statement.toString().trim();
+        if (!trimmed.isEmpty()) {
+            statements.add(trimmed);
+        }
+    }
+
+    private void addWarning(List<LineageWarning> warnings, WarningCode warningCode, String message, int statementIndex) {
+        if (warnings == null) {
+            return;
+        }
+        for (LineageWarning warning : warnings) {
+            if (warning.getWarningCode() == warningCode
+                && warning.getStatementIndex() == statementIndex
+                && warning.getMessage().equals(message)) {
+                return;
+            }
+        }
+        warnings.add(new LineageWarning(warningCode, message, statementIndex));
+    }
+}

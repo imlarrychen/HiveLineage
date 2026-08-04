@@ -46,6 +46,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     private static final Pattern IDENTIFIER = Pattern.compile("\\b([a-zA-Z_][\\w]*)(?:\\.([a-zA-Z_][\\w]*))?\\b");
     private static final Pattern QUALIFIED_COLUMN = Pattern.compile("\\b([a-zA-Z_][\\w]*)\\.([a-zA-Z_][\\w]*)\\b");
     private final HiveAstParserAdapter parserAdapter;
+    private final HiveScriptPreprocessor scriptPreprocessor = new HiveScriptPreprocessor();
 
     public HiveScriptLineageAnalyzer() {
         this(new FallbackHiveAstParserAdapter(new HiveParserAstAdapter(), new HeuristicHiveAstParserAdapter()));
@@ -57,7 +58,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
 
     @Override
     public LineageAnalyzeResult analyzeScript(LineageAnalyzeRequest request) {
-        List<String> statements = splitStatements(request.getRawScript());
+        List<String> statements = scriptPreprocessor.splitStatements(request.getRawScript());
         List<StatementLineageResult> results = new ArrayList<>();
         Map<String, String> sessionVariables = new HashMap<>(request.getRuntimeVariables());
         Map<String, List<DataObjectRef>> temporaryTableSources = new HashMap<>();
@@ -71,13 +72,13 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             if (statement.isEmpty()) {
                 continue;
             }
-            String executableStatement = stripLeadingComments(statement).trim();
+            String executableStatement = scriptPreprocessor.stripLeadingComments(statement).trim();
             if (executableStatement.isEmpty()) {
                 ignored++;
                 continue;
             }
-            if (isSetStatement(executableStatement)) {
-                applySetStatement(executableStatement, sessionVariables);
+            if (scriptPreprocessor.isSetStatement(executableStatement)) {
+                scriptPreprocessor.applySetStatement(executableStatement, sessionVariables);
                 ignored++;
                 if (request.getOptions().isIncludeIgnoredStatements()) {
                     results.add(ignoredResult(request, statement, executableStatement, i, "SET", "SESSION_SET"));
@@ -85,7 +86,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 continue;
             }
             List<LineageWarning> statementWarnings = new ArrayList<>();
-            String normalized = resolveVariables(
+            String normalized = scriptPreprocessor.resolveVariables(
                 executableStatement,
                 sessionVariables,
                 request.getOptions().getFallbackVariableValue(),
@@ -1811,185 +1812,6 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             return "INSERT_DIRECTORY";
         }
         return "IGNORED";
-    }
-
-    private boolean isSetStatement(String statement) {
-        return statement.trim().toLowerCase(Locale.ROOT).startsWith("set ");
-    }
-
-    private void applySetStatement(String statement, Map<String, String> sessionVariables) {
-        String assignment = statement.trim().substring(3).trim();
-        int equalsIndex = assignment.indexOf('=');
-        if (equalsIndex < 1) {
-            return;
-        }
-        String key = assignment.substring(0, equalsIndex).trim();
-        String value = stripQuotedValue(assignment.substring(equalsIndex + 1).trim());
-        sessionVariables.put(key, value);
-        sessionVariables.put("hiveconf:" + key, value);
-        sessionVariables.put("hivevar:" + key, value);
-    }
-
-    private String stripQuotedValue(String value) {
-        if (value.length() >= 2) {
-            char first = value.charAt(0);
-            char last = value.charAt(value.length() - 1);
-            if ((first == '\'' && last == '\'') || (first == '"' && last == '"')) {
-                return value.substring(1, value.length() - 1);
-            }
-        }
-        return value;
-    }
-
-    private String resolveVariables(String statement, Map<String, String> sessionVariables, String fallbackVariableValue) {
-        return resolveVariables(
-            statement,
-            sessionVariables,
-            fallbackVariableValue,
-            new ArrayList<LineageWarning>(),
-            -1
-        );
-    }
-
-    private String resolveVariables(
-        String statement,
-        Map<String, String> sessionVariables,
-        String fallbackVariableValue,
-        List<LineageWarning> warnings,
-        int statementIndex
-    ) {
-        String resolved = statement;
-        for (Map.Entry<String, String> entry : sessionVariables.entrySet()) {
-            resolved = resolved.replace("${" + entry.getKey() + "}", entry.getValue());
-        }
-        resolved = replaceUnresolvedVariables(resolved, Pattern.compile("\\$\\{[^}]+}"), fallbackVariableValue, warnings, statementIndex);
-        return replaceUnresolvedVariables(resolved, Pattern.compile("@\\{[^}]+}"), fallbackVariableValue, warnings, statementIndex);
-    }
-
-    private String replaceUnresolvedVariables(
-        String statement,
-        Pattern variablePattern,
-        String fallbackVariableValue,
-        List<LineageWarning> warnings,
-        int statementIndex
-    ) {
-        Matcher matcher = variablePattern.matcher(statement);
-        StringBuffer buffer = new StringBuffer();
-        while (matcher.find()) {
-            addWarning(warnings, WarningCode.UNRESOLVED_VARIABLE, "Unresolved variable " + matcher.group(), statementIndex);
-            matcher.appendReplacement(buffer, Matcher.quoteReplacement(fallbackVariableValue));
-        }
-        matcher.appendTail(buffer);
-        return buffer.toString();
-    }
-
-    private List<String> splitStatements(String rawScript) {
-        if (rawScript == null || rawScript.trim().isEmpty()) {
-            return Collections.emptyList();
-        }
-        List<String> statements = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        boolean inLineComment = false;
-        boolean inBlockComment = false;
-        for (int i = 0; i < rawScript.length(); i++) {
-            char ch = rawScript.charAt(i);
-            char next = i + 1 < rawScript.length() ? rawScript.charAt(i + 1) : '\0';
-
-            if (inLineComment) {
-                current.append(ch);
-                if (ch == '\n' || ch == '\r') {
-                    inLineComment = false;
-                }
-                continue;
-            }
-            if (inBlockComment) {
-                current.append(ch);
-                if (ch == '*' && next == '/') {
-                    current.append(next);
-                    i++;
-                    inBlockComment = false;
-                }
-                continue;
-            }
-
-            if (!inSingleQuote && !inDoubleQuote && ch == '-' && next == '-') {
-                current.append(ch).append(next);
-                i++;
-                inLineComment = true;
-                continue;
-            }
-            if (!inSingleQuote && !inDoubleQuote && ch == '/' && next == '*') {
-                current.append(ch).append(next);
-                i++;
-                inBlockComment = true;
-                continue;
-            }
-
-            if (!inDoubleQuote && ch == '\'') {
-                current.append(ch);
-                if (inSingleQuote && next == '\'') {
-                    current.append(next);
-                    i++;
-                    continue;
-                }
-                inSingleQuote = !inSingleQuote;
-                continue;
-            }
-            if (!inSingleQuote && ch == '"') {
-                current.append(ch);
-                inDoubleQuote = !inDoubleQuote;
-                continue;
-            }
-
-            if (!inSingleQuote && !inDoubleQuote && ch == ';') {
-                addStatement(statements, current);
-                current.setLength(0);
-                continue;
-            }
-            current.append(ch);
-        }
-        addStatement(statements, current);
-        return statements;
-    }
-
-    private String stripLeadingComments(String statement) {
-        String remaining = statement == null ? "" : statement;
-        boolean changed = true;
-        while (changed) {
-            changed = false;
-            remaining = remaining.trim();
-            if (remaining.startsWith("--")) {
-                int lineEnd = indexOfLineEnd(remaining);
-                remaining = lineEnd < 0 ? "" : remaining.substring(lineEnd + 1);
-                changed = true;
-            } else if (remaining.startsWith("/*")) {
-                int blockEnd = remaining.indexOf("*/");
-                remaining = blockEnd < 0 ? "" : remaining.substring(blockEnd + 2);
-                changed = true;
-            }
-        }
-        return remaining;
-    }
-
-    private int indexOfLineEnd(String value) {
-        int newline = value.indexOf('\n');
-        int carriageReturn = value.indexOf('\r');
-        if (newline < 0) {
-            return carriageReturn;
-        }
-        if (carriageReturn < 0) {
-            return newline;
-        }
-        return Math.min(newline, carriageReturn);
-    }
-
-    private void addStatement(List<String> statements, StringBuilder statement) {
-        String trimmed = statement.toString().trim();
-        if (!trimmed.isEmpty()) {
-            statements.add(trimmed);
-        }
     }
 
     private List<String> parseTargetColumns(String rawColumns) {
