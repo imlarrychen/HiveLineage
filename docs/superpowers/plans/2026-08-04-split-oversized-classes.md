@@ -155,7 +155,7 @@ Expected: the same 73 JUnit method names appear exactly once; compilation succee
 
 - [ ] **Step 7: Run all behavior tests except the known-red size gate**
 
-Run: `mvn -q -Dtest='!JavaSourceSizeTest' test`
+Run: `mvn -q -Dtest=HiveJoinLineageTest,HiveColumnLineageTest,HiveViewAndTemporaryLineageTest,HiveScriptProcessingTest,HiveParserAstAdapterTest,HiveMetadataLineageTest,LineageMarkdownRendererTest,HiveAstWalkerTest,GeneratedSqlTestSetTest,JdbcMetadataColumnV2ProviderIntegrationTest test`
 
 Expected: PASS with no failures or errors.
 
