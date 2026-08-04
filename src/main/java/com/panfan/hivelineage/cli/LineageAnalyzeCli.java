@@ -16,14 +16,24 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.Consumer;
+import java.util.logging.Logger;
 
 public final class LineageAnalyzeCli {
     private static final String DEFAULT_CONFIG_PATH = "config/lineage-analyzer.properties";
+    private static final Logger LOGGER = Logger.getLogger(LineageAnalyzeCli.class.getName());
 
     private LineageAnalyzeCli() {
     }
 
     public static void main(String[] args) throws Exception {
+        int exitCode = run(args, LOGGER::info);
+        if (exitCode != 0) {
+            throw new IllegalStateException("Lineage analysis completed with exit code " + exitCode);
+        }
+    }
+
+    static int run(String[] args, Consumer<String> messageConsumer) throws Exception {
         Path configPath = Paths.get(args.length == 0 ? DEFAULT_CONFIG_PATH : args[0]);
         if (!Files.exists(configPath)) {
             throw new IllegalArgumentException("Config file not found: " + configPath.toAbsolutePath()
@@ -78,16 +88,14 @@ public final class LineageAnalyzeCli {
             LineageMarkdownRenderer.render(result, "Hive SQL Lineage Parse Result", defaultDatabase).getBytes(StandardCharsets.UTF_8)
         );
 
-        System.out.println("Lineage parse finished.");
-        System.out.println("Config: " + configPath.toAbsolutePath());
-        System.out.println("SQL script: " + scriptPath.toAbsolutePath());
-        System.out.println("Output: " + outputPath.toAbsolutePath());
-        System.out.println("Statements: total=" + result.getTotalStatementCount()
+        messageConsumer.accept("Lineage parse finished.");
+        messageConsumer.accept("Config: " + configPath.toAbsolutePath());
+        messageConsumer.accept("SQL script: " + scriptPath.toAbsolutePath());
+        messageConsumer.accept("Output: " + outputPath.toAbsolutePath());
+        messageConsumer.accept("Statements: total=" + result.getTotalStatementCount()
             + ", ignored=" + result.getIgnoredStatementCount()
             + ", failed=" + result.getFailedStatementCount());
-        if (result.getFailedStatementCount() > 0) {
-            System.exit(2);
-        }
+        return result.getFailedStatementCount() > 0 ? 2 : 0;
     }
 
     private static Properties loadProperties(Path configPath) throws Exception {

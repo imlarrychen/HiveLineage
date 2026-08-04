@@ -91,36 +91,39 @@ final class HiveScriptPreprocessor {
         boolean inDoubleQuote = false;
         boolean inLineComment = false;
         boolean inBlockComment = false;
-        for (int i = 0; i < rawScript.length(); i++) {
-            char ch = rawScript.charAt(i);
-            char next = i + 1 < rawScript.length() ? rawScript.charAt(i + 1) : '\0';
+        int position = 0;
+        while (position < rawScript.length()) {
+            char ch = rawScript.charAt(position);
+            char next = position + 1 < rawScript.length() ? rawScript.charAt(position + 1) : '\0';
 
             if (inLineComment) {
                 current.append(ch);
                 if (ch == '\n' || ch == '\r') {
                     inLineComment = false;
                 }
+                position++;
                 continue;
             }
             if (inBlockComment) {
                 current.append(ch);
                 if (ch == '*' && next == '/') {
                     current.append(next);
-                    i++;
+                    position++;
                     inBlockComment = false;
                 }
+                position++;
                 continue;
             }
 
             if (!inSingleQuote && !inDoubleQuote && ch == '-' && next == '-') {
                 current.append(ch).append(next);
-                i++;
+                position += 2;
                 inLineComment = true;
                 continue;
             }
             if (!inSingleQuote && !inDoubleQuote && ch == '/' && next == '*') {
                 current.append(ch).append(next);
-                i++;
+                position += 2;
                 inBlockComment = true;
                 continue;
             }
@@ -129,24 +132,28 @@ final class HiveScriptPreprocessor {
                 current.append(ch);
                 if (inSingleQuote && next == '\'') {
                     current.append(next);
-                    i++;
+                    position += 2;
                     continue;
                 }
                 inSingleQuote = !inSingleQuote;
+                position++;
                 continue;
             }
             if (!inSingleQuote && ch == '"') {
                 current.append(ch);
                 inDoubleQuote = !inDoubleQuote;
+                position++;
                 continue;
             }
 
             if (!inSingleQuote && !inDoubleQuote && ch == ';') {
                 addStatement(statements, current);
                 current.setLength(0);
+                position++;
                 continue;
             }
             current.append(ch);
+            position++;
         }
         addStatement(statements, current);
         return statements;

@@ -14,7 +14,6 @@ import com.panfan.hivelineage.result.WarningCode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -44,26 +43,13 @@ final class HiveJoinConditionAnalyzer {
     }
 
     List<JoinCondition> buildJoinConditions(
-        LineageAnalyzeRequest request,
-        String normalizedStatement,
-        ParsedHiveStatement parsedStatement,
-        Map<String, Map<String, ColumnLineageProjection>> temporaryTableColumns,
-        Map<String, Map<String, ColumnLineageProjection>> viewColumnLineageCache,
-        List<LineageWarning> warnings,
-        int statementIndex,
-        String rawStatement
+        StatementAnalysisContext context,
+        ParsedHiveStatement parsedStatement
     ) {
         if (parsedStatement == null || parsedStatement.getJoinConditions().isEmpty()) {
-            return extractJoinConditions(
-                request,
-                rawStatement,
-                normalizedStatement,
-                statementIndex,
-                temporaryTableColumns,
-                viewColumnLineageCache,
-                warnings
-            );
+            return extractJoinConditions(context);
         }
+        String normalizedStatement = context.getNormalizedStatement();
         CteExtraction cteExtraction = extractCtes(normalizedStatement);
         Map<String, Map<String, List<ColumnRef>>> cteColumnProjections = new HashMap<>();
         for (CteBlock cteBlock : cteExtraction.getCteBlocks()) {
@@ -82,15 +68,11 @@ final class HiveJoinConditionAnalyzer {
                 parsedJoinCondition.getDirectJoinObjects()
             );
             List<ColumnRef> joinColumns = resolveJoinColumns(
-                request,
+                context,
                 directColumns,
                 sourceAliases,
                 parsedStatement.getInputObjects(),
-                cteColumnProjections,
-                temporaryTableColumns,
-                viewColumnLineageCache,
-                warnings,
-                statementIndex
+                cteColumnProjections
             );
             if (directObjects.isEmpty() && hasUnqualifiedColumns(directColumns)) {
                 directObjects = joinTables(joinColumns, directObjects);
@@ -144,25 +126,14 @@ final class HiveJoinConditionAnalyzer {
         return aliases;
     }
     StatementLineageResult joinConditionOnlyResult(
-        LineageAnalyzeRequest request,
-        String rawStatement,
-        String normalizedStatement,
-        int index,
-        Map<String, Map<String, ColumnLineageProjection>> temporaryTableColumns,
-        Map<String, Map<String, ColumnLineageProjection>> viewColumnLineageCache,
-        List<LineageWarning> statementWarnings
+        StatementAnalysisContext context
     ) {
+        LineageAnalyzeRequest request = context.getRequest();
+        String rawStatement = context.getRawStatement();
+        String normalizedStatement = context.getNormalizedStatement();
+        int index = context.getStatementIndex();
         ParsedHiveStatement parsedStatement = parseStatement(normalizedStatement);
-        List<JoinCondition> joinConditions = buildJoinConditions(
-            request,
-            normalizedStatement,
-            parsedStatement,
-            temporaryTableColumns,
-            viewColumnLineageCache,
-            statementWarnings,
-            index,
-            rawStatement
-        );
+        List<JoinCondition> joinConditions = buildJoinConditions(context, parsedStatement);
         return new StatementLineageResult(
             request.getWorkflowId(),
             request.getTaskId(),
@@ -183,7 +154,7 @@ final class HiveJoinConditionAnalyzer {
             Collections.<TableLineage>emptyList(),
             Collections.<ColumnLineage>emptyList(),
             joinConditions,
-            statementWarnings
+            context.getWarnings()
         );
     }
     boolean hasJoinConditionCandidate(String statement) {
@@ -208,15 +179,8 @@ final class HiveJoinConditionAnalyzer {
         }
         return inputObjects;
     }
-    List<JoinCondition> extractJoinConditions(
-        LineageAnalyzeRequest request,
-        String rawStatement,
-        String normalizedStatement,
-        int statementIndex,
-        Map<String, Map<String, ColumnLineageProjection>> temporaryTableColumns,
-        Map<String, Map<String, ColumnLineageProjection>> viewColumnLineageCache,
-        List<LineageWarning> warnings
-    ) {
+    List<JoinCondition> extractJoinConditions(StatementAnalysisContext context) {
+        String normalizedStatement = context.getNormalizedStatement();
         if (!hasJoinConditionCandidate(normalizedStatement)) {
             return Collections.emptyList();
         }
@@ -233,42 +197,30 @@ final class HiveJoinConditionAnalyzer {
         JoinIndexCounter counter = new JoinIndexCounter();
         for (CteBlock cteBlock : cteExtraction.getCteBlocks()) {
             extractJoinConditionsFromQueryBlock(
-                request,
+                context,
                 cteBlock.getSql(),
                 "cte." + cteBlock.getName(),
-                statementIndex,
                 counter,
                 cteColumnProjections,
-                temporaryTableColumns,
-                viewColumnLineageCache,
-                warnings,
                 conditions
             );
         }
         extractJoinConditionsFromQueryBlock(
-            request,
+            context,
             cteExtraction.getRootSql(),
             "root",
-            statementIndex,
             counter,
             cteColumnProjections,
-            temporaryTableColumns,
-            viewColumnLineageCache,
-            warnings,
             conditions
         );
         return conditions;
     }
     void extractJoinConditionsFromQueryBlock(
-        LineageAnalyzeRequest request,
+        StatementAnalysisContext context,
         String queryBlockSql,
         String queryBlockPath,
-        int statementIndex,
         JoinIndexCounter counter,
         Map<String, Map<String, List<ColumnRef>>> cteColumnProjections,
-        Map<String, Map<String, ColumnLineageProjection>> temporaryTableColumns,
-        Map<String, Map<String, ColumnLineageProjection>> viewColumnLineageCache,
-        List<LineageWarning> warnings,
         List<JoinCondition> conditions
     ) {
         Map<String, String> sourceAliases = targetColumnResolver.extractTopLevelSourceAliases(queryBlockSql);
@@ -277,15 +229,11 @@ final class HiveJoinConditionAnalyzer {
             List<ColumnRef> directColumns = extractDirectJoinColumns(clause.getExpression());
             List<DataObjectRef> directObjects = directJoinObjects(directColumns, sourceAliases);
             List<ColumnRef> joinColumns = resolveJoinColumns(
-                request,
+                context,
                 directColumns,
                 sourceAliases,
                 inputObjectsFromSourceAliases(sourceAliases),
-                cteColumnProjections,
-                temporaryTableColumns,
-                viewColumnLineageCache,
-                warnings,
-                statementIndex
+                cteColumnProjections
             );
             List<DataObjectRef> joinTables = joinTables(joinColumns, directObjects);
             JoinTypeInfo joinTypeInfo = resolveJoinType(queryBlockSql, clause.getJoinKeywordIndex());
@@ -306,39 +254,47 @@ final class HiveJoinConditionAnalyzer {
         List<JoinClause> clauses = new ArrayList<>();
         int depth = 0;
         char quote = 0;
-        for (int i = 0; i < sql.length(); i++) {
-            char ch = sql.charAt(i);
+        int position = 0;
+        while (position < sql.length()) {
+            char ch = sql.charAt(position);
             if (quote != 0) {
                 if (ch == quote) {
                     quote = 0;
                 }
+                position++;
                 continue;
             }
             if (ch == '\'' || ch == '"' || ch == '`') {
                 quote = ch;
+                position++;
                 continue;
             }
             if (ch == '(') {
                 depth++;
+                position++;
                 continue;
             }
             if (ch == ')') {
                 depth = Math.max(0, depth - 1);
+                position++;
                 continue;
             }
-            if (depth == 0 && HiveSqlTextUtils.matchesKeywordAt(sql, i, "join")) {
-                int onIndex = HiveSqlTextUtils.topLevelKeywordIndex(sql, "on", i + 4);
+            if (depth == 0 && HiveSqlTextUtils.matchesKeywordAt(sql, position, "join")) {
+                int onIndex = HiveSqlTextUtils.topLevelKeywordIndex(sql, "on", position + 4);
                 if (onIndex < 0) {
+                    position++;
                     continue;
                 }
                 int expressionStart = HiveSqlTextUtils.skipWhitespace(sql, onIndex + 2);
                 int expressionEnd = findJoinExpressionEnd(sql, expressionStart);
                 String expression = sql.substring(expressionStart, expressionEnd).trim();
                 if (!expression.isEmpty()) {
-                    clauses.add(new JoinClause(i, expression));
+                    clauses.add(new JoinClause(position, expression));
                 }
-                i = Math.max(i, expressionEnd - 1);
+                position = Math.max(position + 1, expressionEnd);
+                continue;
             }
+            position++;
         }
         return clauses;
     }
@@ -365,18 +321,28 @@ final class HiveJoinConditionAnalyzer {
                 depth = Math.max(0, depth - 1);
                 continue;
             }
-            if (depth == 0 && (
-                HiveSqlTextUtils.matchesKeywordAt(sql, i, "join")
-                    || HiveSqlTextUtils.matchesKeywordAt(sql, i, "where")
-                    || HiveSqlTextUtils.matchesKeywordAt(sql, i, "group")
-                    || HiveSqlTextUtils.matchesKeywordAt(sql, i, "having")
-                    || HiveSqlTextUtils.matchesKeywordAt(sql, i, "order")
-                    || HiveSqlTextUtils.matchesKeywordAt(sql, i, "limit")
-                    || HiveSqlTextUtils.matchesKeywordAt(sql, i, "union"))) {
+            if (depth == 0 && isJoinExpressionBoundary(sql, i)) {
                 return i;
             }
         }
         return sql.length();
+    }
+
+    private boolean isJoinExpressionBoundary(String sql, int position) {
+        return isPrimaryJoinBoundary(sql, position) || isSecondaryJoinBoundary(sql, position);
+    }
+
+    private boolean isPrimaryJoinBoundary(String sql, int position) {
+        return HiveSqlTextUtils.matchesKeywordAt(sql, position, "join")
+            || HiveSqlTextUtils.matchesKeywordAt(sql, position, "where")
+            || HiveSqlTextUtils.matchesKeywordAt(sql, position, "group")
+            || HiveSqlTextUtils.matchesKeywordAt(sql, position, "having");
+    }
+
+    private boolean isSecondaryJoinBoundary(String sql, int position) {
+        return HiveSqlTextUtils.matchesKeywordAt(sql, position, "order")
+            || HiveSqlTextUtils.matchesKeywordAt(sql, position, "limit")
+            || HiveSqlTextUtils.matchesKeywordAt(sql, position, "union");
     }
     List<ColumnRef> extractDirectJoinColumns(String expression) {
         List<ColumnRef> columns = new ArrayList<>();
@@ -409,15 +375,11 @@ final class HiveJoinConditionAnalyzer {
         return objects;
     }
     List<ColumnRef> resolveJoinColumns(
-        LineageAnalyzeRequest request,
+        StatementAnalysisContext context,
         List<ColumnRef> directColumns,
         Map<String, String> sourceAliases,
         List<DataObjectRef> inputObjects,
-        Map<String, Map<String, List<ColumnRef>>> cteColumnProjections,
-        Map<String, Map<String, ColumnLineageProjection>> temporaryTableColumns,
-        Map<String, Map<String, ColumnLineageProjection>> viewColumnLineageCache,
-        List<LineageWarning> warnings,
-        int statementIndex
+        Map<String, Map<String, List<ColumnRef>>> cteColumnProjections
     ) {
         List<ColumnRef> resolvedColumns = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
@@ -428,18 +390,20 @@ final class HiveJoinConditionAnalyzer {
                 continue;
             }
             List<String> sourceObjects = owner == null
-                ? resolveUnqualifiedJoinColumnOwners(request, columnName, inputObjects, warnings, statementIndex)
+                ? resolveUnqualifiedJoinColumnOwners(
+                    context.getRequest(),
+                    columnName,
+                    inputObjects,
+                    context.getWarnings(),
+                    context.getStatementIndex()
+                )
                 : Collections.singletonList(resolveSourceObject(owner, sourceAliases));
             for (String sourceObject : sourceObjects) {
                 List<ColumnRef> expanded = expandJoinColumn(
-                    request,
+                    context,
                     sourceObject,
                     columnName,
-                    cteColumnProjections,
-                    temporaryTableColumns,
-                    viewColumnLineageCache,
-                    warnings,
-                    statementIndex
+                    cteColumnProjections
                 );
                 for (ColumnRef expandedColumn : expanded) {
                     expansionService.addColumn(resolvedColumns, seen, expandedColumn);
@@ -460,7 +424,12 @@ final class HiveJoinConditionAnalyzer {
         int statementIndex
     ) {
         if (inputObjects.isEmpty()) {
-            targetColumnResolver.addWarning(warnings, WarningCode.UNKNOWN_COLUMN_LINEAGE, "Unable to resolve unqualified join column " + columnName, statementIndex);
+            targetColumnResolver.addWarning(
+                warnings,
+                WarningCode.UNKNOWN_COLUMN_LINEAGE,
+                "Unable to resolve unqualified join column " + columnName,
+                statementIndex
+            );
             return Collections.emptyList();
         }
         List<String> owners = new ArrayList<>();
@@ -499,21 +468,26 @@ final class HiveJoinConditionAnalyzer {
         return inputObjects;
     }
     List<ColumnRef> expandJoinColumn(
-        LineageAnalyzeRequest request,
+        StatementAnalysisContext context,
         String sourceObject,
         String columnName,
-        Map<String, Map<String, List<ColumnRef>>> cteColumnProjections,
-        Map<String, Map<String, ColumnLineageProjection>> temporaryTableColumns,
-        Map<String, Map<String, ColumnLineageProjection>> viewColumnLineageCache,
-        List<LineageWarning> warnings,
-        int statementIndex
+        Map<String, Map<String, List<ColumnRef>>> cteColumnProjections
     ) {
-        ColumnLineageProjection temporaryProjection = projectionResolver.columnProjection(sourceObject, columnName, temporaryTableColumns);
+        ColumnLineageProjection temporaryProjection = projectionResolver.columnProjection(
+            sourceObject,
+            columnName,
+            context.getTemporaryTableColumns()
+        );
         if (temporaryProjection != null && !temporaryProjection.getSourceColumns().isEmpty()) {
             return temporaryProjection.getSourceColumns();
         }
-        if (containsProjectionTable(sourceObject, temporaryTableColumns)) {
-            targetColumnResolver.addWarning(warnings, WarningCode.UNKNOWN_COLUMN_LINEAGE, "Unable to map temporary table join column " + sourceObject + "." + columnName, statementIndex);
+        if (containsProjectionTable(sourceObject, context.getTemporaryTableColumns())) {
+            targetColumnResolver.addWarning(
+                context.getWarnings(),
+                WarningCode.UNKNOWN_COLUMN_LINEAGE,
+                "Unable to map temporary table join column " + sourceObject + "." + columnName,
+                context.getStatementIndex()
+            );
             return Collections.emptyList();
         }
 
@@ -523,17 +497,19 @@ final class HiveJoinConditionAnalyzer {
             if (projectedColumns != null && !projectedColumns.isEmpty()) {
                 return projectedColumns;
             }
-            targetColumnResolver.addWarning(warnings, WarningCode.UNKNOWN_COLUMN_LINEAGE, "Unable to map CTE join column " + sourceObject + "." + columnName, statementIndex);
+            targetColumnResolver.addWarning(
+                context.getWarnings(),
+                WarningCode.UNKNOWN_COLUMN_LINEAGE,
+                "Unable to map CTE join column " + sourceObject + "." + columnName,
+                context.getStatementIndex()
+            );
             return Collections.emptyList();
         }
 
         ColumnLineageProjection viewProjection = expansionService.viewColumnProjection(
-            request,
+            context,
             sourceObject,
-            columnName,
-            viewColumnLineageCache,
-            warnings,
-            statementIndex
+            columnName
         );
         if (viewProjection != null && !viewProjection.getSourceColumns().isEmpty()) {
             return viewProjection.getSourceColumns();

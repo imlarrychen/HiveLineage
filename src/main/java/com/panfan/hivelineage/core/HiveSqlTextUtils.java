@@ -106,16 +106,18 @@ final class HiveSqlTextUtils {
             && (end == statement.length() || !isIdentifierCharacter(statement.charAt(end)));
     }
     static int skipWhitespace(String statement, int position) {
-        while (position < statement.length() && Character.isWhitespace(statement.charAt(position))) {
-            position++;
+        int cursor = position;
+        while (cursor < statement.length() && Character.isWhitespace(statement.charAt(cursor))) {
+            cursor++;
         }
-        return position;
+        return cursor;
     }
     static int readIdentifier(String statement, int position) {
-        while (position < statement.length() && isIdentifierCharacter(statement.charAt(position))) {
-            position++;
+        int cursor = position;
+        while (cursor < statement.length() && isIdentifierCharacter(statement.charAt(cursor))) {
+            cursor++;
         }
-        return position;
+        return cursor;
     }
     static boolean isIdentifierCharacter(char ch) {
         return Character.isLetterOrDigit(ch) || ch == '_' || ch == '.';
@@ -205,32 +207,41 @@ final class HiveSqlTextUtils {
         StringBuilder builder = new StringBuilder();
         boolean inSingleQuote = false;
         boolean inDoubleQuote = false;
-        for (int i = 0; i < expression.length(); i++) {
-            char ch = expression.charAt(i);
+        int position = 0;
+        while (position < expression.length()) {
+            char ch = expression.charAt(position);
             if (inSingleQuote) {
-                if (ch == '\'' && i + 1 < expression.length() && expression.charAt(i + 1) == '\'') {
+                if (ch == '\''
+                    && position + 1 < expression.length()
+                    && expression.charAt(position + 1) == '\'') {
                     builder.append(' ');
-                    i++;
+                    position++;
                     builder.append(' ');
+                    position++;
                     continue;
                 }
                 if (ch == '\'') {
                     inSingleQuote = false;
                 }
                 builder.append(' ');
+                position++;
                 continue;
             }
             if (inDoubleQuote) {
-                if (ch == '"' && i + 1 < expression.length() && expression.charAt(i + 1) == '"') {
+                if (ch == '"'
+                    && position + 1 < expression.length()
+                    && expression.charAt(position + 1) == '"') {
                     builder.append(' ');
-                    i++;
+                    position++;
                     builder.append(' ');
+                    position++;
                     continue;
                 }
                 if (ch == '"') {
                     inDoubleQuote = false;
                 }
                 builder.append(' ');
+                position++;
                 continue;
             }
             if (ch == '\'') {
@@ -242,6 +253,7 @@ final class HiveSqlTextUtils {
             } else {
                 builder.append(ch);
             }
+            position++;
         }
         return builder.toString();
     }

@@ -51,16 +51,18 @@ final class HiveAstJoinExtractor {
         if (queryNode == null) {
             return;
         }
-        int[] subqueryIndex = new int[] {1};
+        NestedJoinTraversalContext context = new NestedJoinTraversalContext(
+            cteAliases,
+            joinIndex,
+            conditions,
+            new int[] {1},
+            false
+        );
         for (int i = 0; i < queryNode.getChildCount(); i++) {
             collectNestedSubqueryJoinConditions(
                 (ASTNode) queryNode.getChild(i),
                 parentPath,
-                cteAliases,
-                joinIndex,
-                conditions,
-                subqueryIndex,
-                false
+                context
             );
         }
     }
@@ -68,11 +70,7 @@ final class HiveAstJoinExtractor {
     private void collectNestedSubqueryJoinConditions(
         ASTNode node,
         String parentPath,
-        Set<String> cteAliases,
-        int[] joinIndex,
-        List<ParsedJoinCondition> conditions,
-        int[] subqueryIndex,
-        boolean inWhere
+        NestedJoinTraversalContext context
     ) {
         if (node == null) {
             return;
@@ -80,21 +78,23 @@ final class HiveAstJoinExtractor {
         if (node.getType() == HiveParser.TOK_CTE) {
             return;
         }
-        boolean childInWhere = inWhere || node.getType() == HiveParser.TOK_WHERE;
+        boolean childInWhere = context.isInWhere() || node.getType() == HiveParser.TOK_WHERE;
         if (node.getType() == HiveParser.TOK_QUERY) {
             String queryBlockPath = childInWhere
-                ? parentPath + ".where.exists[" + subqueryIndex[0]++ + "]"
-                : parentPath + ".subquery[" + subqueryIndex[0]++ + "]";
-            collectJoinConditionsFromQuery(node, queryBlockPath, cteAliases, joinIndex, conditions);
+                ? parentPath + ".where.exists[" + context.nextSubqueryIndex() + "]"
+                : parentPath + ".subquery[" + context.nextSubqueryIndex() + "]";
+            collectJoinConditionsFromQuery(
+                node,
+                queryBlockPath,
+                context.getCteAliases(),
+                context.getJoinIndex(),
+                context.getConditions()
+            );
             for (int i = 0; i < node.getChildCount(); i++) {
                 collectNestedSubqueryJoinConditions(
                     (ASTNode) node.getChild(i),
                     queryBlockPath,
-                    cteAliases,
-                    joinIndex,
-                    conditions,
-                    new int[] {1},
-                    false
+                    context.forChildScope()
                 );
             }
             return;
@@ -103,10 +103,16 @@ final class HiveAstJoinExtractor {
             ASTNode queryNode = astWalker.directChild(node, HiveParser.TOK_QUERY);
             if (queryNode != null) {
                 String queryBlockPath = childInWhere
-                    ? parentPath + ".where.exists[" + subqueryIndex[0]++ + "]"
-                    : parentPath + ".subquery[" + subqueryIndex[0]++ + "]";
-                collectJoinConditionsFromQuery(queryNode, queryBlockPath, cteAliases, joinIndex, conditions);
-                collectNestedSubqueryJoinConditions(queryNode, queryBlockPath, cteAliases, joinIndex, conditions, new int[] {1}, false);
+                    ? parentPath + ".where.exists[" + context.nextSubqueryIndex() + "]"
+                    : parentPath + ".subquery[" + context.nextSubqueryIndex() + "]";
+                collectJoinConditionsFromQuery(
+                    queryNode,
+                    queryBlockPath,
+                    context.getCteAliases(),
+                    context.getJoinIndex(),
+                    context.getConditions()
+                );
+                collectNestedSubqueryJoinConditions(queryNode, queryBlockPath, context.forChildScope());
                 return;
             }
         }
@@ -114,11 +120,7 @@ final class HiveAstJoinExtractor {
             collectNestedSubqueryJoinConditions(
                 (ASTNode) node.getChild(i),
                 parentPath,
-                cteAliases,
-                joinIndex,
-                conditions,
-                subqueryIndex,
-                childInWhere
+                context.withInWhere(childInWhere)
             );
         }
     }
@@ -315,12 +317,17 @@ final class HiveAstJoinExtractor {
 
     private boolean isJoinNode(ASTNode node) {
         int type = node.getType();
-        return type == HiveParser.TOK_JOIN
-            || type == HiveParser.TOK_LEFTOUTERJOIN
+        return type == HiveParser.TOK_JOIN || isOuterJoin(type) || isSemiJoin(type);
+    }
+
+    private boolean isOuterJoin(int type) {
+        return type == HiveParser.TOK_LEFTOUTERJOIN
             || type == HiveParser.TOK_RIGHTOUTERJOIN
-            || type == HiveParser.TOK_FULLOUTERJOIN
-            || type == HiveParser.TOK_LEFTSEMIJOIN
-            || type == HiveParser.TOK_LEFTANTISEMIJOIN;
+            || type == HiveParser.TOK_FULLOUTERJOIN;
+    }
+
+    private boolean isSemiJoin(int type) {
+        return type == HiveParser.TOK_LEFTSEMIJOIN || type == HiveParser.TOK_LEFTANTISEMIJOIN;
     }
 
     private ASTNode joinConditionNode(ASTNode joinNode) {
@@ -509,5 +516,67 @@ final class HiveAstJoinExtractor {
             builder.append(part);
         }
         return builder.toString();
+    }
+
+    private static final class NestedJoinTraversalContext {
+        private final Set<String> cteAliases;
+        private final int[] joinIndex;
+        private final List<ParsedJoinCondition> conditions;
+        private final int[] subqueryIndex;
+        private final boolean inWhere;
+
+        private NestedJoinTraversalContext(
+            Set<String> cteAliases,
+            int[] joinIndex,
+            List<ParsedJoinCondition> conditions,
+            int[] subqueryIndex,
+            boolean inWhere
+        ) {
+            this.cteAliases = cteAliases;
+            this.joinIndex = joinIndex;
+            this.conditions = conditions;
+            this.subqueryIndex = subqueryIndex;
+            this.inWhere = inWhere;
+        }
+
+        private Set<String> getCteAliases() {
+            return cteAliases;
+        }
+
+        private int[] getJoinIndex() {
+            return joinIndex;
+        }
+
+        private List<ParsedJoinCondition> getConditions() {
+            return conditions;
+        }
+
+        private int nextSubqueryIndex() {
+            return subqueryIndex[0]++;
+        }
+
+        private boolean isInWhere() {
+            return inWhere;
+        }
+
+        private NestedJoinTraversalContext forChildScope() {
+            return new NestedJoinTraversalContext(
+                cteAliases,
+                joinIndex,
+                conditions,
+                new int[] {1},
+                false
+            );
+        }
+
+        private NestedJoinTraversalContext withInWhere(boolean childInWhere) {
+            return new NestedJoinTraversalContext(
+                cteAliases,
+                joinIndex,
+                conditions,
+                subqueryIndex,
+                childInWhere
+            );
+        }
     }
 }

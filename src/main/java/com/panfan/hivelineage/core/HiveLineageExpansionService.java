@@ -122,13 +122,14 @@ final class HiveLineageExpansionService {
         return dotIndex >= 0 && statementProjectionTables.containsKey(normalized.substring(dotIndex + 1));
     }
     List<DataObjectRef> expandViewInputObjects(
-        LineageAnalyzeRequest request,
+        StatementAnalysisContext context,
         List<DataObjectRef> inputObjects,
         int depth,
-        Set<String> visitingViews,
-        List<LineageWarning> warnings,
-        int statementIndex
+        Set<String> visitingViews
     ) {
+        LineageAnalyzeRequest request = context.getRequest();
+        List<LineageWarning> warnings = context.getWarnings();
+        int statementIndex = context.getStatementIndex();
         if (!request.getOptions().isExpandViewLineage()
             || request.getMetadataProvider() == null) {
             return inputObjects;
@@ -141,20 +142,35 @@ final class HiveLineageExpansionService {
         List<DataObjectRef> expanded = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         for (DataObjectRef inputObject : inputObjects) {
-            HiveTableMetadata metadata = targetColumnResolver.loadTableMetadata(request, inputObject.getQualifiedName(), warnings, statementIndex);
+            HiveTableMetadata metadata = targetColumnResolver.loadTableMetadata(
+                request,
+                inputObject.getQualifiedName(),
+                warnings,
+                statementIndex
+            );
             if (metadata == null || !metadata.isView()) {
                 addInputObject(expanded, seen, inputObject);
                 continue;
             }
             if (metadata.getViewOriginalSql() == null || metadata.getViewOriginalSql().trim().isEmpty()) {
-                targetColumnResolver.addWarning(warnings, WarningCode.VIEW_METADATA_NOT_FOUND, "View definition SQL is missing for " + inputObject.getQualifiedName(), statementIndex);
+                targetColumnResolver.addWarning(
+                    warnings,
+                    WarningCode.VIEW_METADATA_NOT_FOUND,
+                    "View definition SQL is missing for " + inputObject.getQualifiedName(),
+                    statementIndex
+                );
                 addInputObject(expanded, seen, inputObject);
                 continue;
             }
 
             String viewName = inputObject.getQualifiedName();
             if (!visitingViews.add(viewName)) {
-                targetColumnResolver.addWarning(warnings, WarningCode.VIEW_EXPANSION_CYCLE, "View expansion cycle detected at " + viewName, statementIndex);
+                targetColumnResolver.addWarning(
+                    warnings,
+                    WarningCode.VIEW_EXPANSION_CYCLE,
+                    "View expansion cycle detected at " + viewName,
+                    statementIndex
+                );
                 addInputObject(expanded, seen, inputObject);
                 continue;
             }
@@ -162,12 +178,17 @@ final class HiveLineageExpansionService {
             try {
                 viewSources = parserAdapter.parse(metadata.getViewOriginalSql()).getInputObjects();
             } catch (RuntimeException ex) {
-                targetColumnResolver.addWarning(warnings, WarningCode.VIEW_EXPANSION_FAILED, "View expansion failed for " + viewName + ": " + ex.getMessage(), statementIndex);
+                targetColumnResolver.addWarning(
+                    warnings,
+                    WarningCode.VIEW_EXPANSION_FAILED,
+                    "View expansion failed for " + viewName + ": " + ex.getMessage(),
+                    statementIndex
+                );
                 addInputObject(expanded, seen, inputObject);
                 visitingViews.remove(viewName);
                 continue;
             }
-            viewSources = expandViewInputObjects(request, viewSources, depth + 1, visitingViews, warnings, statementIndex);
+            viewSources = expandViewInputObjects(context, viewSources, depth + 1, visitingViews);
             for (DataObjectRef viewSource : viewSources) {
                 addInputObject(expanded, seen, viewSource);
             }
@@ -176,14 +197,14 @@ final class HiveLineageExpansionService {
         return expanded;
     }
     List<ColumnRef> expandViewSourceColumns(
-        LineageAnalyzeRequest request,
+        StatementAnalysisContext context,
         List<ColumnRef> sourceColumns,
-        Map<String, Map<String, ColumnLineageProjection>> viewColumnLineageCache,
         int depth,
-        Set<String> visitingViews,
-        List<LineageWarning> warnings,
-        int statementIndex
+        Set<String> visitingViews
     ) {
+        LineageAnalyzeRequest request = context.getRequest();
+        List<LineageWarning> warnings = context.getWarnings();
+        int statementIndex = context.getStatementIndex();
         if (!request.getOptions().isExpandViewLineage()
             || request.getMetadataProvider() == null) {
             return sourceColumns;
@@ -203,36 +224,58 @@ final class HiveLineageExpansionService {
                 continue;
             }
 
-            HiveTableMetadata metadata = targetColumnResolver.loadTableMetadata(request, tableName, warnings, statementIndex);
+            HiveTableMetadata metadata = targetColumnResolver.loadTableMetadata(
+                request,
+                tableName,
+                warnings,
+                statementIndex
+            );
             if (metadata == null || !metadata.isView()) {
                 addColumn(expanded, seen, sourceColumn);
                 continue;
             }
             if (metadata.getViewOriginalSql() == null || metadata.getViewOriginalSql().trim().isEmpty()) {
-                targetColumnResolver.addWarning(warnings, WarningCode.VIEW_METADATA_NOT_FOUND, "View definition SQL is missing for " + tableName, statementIndex);
+                targetColumnResolver.addWarning(
+                    warnings,
+                    WarningCode.VIEW_METADATA_NOT_FOUND,
+                    "View definition SQL is missing for " + tableName,
+                    statementIndex
+                );
                 addColumn(expanded, seen, sourceColumn);
                 continue;
             }
             if (!visitingViews.add(tableName)) {
-                targetColumnResolver.addWarning(warnings, WarningCode.VIEW_EXPANSION_CYCLE, "View expansion cycle detected at " + tableName, statementIndex);
+                targetColumnResolver.addWarning(
+                    warnings,
+                    WarningCode.VIEW_EXPANSION_CYCLE,
+                    "View expansion cycle detected at " + tableName,
+                    statementIndex
+                );
                 addColumn(expanded, seen, sourceColumn);
                 continue;
             }
 
-            Map<String, ColumnLineageProjection> mapping = viewColumnMapping(request, metadata, viewColumnLineageCache, depth, visitingViews, warnings, statementIndex);
+            Map<String, ColumnLineageProjection> mapping = viewColumnMapping(
+                context,
+                metadata,
+                depth,
+                visitingViews
+            );
             ColumnLineageProjection mappedProjection = mapping.get(columnName.toLowerCase(Locale.ROOT));
             if (mappedProjection == null || mappedProjection.getSourceColumns().isEmpty()) {
-                targetColumnResolver.addWarning(warnings, WarningCode.UNKNOWN_COLUMN_LINEAGE, "Unable to map view column " + sourceColumn.getQualifiedName(), statementIndex);
+                targetColumnResolver.addWarning(
+                    warnings,
+                    WarningCode.UNKNOWN_COLUMN_LINEAGE,
+                    "Unable to map view column " + sourceColumn.getQualifiedName(),
+                    statementIndex
+                );
                 addColumn(expanded, seen, sourceColumn);
             } else {
                 List<ColumnRef> recursivelyExpanded = expandViewSourceColumns(
-                    request,
+                    context,
                     mappedProjection.getSourceColumns(),
-                    viewColumnLineageCache,
                     depth + 1,
-                    visitingViews,
-                    warnings,
-                    statementIndex
+                    visitingViews
                 );
                 for (ColumnRef mappedColumn : recursivelyExpanded) {
                     addColumn(expanded, seen, mappedColumn);
@@ -243,14 +286,16 @@ final class HiveLineageExpansionService {
         return expanded;
     }
     Map<String, ColumnLineageProjection> viewColumnMapping(
-        LineageAnalyzeRequest request,
+        StatementAnalysisContext context,
         HiveTableMetadata viewMetadata,
-        Map<String, Map<String, ColumnLineageProjection>> viewColumnLineageCache,
         int depth,
-        Set<String> visitingViews,
-        List<LineageWarning> warnings,
-        int statementIndex
+        Set<String> visitingViews
     ) {
+        LineageAnalyzeRequest request = context.getRequest();
+        Map<String, Map<String, ColumnLineageProjection>> viewColumnLineageCache =
+            context.getViewColumnLineageCache();
+        List<LineageWarning> warnings = context.getWarnings();
+        int statementIndex = context.getStatementIndex();
         String viewName = viewMetadata.getTableIdentifier().getQualifiedName();
         Map<String, ColumnLineageProjection> cached = viewColumnLineageCache.get(viewName);
         if (cached != null) {
@@ -261,7 +306,12 @@ final class HiveLineageExpansionService {
         try {
             parsedView = parserAdapter.parse(viewMetadata.getViewOriginalSql());
         } catch (RuntimeException ex) {
-            targetColumnResolver.addWarning(warnings, WarningCode.VIEW_EXPANSION_FAILED, "View expansion failed for " + viewName + ": " + ex.getMessage(), statementIndex);
+            targetColumnResolver.addWarning(
+                warnings,
+                WarningCode.VIEW_EXPANSION_FAILED,
+                "View expansion failed for " + viewName + ": " + ex.getMessage(),
+                statementIndex
+            );
             return Collections.emptyMap();
         }
         List<String> targetColumns = parsedView.getTargetColumns();
@@ -269,12 +319,23 @@ final class HiveLineageExpansionService {
             targetColumns = viewMetadata.getColumns().subList(0, parsedView.getSelectExpressions().size());
         }
 
-        List<DataObjectRef> viewInputs = expandViewInputObjects(request, parsedView.getInputObjects(), depth + 1, visitingViews, warnings, statementIndex);
+        List<DataObjectRef> viewInputs = expandViewInputObjects(
+            context,
+            parsedView.getInputObjects(),
+            depth + 1,
+            visitingViews
+        );
         String defaultSourceTable = parsedView.getInputObjects().isEmpty()
             ? viewName
             : parsedView.getInputObjects().get(0).getQualifiedName();
         Map<String, String> sourceAliases = new HashMap<>(parsedView.getSourceAliases());
-        Map<String, String> columnOwners = targetColumnResolver.buildColumnOwners(request, viewInputs, request.getOptions().getParseMode(), warnings, statementIndex);
+        Map<String, String> columnOwners = targetColumnResolver.buildColumnOwners(
+            request,
+            viewInputs,
+            request.getOptions().getParseMode(),
+            warnings,
+            statementIndex
+        );
 
         Map<String, ColumnLineageProjection> mapping = new HashMap<>();
         int count = Math.min(targetColumns.size(), parsedView.getSelectExpressions().size());
@@ -288,7 +349,7 @@ final class HiveLineageExpansionService {
                 columnOwners,
                 parsedView.getColumnAliasSources()
             );
-            sourceColumns = expandViewSourceColumns(request, sourceColumns, viewColumnLineageCache, depth + 1, visitingViews, warnings, statementIndex);
+            sourceColumns = expandViewSourceColumns(context, sourceColumns, depth + 1, visitingViews);
             LineageType lineageType = projectionResolver.resolveLineageType(lineageExpression, expression, sourceColumns);
             mapping.put(
                 targetColumns.get(i).toLowerCase(Locale.ROOT),
@@ -308,7 +369,12 @@ final class HiveLineageExpansionService {
         for (DataObjectRef inputObject : inputObjects) {
             String tableName = inputObject.getQualifiedName();
             if (seen.add(tableName) && isKnownView(request, tableName)) {
-                targetColumnResolver.addWarning(warnings, WarningCode.VIEW_EXPANSION_DEPTH_EXCEEDED, "View expansion depth exceeded at " + tableName, statementIndex);
+                targetColumnResolver.addWarning(
+                    warnings,
+                    WarningCode.VIEW_EXPANSION_DEPTH_EXCEEDED,
+                    "View expansion depth exceeded at " + tableName,
+                    statementIndex
+                );
             }
         }
     }
@@ -322,7 +388,12 @@ final class HiveLineageExpansionService {
         for (ColumnRef sourceColumn : sourceColumns) {
             String tableName = HiveSqlTextUtils.tableNameOfColumn(sourceColumn.getQualifiedName());
             if (tableName != null && seen.add(tableName) && isKnownView(request, tableName)) {
-                targetColumnResolver.addWarning(warnings, WarningCode.VIEW_EXPANSION_DEPTH_EXCEEDED, "View expansion depth exceeded at " + tableName, statementIndex);
+                targetColumnResolver.addWarning(
+                    warnings,
+                    WarningCode.VIEW_EXPANSION_DEPTH_EXCEEDED,
+                    "View expansion depth exceeded at " + tableName,
+                    statementIndex
+                );
             }
         }
     }
@@ -345,16 +416,12 @@ final class HiveLineageExpansionService {
         }
     }
     ColumnLineageProjection resolveDirectColumnProjection(
-        LineageAnalyzeRequest request,
+        StatementAnalysisContext context,
         String expression,
         List<DataObjectRef> originalInputObjects,
         Map<String, String> sourceAliases,
         Map<String, String> topLevelProjectionSourceAliases,
-        Map<String, Map<String, ColumnLineageProjection>> statementProjectionTables,
-        Map<String, Map<String, ColumnLineageProjection>> temporaryTableColumns,
-        Map<String, Map<String, ColumnLineageProjection>> viewColumnLineageCache,
-        List<LineageWarning> warnings,
-        int statementIndex
+        Map<String, Map<String, ColumnLineageProjection>> statementProjectionTables
     ) {
         DirectColumn directColumn = projectionResolver.parseDirectColumn(expression);
         if (directColumn == null) {
@@ -383,40 +450,55 @@ final class HiveLineageExpansionService {
         if (tableName == null) {
             return null;
         }
-        ColumnLineageProjection statementProjection = projectionResolver.columnProjection(tableName, directColumn.getColumn(), statementProjectionTables);
+        ColumnLineageProjection statementProjection = projectionResolver.columnProjection(
+            tableName,
+            directColumn.getColumn(),
+            statementProjectionTables
+        );
         if (statementProjection != null) {
             return statementProjection;
         }
-        ColumnLineageProjection temporaryProjection = projectionResolver.columnProjection(tableName, directColumn.getColumn(), temporaryTableColumns);
+        ColumnLineageProjection temporaryProjection = projectionResolver.columnProjection(
+            tableName,
+            directColumn.getColumn(),
+            context.getTemporaryTableColumns()
+        );
         if (temporaryProjection != null) {
             return temporaryProjection;
         }
-        return viewColumnProjection(request, tableName, directColumn.getColumn(), viewColumnLineageCache, warnings, statementIndex);
+        return viewColumnProjection(context, tableName, directColumn.getColumn());
     }
     ColumnLineageProjection viewColumnProjection(
-        LineageAnalyzeRequest request,
+        StatementAnalysisContext context,
         String tableName,
-        String columnName,
-        Map<String, Map<String, ColumnLineageProjection>> viewColumnLineageCache,
-        List<LineageWarning> warnings,
-        int statementIndex
+        String columnName
     ) {
+        LineageAnalyzeRequest request = context.getRequest();
         if (!request.getOptions().isExpandViewLineage() || request.getMetadataProvider() == null) {
             return null;
         }
-        HiveTableMetadata metadata = targetColumnResolver.loadTableMetadata(request, tableName, warnings, statementIndex);
-        if (metadata == null || !metadata.isView() || metadata.getViewOriginalSql() == null || metadata.getViewOriginalSql().trim().isEmpty()) {
+        HiveTableMetadata metadata = targetColumnResolver.loadTableMetadata(
+            request,
+            tableName,
+            context.getWarnings(),
+            context.getStatementIndex()
+        );
+        if (!hasUsableViewDefinition(metadata)) {
             return null;
         }
         Map<String, ColumnLineageProjection> mapping = viewColumnMapping(
-            request,
+            context,
             metadata,
-            viewColumnLineageCache,
             0,
-            new LinkedHashSet<String>(),
-            warnings,
-            statementIndex
+            new LinkedHashSet<String>()
         );
         return mapping.get(columnName.toLowerCase(Locale.ROOT));
+    }
+
+    private boolean hasUsableViewDefinition(HiveTableMetadata metadata) {
+        return metadata != null
+            && metadata.isView()
+            && metadata.getViewOriginalSql() != null
+            && !metadata.getViewOriginalSql().trim().isEmpty();
     }
 }

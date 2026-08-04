@@ -10,7 +10,6 @@ import com.panfan.hivelineage.result.WarningCode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -87,25 +86,28 @@ final class HiveTargetColumnResolver {
         LineageParseMode parseMode
     ) {
         return expandStarSelectItems(
-            request,
+            new ColumnResolutionContext(
+                request,
+                parseMode,
+                Collections.<LineageWarning>emptyList(),
+                -1
+            ),
             null,
             selectItems,
-            inputObjects,
-            parseMode,
-            Collections.<LineageWarning>emptyList(),
-            -1
+            inputObjects
         );
     }
 
     List<String> expandStarSelectItems(
-        LineageAnalyzeRequest request,
+        ColumnResolutionContext context,
         String targetTable,
         List<String> selectItems,
-        List<DataObjectRef> inputObjects,
-        LineageParseMode parseMode,
-        List<LineageWarning> warnings,
-        int statementIndex
+        List<DataObjectRef> inputObjects
     ) {
+        LineageAnalyzeRequest request = context.getRequest();
+        LineageParseMode parseMode = context.getParseMode();
+        List<LineageWarning> warnings = context.getWarnings();
+        int statementIndex = context.getStatementIndex();
         if ((parseMode != LineageParseMode.COLUMN_ONLY && parseMode != LineageParseMode.TABLE_AND_COLUMN)
             || selectItems.size() != 1
             || !"*".equals(selectItems.get(0).trim())
@@ -242,31 +244,43 @@ final class HiveTargetColumnResolver {
         }
         int depth = 0;
         char quote = 0;
-        for (int i = start; i < normalizedStatement.length(); i++) {
-            char ch = normalizedStatement.charAt(i);
+        int position = start;
+        while (position < normalizedStatement.length()) {
+            char ch = normalizedStatement.charAt(position);
             if (quote != 0) {
                 if (ch == quote) {
                     quote = 0;
                 }
+                position++;
                 continue;
             }
             if (ch == '\'' || ch == '"' || ch == '`') {
                 quote = ch;
+                position++;
                 continue;
             }
             if (ch == '(') {
                 depth++;
+                position++;
                 continue;
             }
             if (ch == ')') {
                 depth = Math.max(0, depth - 1);
+                position++;
                 continue;
             }
-            if (depth == 0 && (HiveSqlTextUtils.matchesKeywordAt(normalizedStatement, i, "from") || HiveSqlTextUtils.matchesKeywordAt(normalizedStatement, i, "join"))) {
-                i = captureTopLevelSourceAlias(normalizedStatement, i, aliases);
+            if (depth == 0 && isSourceKeywordAt(normalizedStatement, position)) {
+                position = captureTopLevelSourceAlias(normalizedStatement, position, aliases) + 1;
+                continue;
             }
+            position++;
         }
         return aliases;
+    }
+
+    private boolean isSourceKeywordAt(String statement, int position) {
+        return HiveSqlTextUtils.matchesKeywordAt(statement, position, "from")
+            || HiveSqlTextUtils.matchesKeywordAt(statement, position, "join");
     }
 
     int captureTopLevelSourceAlias(String statement, int keywordIndex, Map<String, String> aliases) {

@@ -97,23 +97,26 @@ final class HiveProjectionLineageResolver {
         Map<String, Map<String, ColumnLineageProjection>> projections = new HashMap<>();
         int depth = 0;
         char quote = 0;
-        for (int i = 0; i < sql.length(); i++) {
-            char ch = sql.charAt(i);
+        int position = 0;
+        while (position < sql.length()) {
+            char ch = sql.charAt(position);
             if (quote != 0) {
                 if (ch == quote) {
                     quote = 0;
                 }
+                position++;
                 continue;
             }
             if (ch == '\'' || ch == '"' || ch == '`') {
                 quote = ch;
+                position++;
                 continue;
             }
             if (ch == '(') {
                 if (depth == 0) {
-                    int closeIndex = HiveSqlTextUtils.findMatchingParen(sql, i);
-                    if (closeIndex > i) {
-                        String body = sql.substring(i + 1, closeIndex).trim();
+                    int closeIndex = HiveSqlTextUtils.findMatchingParen(sql, position);
+                    if (closeIndex > position) {
+                        String body = sql.substring(position + 1, closeIndex).trim();
                         if (isQueryBody(body)) {
                             Map<String, Map<String, ColumnLineageProjection>> combined = combinedProjectionTables(existingProjections, projections);
                             Map<String, Map<String, ColumnLineageProjection>> nested = extractInlineProjectionTables(body, combined);
@@ -124,16 +127,18 @@ final class HiveProjectionLineageResolver {
                                 projections.put(alias, extractProjectionTable(body, combined));
                             }
                         }
-                        i = closeIndex;
+                        position = closeIndex + 1;
                         continue;
                     }
                 }
                 depth++;
+                position++;
                 continue;
             }
             if (ch == ')') {
                 depth = Math.max(0, depth - 1);
             }
+            position++;
         }
         return projections;
     }
@@ -147,10 +152,12 @@ final class HiveProjectionLineageResolver {
     }
     boolean isQueryBody(String body) {
         String lower = body.trim().toLowerCase(Locale.ROOT);
-        return (lower.startsWith("select")
-            && (lower.length() == 6 || !HiveSqlTextUtils.isIdentifierCharacter(lower.charAt(6))))
-            || (lower.startsWith("with")
-            && (lower.length() == 4 || !HiveSqlTextUtils.isIdentifierCharacter(lower.charAt(4))));
+        return startsWithKeyword(lower, "select") || startsWithKeyword(lower, "with");
+    }
+    private boolean startsWithKeyword(String sql, String keyword) {
+        return sql.startsWith(keyword)
+            && (sql.length() == keyword.length()
+            || !HiveSqlTextUtils.isIdentifierCharacter(sql.charAt(keyword.length())));
     }
     String readAliasAfter(String sql, int start) {
         int position = HiveSqlTextUtils.skipWhitespace(sql, start);
@@ -304,36 +311,41 @@ final class HiveProjectionLineageResolver {
         if (start < 0) {
             return aliases;
         }
-        for (int i = start; i < sql.length(); i++) {
-            char ch = sql.charAt(i);
+        int position = start;
+        while (position < sql.length()) {
+            char ch = sql.charAt(position);
             if (quote != 0) {
                 if (ch == quote) {
                     quote = 0;
                 }
+                position++;
                 continue;
             }
             if (ch == '\'' || ch == '"' || ch == '`') {
                 quote = ch;
+                position++;
                 continue;
             }
             if (ch == '(') {
                 if (depth == 0) {
-                    int closeIndex = HiveSqlTextUtils.findMatchingParen(sql, i);
-                    if (closeIndex > i) {
+                    int closeIndex = HiveSqlTextUtils.findMatchingParen(sql, position);
+                    if (closeIndex > position) {
                         String alias = readAliasAfter(sql, closeIndex + 1);
                         if (alias != null) {
                             aliases.put(alias, alias);
                         }
-                        i = closeIndex;
+                        position = closeIndex + 1;
                         continue;
                     }
                 }
                 depth++;
+                position++;
                 continue;
             }
             if (ch == ')') {
                 depth = Math.max(0, depth - 1);
             }
+            position++;
         }
         return aliases;
     }
@@ -343,29 +355,34 @@ final class HiveProjectionLineageResolver {
         char quote = 0;
         int branchStart = 0;
         String functionName = null;
-        for (int i = 0; i < sql.length(); i++) {
-            char ch = sql.charAt(i);
+        int position = 0;
+        while (position < sql.length()) {
+            char ch = sql.charAt(position);
             if (quote != 0) {
                 if (ch == quote) {
                     quote = 0;
                 }
+                position++;
                 continue;
             }
             if (ch == '\'' || ch == '"' || ch == '`') {
                 quote = ch;
+                position++;
                 continue;
             }
             if (ch == '(') {
                 depth++;
+                position++;
                 continue;
             }
             if (ch == ')') {
                 depth = Math.max(0, depth - 1);
+                position++;
                 continue;
             }
-            if (depth == 0 && HiveSqlTextUtils.matchesKeywordAt(sql, i, "union")) {
-                branches.add(sql.substring(branchStart, i).trim());
-                int next = HiveSqlTextUtils.skipWhitespace(sql, i + 5);
+            if (depth == 0 && HiveSqlTextUtils.matchesKeywordAt(sql, position, "union")) {
+                branches.add(sql.substring(branchStart, position).trim());
+                int next = HiveSqlTextUtils.skipWhitespace(sql, position + 5);
                 if (HiveSqlTextUtils.matchesKeywordAt(sql, next, "all")) {
                     functionName = "union_all";
                     branchStart = HiveSqlTextUtils.skipWhitespace(sql, next + 3);
@@ -373,8 +390,10 @@ final class HiveProjectionLineageResolver {
                     functionName = "union_distinct";
                     branchStart = next;
                 }
-                i = branchStart - 1;
+                position = branchStart;
+                continue;
             }
+            position++;
         }
         if (functionName == null) {
             return null;
@@ -522,10 +541,19 @@ final class HiveProjectionLineageResolver {
         return null;
     }
     boolean isLiteralExpression(String expression) {
+        return isQuotedLiteral(expression)
+            || isNumericLiteral(expression)
+            || isKeywordLiteral(expression);
+    }
+    private boolean isQuotedLiteral(String expression) {
         return expression.matches("'(?:[^']|'')*'")
-            || expression.matches("\"(?:[^\"]|\"\")*\"")
-            || expression.matches("[-+]?\\d+(?:\\.\\d+)?")
-            || "true".equalsIgnoreCase(expression)
+            || expression.matches("\"(?:[^\"]|\"\")*\"");
+    }
+    private boolean isNumericLiteral(String expression) {
+        return expression.matches("[-+]?\\d+(?:\\.\\d+)?");
+    }
+    private boolean isKeywordLiteral(String expression) {
+        return "true".equalsIgnoreCase(expression)
             || "false".equalsIgnoreCase(expression)
             || "null".equalsIgnoreCase(expression);
     }
@@ -707,9 +735,18 @@ final class HiveProjectionLineageResolver {
         private final String name;
         private final String sql;
 
-        private CteBlock(String name, String sql) { this.name = name; this.sql = sql; }
-        private String getName() { return name; }
-        private String getSql() { return sql; }
+        private CteBlock(String name, String sql) {
+            this.name = name;
+            this.sql = sql;
+        }
+
+        private String getName() {
+            return name;
+        }
+
+        private String getSql() {
+            return sql;
+        }
     }
 
     private static final class CteExtraction {
@@ -720,7 +757,12 @@ final class HiveProjectionLineageResolver {
             this.cteBlocks = Collections.unmodifiableList(new ArrayList<>(cteBlocks));
             this.rootSql = rootSql;
         }
-        private List<CteBlock> getCteBlocks() { return cteBlocks; }
-        private String getRootSql() { return rootSql; }
+        private List<CteBlock> getCteBlocks() {
+            return cteBlocks;
+        }
+
+        private String getRootSql() {
+            return rootSql;
+        }
     }
 }
