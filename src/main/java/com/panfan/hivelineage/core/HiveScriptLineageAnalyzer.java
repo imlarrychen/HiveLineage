@@ -189,10 +189,10 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 normalizedStatement,
                 index,
                 "CREATE_TEMPORARY_TABLE_AS_SELECT",
-                normalizeIdentifier(tempMatcher.group(1).trim()),
+                HiveSqlTextUtils.normalizeIdentifier(tempMatcher.group(1).trim()),
                 Collections.<String>emptyList(),
                 tempMatcher.group(2).trim(),
-                normalizeIdentifier(tempMatcher.group(3).trim()),
+                HiveSqlTextUtils.normalizeIdentifier(tempMatcher.group(3).trim()),
                 temporaryTableSources,
                 temporaryTableColumns,
                 viewColumnLineageCache,
@@ -208,10 +208,10 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 normalizedStatement,
                 index,
                 "CREATE_TABLE_AS_SELECT",
-                normalizeIdentifier(ctasMatcher.group(1).trim()),
+                HiveSqlTextUtils.normalizeIdentifier(ctasMatcher.group(1).trim()),
                 Collections.<String>emptyList(),
                 ctasMatcher.group(2).trim(),
-                normalizeIdentifier(ctasMatcher.group(3).trim()),
+                HiveSqlTextUtils.normalizeIdentifier(ctasMatcher.group(3).trim()),
                 temporaryTableSources,
                 temporaryTableColumns,
                 viewColumnLineageCache,
@@ -234,10 +234,10 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             normalizedStatement,
             index,
             operation,
-            normalizeIdentifier(matcher.group(2).trim()),
+            HiveSqlTextUtils.normalizeIdentifier(matcher.group(2).trim()),
             parseTargetColumns(matcher.group(3)),
             matcher.group(4).trim(),
-            normalizeIdentifier(matcher.group(5).trim()),
+            HiveSqlTextUtils.normalizeIdentifier(matcher.group(5).trim()),
             temporaryTableSources,
             temporaryTableColumns,
             viewColumnLineageCache,
@@ -305,7 +305,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             operation,
             targetTable,
             targetColumns,
-            splitSelectItems(selectList),
+            HiveSqlTextUtils.splitSelectItems(selectList),
             null,
             temporaryTableSources,
             temporaryTableColumns,
@@ -388,7 +388,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             Map<String, String> columnOwners = buildColumnOwners(request, inputObjects, parseMode, statementWarnings, index);
             boolean setOperationQuery = hasCompleteSetOperationProjection(resolvedParsedStatement, selectItems.size());
             for (int i = 0; i < selectItems.size(); i++) {
-                String expression = stripAlias(selectItems.get(i));
+                String expression = HiveSqlTextUtils.stripAlias(selectItems.get(i));
                 String sourceExtractionExpression = expression;
                 String lineageExpression = setOperationQuery
                     ? setOperationExpression(resolvedParsedStatement, normalizedStatement, i)
@@ -597,7 +597,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         int objectIndex = 0;
         Set<String> seenOwners = new LinkedHashSet<>();
         for (String directColumn : directColumns) {
-            String owner = tableNameOfColumn(directColumn);
+            String owner = HiveSqlTextUtils.tableNameOfColumn(directColumn);
             if (owner == null || !seenOwners.add(owner.toLowerCase(Locale.ROOT))) {
                 continue;
             }
@@ -799,12 +799,12 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 depth = Math.max(0, depth - 1);
                 continue;
             }
-            if (depth == 0 && matchesKeywordAt(sql, i, "join")) {
-                int onIndex = topLevelKeywordIndex(sql, "on", i + 4);
+            if (depth == 0 && HiveSqlTextUtils.matchesKeywordAt(sql, i, "join")) {
+                int onIndex = HiveSqlTextUtils.topLevelKeywordIndex(sql, "on", i + 4);
                 if (onIndex < 0) {
                     continue;
                 }
-                int expressionStart = skipWhitespace(sql, onIndex + 2);
+                int expressionStart = HiveSqlTextUtils.skipWhitespace(sql, onIndex + 2);
                 int expressionEnd = findJoinExpressionEnd(sql, expressionStart);
                 String expression = sql.substring(expressionStart, expressionEnd).trim();
                 if (!expression.isEmpty()) {
@@ -840,53 +840,24 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 continue;
             }
             if (depth == 0 && (
-                matchesKeywordAt(sql, i, "join")
-                    || matchesKeywordAt(sql, i, "where")
-                    || matchesKeywordAt(sql, i, "group")
-                    || matchesKeywordAt(sql, i, "having")
-                    || matchesKeywordAt(sql, i, "order")
-                    || matchesKeywordAt(sql, i, "limit")
-                    || matchesKeywordAt(sql, i, "union"))) {
+                HiveSqlTextUtils.matchesKeywordAt(sql, i, "join")
+                    || HiveSqlTextUtils.matchesKeywordAt(sql, i, "where")
+                    || HiveSqlTextUtils.matchesKeywordAt(sql, i, "group")
+                    || HiveSqlTextUtils.matchesKeywordAt(sql, i, "having")
+                    || HiveSqlTextUtils.matchesKeywordAt(sql, i, "order")
+                    || HiveSqlTextUtils.matchesKeywordAt(sql, i, "limit")
+                    || HiveSqlTextUtils.matchesKeywordAt(sql, i, "union"))) {
                 return i;
             }
         }
         return sql.length();
     }
 
-    private int topLevelKeywordIndex(String sql, String keyword, int start) {
-        int depth = 0;
-        char quote = 0;
-        for (int i = Math.max(0, start); i < sql.length(); i++) {
-            char ch = sql.charAt(i);
-            if (quote != 0) {
-                if (ch == quote) {
-                    quote = 0;
-                }
-                continue;
-            }
-            if (ch == '\'' || ch == '"' || ch == '`') {
-                quote = ch;
-                continue;
-            }
-            if (ch == '(') {
-                depth++;
-                continue;
-            }
-            if (ch == ')') {
-                depth = Math.max(0, depth - 1);
-                continue;
-            }
-            if (depth == 0 && matchesKeywordAt(sql, i, keyword)) {
-                return i;
-            }
-        }
-        return -1;
-    }
 
     private List<ColumnRef> extractDirectJoinColumns(String expression) {
         List<ColumnRef> columns = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
-        Matcher matcher = QUALIFIED_COLUMN.matcher(removeStringLiterals(expression));
+        Matcher matcher = QUALIFIED_COLUMN.matcher(HiveSqlTextUtils.removeStringLiterals(expression));
         while (matcher.find()) {
             String owner = matcher.group(1);
             String column = matcher.group(2);
@@ -902,7 +873,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         List<DataObjectRef> objects = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         for (ColumnRef directColumn : directColumns) {
-            String tableName = tableNameOfColumn(directColumn.getQualifiedName());
+            String tableName = HiveSqlTextUtils.tableNameOfColumn(directColumn.getQualifiedName());
             if (tableName == null) {
                 continue;
             }
@@ -929,8 +900,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         List<ColumnRef> resolvedColumns = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         for (ColumnRef directColumn : directColumns) {
-            String owner = tableNameOfColumn(directColumn.getQualifiedName());
-            String columnName = owner == null ? directColumn.getQualifiedName() : columnNameOf(directColumn.getQualifiedName());
+            String owner = HiveSqlTextUtils.tableNameOfColumn(directColumn.getQualifiedName());
+            String columnName = owner == null ? directColumn.getQualifiedName() : HiveSqlTextUtils.columnNameOf(directColumn.getQualifiedName());
             if (columnName == null) {
                 continue;
             }
@@ -985,14 +956,14 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         }
         String message = owners.isEmpty()
             ? "Unable to resolve unqualified join column " + columnName
-            : "Ambiguous unqualified join column " + columnName + " in " + joinWithComma(owners);
+            : "Ambiguous unqualified join column " + columnName + " in " + HiveSqlTextUtils.joinWithComma(owners);
         addWarning(warnings, WarningCode.UNKNOWN_COLUMN_LINEAGE, message, statementIndex);
         return Collections.emptyList();
     }
 
     private boolean hasUnqualifiedColumns(List<ColumnRef> columns) {
         for (ColumnRef column : columns) {
-            if (tableNameOfColumn(column.getQualifiedName()) == null) {
+            if (HiveSqlTextUtils.tableNameOfColumn(column.getQualifiedName()) == null) {
                 return true;
             }
         }
@@ -1068,7 +1039,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         List<DataObjectRef> tables = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         for (ColumnRef joinColumn : joinColumns) {
-            String tableName = tableNameOfColumn(joinColumn.getQualifiedName());
+            String tableName = HiveSqlTextUtils.tableNameOfColumn(joinColumn.getQualifiedName());
             if (tableName != null) {
                 addInputObject(tables, seen, new DataObjectRef(tableName));
             }
@@ -1086,8 +1057,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         String cteSql,
         Map<String, Map<String, List<ColumnRef>>> existingCteColumnProjections
     ) {
-        int selectIndex = topLevelKeywordIndex(cteSql, "select", 0);
-        int fromIndex = topLevelKeywordIndex(cteSql, "from", selectIndex < 0 ? 0 : selectIndex);
+        int selectIndex = HiveSqlTextUtils.topLevelKeywordIndex(cteSql, "select", 0);
+        int fromIndex = HiveSqlTextUtils.topLevelKeywordIndex(cteSql, "from", selectIndex < 0 ? 0 : selectIndex);
         if (selectIndex < 0 || fromIndex < 0 || fromIndex <= selectIndex) {
             return Collections.emptyMap();
         }
@@ -1095,11 +1066,11 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         Map<String, String> sourceAliases = extractTopLevelSourceAliases(cteSql);
         String defaultSourceTable = firstAliasTarget(sourceAliases);
         Map<String, List<ColumnRef>> projections = new HashMap<>();
-        for (String selectItem : splitSelectItems(selectList)) {
-            String outputColumn = extractAlias(selectItem);
-            String expression = stripAlias(selectItem);
+        for (String selectItem : HiveSqlTextUtils.splitSelectItems(selectList)) {
+            String outputColumn = HiveSqlTextUtils.extractAlias(selectItem);
+            String expression = HiveSqlTextUtils.stripAlias(selectItem);
             if (outputColumn == null && isDirectExpression(expression)) {
-                outputColumn = columnNameOf(expression);
+                outputColumn = HiveSqlTextUtils.columnNameOf(expression);
                 if (outputColumn == null) {
                     outputColumn = expression;
                 }
@@ -1117,8 +1088,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             List<ColumnRef> expanded = new ArrayList<>();
             Set<String> seen = new LinkedHashSet<>();
             for (ColumnRef sourceColumn : sourceColumns) {
-                String sourceTable = tableNameOfColumn(sourceColumn.getQualifiedName());
-                String sourceColumnName = columnNameOf(sourceColumn.getQualifiedName());
+                String sourceTable = HiveSqlTextUtils.tableNameOfColumn(sourceColumn.getQualifiedName());
+                String sourceColumnName = HiveSqlTextUtils.columnNameOf(sourceColumn.getQualifiedName());
                 List<ColumnRef> nested = sourceTable == null || sourceColumnName == null
                     ? Collections.singletonList(sourceColumn)
                     : expandCteProjectionColumn(sourceTable, sourceColumnName, existingCteColumnProjections);
@@ -1161,37 +1132,37 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             return new CteExtraction(Collections.<CteBlock>emptyList(), trimmed);
         }
         List<CteBlock> cteBlocks = new ArrayList<>();
-        int position = skipWhitespace(trimmed, 4);
+        int position = HiveSqlTextUtils.skipWhitespace(trimmed, 4);
         while (position < trimmed.length()) {
             int nameStart = position;
-            int nameEnd = readIdentifier(trimmed, nameStart);
+            int nameEnd = HiveSqlTextUtils.readIdentifier(trimmed, nameStart);
             if (nameEnd <= nameStart) {
                 break;
             }
-            String cteName = normalizeIdentifier(trimmed.substring(nameStart, nameEnd));
-            position = skipWhitespace(trimmed, nameEnd);
+            String cteName = HiveSqlTextUtils.normalizeIdentifier(trimmed.substring(nameStart, nameEnd));
+            position = HiveSqlTextUtils.skipWhitespace(trimmed, nameEnd);
             if (position < trimmed.length() && trimmed.charAt(position) == '(') {
-                position = findMatchingParen(trimmed, position) + 1;
-                position = skipWhitespace(trimmed, position);
+                position = HiveSqlTextUtils.findMatchingParen(trimmed, position) + 1;
+                position = HiveSqlTextUtils.skipWhitespace(trimmed, position);
             }
             int asStart = position;
-            int asEnd = readIdentifier(trimmed, asStart);
+            int asEnd = HiveSqlTextUtils.readIdentifier(trimmed, asStart);
             if (asEnd <= asStart || !"as".equalsIgnoreCase(trimmed.substring(asStart, asEnd))) {
                 break;
             }
-            position = skipWhitespace(trimmed, asEnd);
+            position = HiveSqlTextUtils.skipWhitespace(trimmed, asEnd);
             if (position >= trimmed.length() || trimmed.charAt(position) != '(') {
                 break;
             }
             int bodyStart = position + 1;
-            int bodyEnd = findMatchingParen(trimmed, position);
+            int bodyEnd = HiveSqlTextUtils.findMatchingParen(trimmed, position);
             if (bodyEnd < bodyStart) {
                 break;
             }
             cteBlocks.add(new CteBlock(cteName, trimmed.substring(bodyStart, bodyEnd).trim()));
-            position = skipWhitespace(trimmed, bodyEnd + 1);
+            position = HiveSqlTextUtils.skipWhitespace(trimmed, bodyEnd + 1);
             if (position < trimmed.length() && trimmed.charAt(position) == ',') {
-                position = skipWhitespace(trimmed, position + 1);
+                position = HiveSqlTextUtils.skipWhitespace(trimmed, position + 1);
                 continue;
             }
             break;
@@ -1200,32 +1171,6 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         return new CteExtraction(cteBlocks, rootSql);
     }
 
-    private int findMatchingParen(String text, int openIndex) {
-        int depth = 0;
-        char quote = 0;
-        for (int i = openIndex; i < text.length(); i++) {
-            char ch = text.charAt(i);
-            if (quote != 0) {
-                if (ch == quote) {
-                    quote = 0;
-                }
-                continue;
-            }
-            if (ch == '\'' || ch == '"' || ch == '`') {
-                quote = ch;
-                continue;
-            }
-            if (ch == '(') {
-                depth++;
-            } else if (ch == ')') {
-                depth--;
-                if (depth == 0) {
-                    return i;
-                }
-            }
-        }
-        return -1;
-    }
 
     private JoinTypeInfo resolveJoinType(String sql, int joinKeywordIndex) {
         String prefix = sql.substring(Math.max(0, joinKeywordIndex - 32), joinKeywordIndex).toLowerCase(Locale.ROOT);
@@ -1308,7 +1253,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             return Collections.emptyList();
         }
         List<String> dynamicColumns = new ArrayList<>();
-        for (String partitionItem : splitSelectItems(matcher.group(1))) {
+        for (String partitionItem : HiveSqlTextUtils.splitSelectItems(matcher.group(1))) {
             if (!partitionItem.contains("=")) {
                 String column = partitionItem.trim();
                 if (!column.isEmpty()) {
@@ -1337,7 +1282,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     private Map<String, ColumnLineageProjection> columnProjectionMap(List<ColumnLineage> columnLineages) {
         Map<String, ColumnLineageProjection> projections = new HashMap<>();
         for (ColumnLineage columnLineage : columnLineages) {
-            String columnName = columnNameOf(columnLineage.getTargetColumn().getQualifiedName());
+            String columnName = HiveSqlTextUtils.columnNameOf(columnLineage.getTargetColumn().getQualifiedName());
             if (columnName == null) {
                 continue;
             }
@@ -1488,8 +1433,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         List<ColumnRef> expanded = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         for (ColumnRef sourceColumn : sourceColumns) {
-            String tableName = tableNameOfColumn(sourceColumn.getQualifiedName());
-            String columnName = columnNameOf(sourceColumn.getQualifiedName());
+            String tableName = HiveSqlTextUtils.tableNameOfColumn(sourceColumn.getQualifiedName());
+            String columnName = HiveSqlTextUtils.columnNameOf(sourceColumn.getQualifiedName());
             if (tableName == null || columnName == null) {
                 addColumn(expanded, seen, sourceColumn);
                 continue;
@@ -1572,7 +1517,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         Map<String, ColumnLineageProjection> mapping = new HashMap<>();
         int count = Math.min(targetColumns.size(), parsedView.getSelectExpressions().size());
         for (int i = 0; i < count; i++) {
-            String expression = stripAlias(parsedView.getSelectExpressions().get(i));
+            String expression = HiveSqlTextUtils.stripAlias(parsedView.getSelectExpressions().get(i));
             String lineageExpression = normalizeLineageExpression(expression);
             List<ColumnRef> sourceColumns = extractSourceColumns(
                 expression,
@@ -1615,7 +1560,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     ) {
         Set<String> seen = new LinkedHashSet<>();
         for (ColumnRef sourceColumn : sourceColumns) {
-            String tableName = tableNameOfColumn(sourceColumn.getQualifiedName());
+            String tableName = HiveSqlTextUtils.tableNameOfColumn(sourceColumn.getQualifiedName());
             if (tableName != null && seen.add(tableName) && isKnownView(request, tableName)) {
                 addWarning(warnings, WarningCode.VIEW_EXPANSION_DEPTH_EXCEEDED, "View expansion depth exceeded at " + tableName, statementIndex);
             }
@@ -1643,19 +1588,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         }
     }
 
-    private String tableNameOfColumn(String qualifiedColumnName) {
-        int dotIndex = qualifiedColumnName.lastIndexOf('.');
-        return dotIndex < 0 ? null : qualifiedColumnName.substring(0, dotIndex);
-    }
 
-    private String columnNameOf(String qualifiedColumnName) {
-        int dotIndex = qualifiedColumnName.lastIndexOf('.');
-        return dotIndex < 0 ? null : qualifiedColumnName.substring(dotIndex + 1);
-    }
 
-    private String normalizeIdentifier(String identifier) {
-        return identifier == null ? null : identifier.trim().toLowerCase(Locale.ROOT);
-    }
 
     private StatementLineageResult failedResult(
         LineageAnalyzeRequest request,
@@ -1828,8 +1762,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     private List<String> inferTargetColumns(List<String> selectItems) {
         List<String> columns = new ArrayList<>();
         for (String item : selectItems) {
-            String alias = extractAlias(item);
-            columns.add(alias == null ? stripAlias(item) : alias);
+            String alias = HiveSqlTextUtils.extractAlias(item);
+            columns.add(alias == null ? HiveSqlTextUtils.stripAlias(item) : alias);
         }
         return columns;
     }
@@ -1970,16 +1904,16 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         Map<String, String> aliases = new HashMap<>();
         Matcher objectMatcher = SOURCE_OBJECT.matcher(normalizedStatement);
         while (objectMatcher.find()) {
-            String tableName = normalizeIdentifier(objectMatcher.group(1));
+            String tableName = HiveSqlTextUtils.normalizeIdentifier(objectMatcher.group(1));
             String simpleTableName = tableName.contains(".") ? tableName.substring(tableName.lastIndexOf('.') + 1) : tableName;
             aliases.put(tableName, tableName);
             aliases.put(simpleTableName, tableName);
         }
         Matcher aliasMatcher = SOURCE_ALIAS.matcher(normalizedStatement);
         while (aliasMatcher.find()) {
-            String tableName = normalizeIdentifier(aliasMatcher.group(1));
+            String tableName = HiveSqlTextUtils.normalizeIdentifier(aliasMatcher.group(1));
             String alias = aliasMatcher.group(2);
-            if (alias != null && !isAliasKeyword(alias)) {
+            if (alias != null && !HiveSqlTextUtils.isAliasKeyword(alias)) {
                 aliases.put(alias.toLowerCase(Locale.ROOT), tableName);
             }
         }
@@ -2020,9 +1954,9 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
 
     private Map<String, String> extractTopLevelSourceAliases(String normalizedStatement) {
         Map<String, String> aliases = new HashMap<>();
-        int start = lastTopLevelKeywordIndex(normalizedStatement, "insert");
+        int start = HiveSqlTextUtils.lastTopLevelKeywordIndex(normalizedStatement, "insert");
         if (start < 0) {
-            start = lastTopLevelKeywordIndex(normalizedStatement, "select");
+            start = HiveSqlTextUtils.lastTopLevelKeywordIndex(normalizedStatement, "select");
         }
         if (start < 0) {
             start = 0;
@@ -2049,7 +1983,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 depth = Math.max(0, depth - 1);
                 continue;
             }
-            if (depth == 0 && (matchesKeywordAt(normalizedStatement, i, "from") || matchesKeywordAt(normalizedStatement, i, "join"))) {
+            if (depth == 0 && (HiveSqlTextUtils.matchesKeywordAt(normalizedStatement, i, "from") || HiveSqlTextUtils.matchesKeywordAt(normalizedStatement, i, "join"))) {
                 i = captureTopLevelSourceAlias(normalizedStatement, i, aliases);
             }
         }
@@ -2057,98 +1991,42 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     }
 
     private int captureTopLevelSourceAlias(String statement, int keywordIndex, Map<String, String> aliases) {
-        int position = skipWhitespace(statement, keywordIndex);
-        position = readIdentifier(statement, position);
-        position = skipWhitespace(statement, position);
+        int position = HiveSqlTextUtils.skipWhitespace(statement, keywordIndex);
+        position = HiveSqlTextUtils.readIdentifier(statement, position);
+        position = HiveSqlTextUtils.skipWhitespace(statement, position);
         if (position >= statement.length() || statement.charAt(position) == '(') {
             return Math.max(keywordIndex, position - 1);
         }
         int tableStart = position;
-        int tableEnd = readIdentifier(statement, tableStart);
+        int tableEnd = HiveSqlTextUtils.readIdentifier(statement, tableStart);
         if (tableEnd == tableStart) {
             return position;
         }
-        String tableName = normalizeIdentifier(statement.substring(tableStart, tableEnd));
+        String tableName = HiveSqlTextUtils.normalizeIdentifier(statement.substring(tableStart, tableEnd));
         String simpleTableName = tableName.contains(".") ? tableName.substring(tableName.lastIndexOf('.') + 1) : tableName;
         aliases.put(tableName, tableName);
         aliases.put(simpleTableName, tableName);
 
-        position = skipWhitespace(statement, tableEnd);
+        position = HiveSqlTextUtils.skipWhitespace(statement, tableEnd);
         int aliasStart = position;
-        int aliasEnd = readIdentifier(statement, aliasStart);
+        int aliasEnd = HiveSqlTextUtils.readIdentifier(statement, aliasStart);
         if (aliasEnd > aliasStart && "as".equalsIgnoreCase(statement.substring(aliasStart, aliasEnd))) {
-            aliasStart = skipWhitespace(statement, aliasEnd);
-            aliasEnd = readIdentifier(statement, aliasStart);
+            aliasStart = HiveSqlTextUtils.skipWhitespace(statement, aliasEnd);
+            aliasEnd = HiveSqlTextUtils.readIdentifier(statement, aliasStart);
         }
         if (aliasEnd > aliasStart) {
             String alias = statement.substring(aliasStart, aliasEnd);
-            if (!isAliasKeyword(alias)) {
+            if (!HiveSqlTextUtils.isAliasKeyword(alias)) {
                 aliases.put(alias.toLowerCase(Locale.ROOT), tableName);
             }
         }
         return tableEnd;
     }
 
-    private int lastTopLevelKeywordIndex(String statement, String keyword) {
-        int found = -1;
-        int depth = 0;
-        char quote = 0;
-        for (int i = 0; i < statement.length(); i++) {
-            char ch = statement.charAt(i);
-            if (quote != 0) {
-                if (ch == quote) {
-                    quote = 0;
-                }
-                continue;
-            }
-            if (ch == '\'' || ch == '"' || ch == '`') {
-                quote = ch;
-                continue;
-            }
-            if (ch == '(') {
-                depth++;
-                continue;
-            }
-            if (ch == ')') {
-                depth = Math.max(0, depth - 1);
-                continue;
-            }
-            if (depth == 0 && matchesKeywordAt(statement, i, keyword)) {
-                found = i;
-            }
-        }
-        return found;
-    }
 
-    private boolean matchesKeywordAt(String statement, int index, String keyword) {
-        int end = index + keyword.length();
-        if (index < 0 || end > statement.length()) {
-            return false;
-        }
-        if (!statement.regionMatches(true, index, keyword, 0, keyword.length())) {
-            return false;
-        }
-        return (index == 0 || !isIdentifierCharacter(statement.charAt(index - 1)))
-            && (end == statement.length() || !isIdentifierCharacter(statement.charAt(end)));
-    }
 
-    private int skipWhitespace(String statement, int position) {
-        while (position < statement.length() && Character.isWhitespace(statement.charAt(position))) {
-            position++;
-        }
-        return position;
-    }
 
-    private int readIdentifier(String statement, int position) {
-        while (position < statement.length() && isIdentifierCharacter(statement.charAt(position))) {
-            position++;
-        }
-        return position;
-    }
 
-    private boolean isIdentifierCharacter(char ch) {
-        return Character.isLetterOrDigit(ch) || ch == '_' || ch == '.';
-    }
 
     private Map<String, String> buildColumnOwners(
         LineageAnalyzeRequest request,
@@ -2210,7 +2088,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         if (expressions.size() == 1) {
             return expressions.get(0);
         }
-        return setOperationFunctionName(normalizedStatement) + "(" + joinWithComma(expressions) + ")";
+        return setOperationFunctionName(normalizedStatement) + "(" + HiveSqlTextUtils.joinWithComma(expressions) + ")";
     }
 
     private String setOperationFunctionName(String normalizedStatement) {
@@ -2230,16 +2108,6 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         return "set_operation";
     }
 
-    private String joinWithComma(List<String> values) {
-        StringBuilder builder = new StringBuilder();
-        for (String value : values) {
-            if (builder.length() > 0) {
-                builder.append(", ");
-            }
-            builder.append(value);
-        }
-        return builder.toString();
-    }
 
     private boolean hasCompleteSetOperationProjection(ParsedHiveStatement parsedStatement, int selectItemCount) {
         Map<Integer, List<String>> expressions = parsedStatement.getSetOperationExpressionsBySelectIndex();
@@ -2287,7 +2155,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             }
             if (ch == '(') {
                 if (depth == 0) {
-                    int closeIndex = findMatchingParen(sql, i);
+                    int closeIndex = HiveSqlTextUtils.findMatchingParen(sql, i);
                     if (closeIndex > i) {
                         String body = sql.substring(i + 1, closeIndex).trim();
                         if (isQueryBody(body)) {
@@ -2326,23 +2194,23 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     private boolean isQueryBody(String body) {
         String lower = body.trim().toLowerCase(Locale.ROOT);
         return (lower.startsWith("select")
-            && (lower.length() == 6 || !isIdentifierCharacter(lower.charAt(6))))
+            && (lower.length() == 6 || !HiveSqlTextUtils.isIdentifierCharacter(lower.charAt(6))))
             || (lower.startsWith("with")
-            && (lower.length() == 4 || !isIdentifierCharacter(lower.charAt(4))));
+            && (lower.length() == 4 || !HiveSqlTextUtils.isIdentifierCharacter(lower.charAt(4))));
     }
 
     private String readAliasAfter(String sql, int start) {
-        int position = skipWhitespace(sql, start);
-        int asEnd = readIdentifier(sql, position);
+        int position = HiveSqlTextUtils.skipWhitespace(sql, start);
+        int asEnd = HiveSqlTextUtils.readIdentifier(sql, position);
         if (asEnd > position && "as".equalsIgnoreCase(sql.substring(position, asEnd))) {
-            position = skipWhitespace(sql, asEnd);
+            position = HiveSqlTextUtils.skipWhitespace(sql, asEnd);
         }
-        int aliasEnd = readIdentifier(sql, position);
+        int aliasEnd = HiveSqlTextUtils.readIdentifier(sql, position);
         if (aliasEnd <= position) {
             return null;
         }
         String alias = sql.substring(position, aliasEnd);
-        return isAliasKeyword(alias) ? null : alias.toLowerCase(Locale.ROOT);
+        return HiveSqlTextUtils.isAliasKeyword(alias) ? null : alias.toLowerCase(Locale.ROOT);
     }
 
     private Map<String, ColumnLineageProjection> extractProjectionTable(
@@ -2393,7 +2261,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 outputColumn,
                 new ColumnLineageProjection(
                     sourceColumns,
-                    setOperationParts.getFunctionName() + "(" + joinWithComma(expressions) + ")",
+                    setOperationParts.getFunctionName() + "(" + HiveSqlTextUtils.joinWithComma(expressions) + ")",
                     LineageType.DERIVED
                 )
             );
@@ -2405,8 +2273,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         String sql,
         Map<String, Map<String, ColumnLineageProjection>> existingProjections
     ) {
-        int selectIndex = topLevelKeywordIndex(sql, "select", 0);
-        int fromIndex = topLevelKeywordIndex(sql, "from", selectIndex < 0 ? 0 : selectIndex);
+        int selectIndex = HiveSqlTextUtils.topLevelKeywordIndex(sql, "select", 0);
+        int fromIndex = HiveSqlTextUtils.topLevelKeywordIndex(sql, "from", selectIndex < 0 ? 0 : selectIndex);
         if (selectIndex < 0 || fromIndex < 0 || fromIndex <= selectIndex) {
             return Collections.emptyMap();
         }
@@ -2414,11 +2282,11 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         Map<String, String> sourceAliases = extractProjectionSourceAliases(sql);
         String defaultSourceTable = firstAliasTarget(sourceAliases);
         Map<String, ColumnLineageProjection> projections = new LinkedHashMap<>();
-        for (String selectItem : splitSelectItems(selectList)) {
-            String outputColumn = extractAlias(selectItem);
-            String expression = stripAlias(selectItem);
+        for (String selectItem : HiveSqlTextUtils.splitSelectItems(selectList)) {
+            String outputColumn = HiveSqlTextUtils.extractAlias(selectItem);
+            String expression = HiveSqlTextUtils.stripAlias(selectItem);
             if (outputColumn == null && isDirectExpression(expression)) {
-                outputColumn = columnNameOf(expression);
+                outputColumn = HiveSqlTextUtils.columnNameOf(expression);
                 if (outputColumn == null) {
                     outputColumn = expression;
                 }
@@ -2451,8 +2319,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         Set<String> seen = new LinkedHashSet<>();
         ColumnLineageProjection singleProjection = null;
         for (ColumnRef rawSourceColumn : rawSourceColumns) {
-            String sourceTable = tableNameOfColumn(rawSourceColumn.getQualifiedName());
-            String sourceColumnName = columnNameOf(rawSourceColumn.getQualifiedName());
+            String sourceTable = HiveSqlTextUtils.tableNameOfColumn(rawSourceColumn.getQualifiedName());
+            String sourceColumnName = HiveSqlTextUtils.columnNameOf(rawSourceColumn.getQualifiedName());
             ColumnLineageProjection projection = sourceTable == null || sourceColumnName == null
                 ? null
                 : columnProjection(sourceTable, sourceColumnName, existingProjections);
@@ -2484,7 +2352,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         Map<String, String> aliases = extractTopLevelSourceAliases(sql);
         int depth = 0;
         char quote = 0;
-        int start = topLevelKeywordIndex(sql, "from", 0);
+        int start = HiveSqlTextUtils.topLevelKeywordIndex(sql, "from", 0);
         if (start < 0) {
             return aliases;
         }
@@ -2502,7 +2370,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             }
             if (ch == '(') {
                 if (depth == 0) {
-                    int closeIndex = findMatchingParen(sql, i);
+                    int closeIndex = HiveSqlTextUtils.findMatchingParen(sql, i);
                     if (closeIndex > i) {
                         String alias = readAliasAfter(sql, closeIndex + 1);
                         if (alias != null) {
@@ -2548,12 +2416,12 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 depth = Math.max(0, depth - 1);
                 continue;
             }
-            if (depth == 0 && matchesKeywordAt(sql, i, "union")) {
+            if (depth == 0 && HiveSqlTextUtils.matchesKeywordAt(sql, i, "union")) {
                 branches.add(sql.substring(branchStart, i).trim());
-                int next = skipWhitespace(sql, i + 5);
-                if (matchesKeywordAt(sql, next, "all")) {
+                int next = HiveSqlTextUtils.skipWhitespace(sql, i + 5);
+                if (HiveSqlTextUtils.matchesKeywordAt(sql, next, "all")) {
                     functionName = "union_all";
-                    branchStart = skipWhitespace(sql, next + 3);
+                    branchStart = HiveSqlTextUtils.skipWhitespace(sql, next + 3);
                 } else {
                     functionName = "union_distinct";
                     branchStart = next;
@@ -2729,66 +2597,9 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         return false;
     }
 
-    private List<String> splitSelectItems(String selectList) {
-        List<String> items = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        int depth = 0;
-        for (int i = 0; i < selectList.length(); i++) {
-            char ch = selectList.charAt(i);
-            if (ch == '(') {
-                depth++;
-            } else if (ch == ')') {
-                depth--;
-            }
-            if (ch == ',' && depth == 0) {
-                items.add(current.toString().trim());
-                current.setLength(0);
-            } else {
-                current.append(ch);
-            }
-        }
-        if (current.length() > 0) {
-            items.add(current.toString().trim());
-        }
-        return items;
-    }
 
-    private String stripAlias(String selectItem) {
-        int asIndex = topLevelAsIndex(selectItem);
-        if (asIndex < 0) {
-            return selectItem.trim();
-        }
-        return selectItem.substring(0, asIndex).trim();
-    }
 
-    private String extractAlias(String selectItem) {
-        int asIndex = topLevelAsIndex(selectItem);
-        if (asIndex < 0) {
-            return null;
-        }
-        return selectItem.substring(asIndex + 4).trim();
-    }
 
-    private int topLevelAsIndex(String selectItem) {
-        String lower = selectItem.toLowerCase(Locale.ROOT);
-        int depth = 0;
-        int found = -1;
-        for (int i = 0; i <= lower.length() - 4; i++) {
-            char ch = lower.charAt(i);
-            if (ch == '(') {
-                depth++;
-                continue;
-            }
-            if (ch == ')') {
-                depth = Math.max(0, depth - 1);
-                continue;
-            }
-            if (depth == 0 && lower.startsWith(" as ", i)) {
-                found = i;
-            }
-        }
-        return found;
-    }
 
     private boolean isDirectExpression(String expression) {
         return expression.matches("[a-zA-Z_][\\w]*(?:\\.[a-zA-Z_][\\w]*)?");
@@ -2825,7 +2636,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         String setOperationFunction = setOperationLineageFunction(trimmed);
         if (setOperationFunction != null && trimmed.endsWith(")")) {
             String inner = trimmed.substring(setOperationFunction.length() + 1, trimmed.length() - 1);
-            List<String> parts = splitSelectItems(inner);
+            List<String> parts = HiveSqlTextUtils.splitSelectItems(inner);
             if (parts.isEmpty()) {
                 return false;
             }
@@ -2874,7 +2685,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         Map<String, String> columnAliasSources
     ) {
         Set<String> columns = new LinkedHashSet<>();
-        Matcher matcher = IDENTIFIER.matcher(removeStringLiterals(expression));
+        Matcher matcher = IDENTIFIER.matcher(HiveSqlTextUtils.removeStringLiterals(expression));
         while (matcher.find()) {
             String first = matcher.group(1);
             String second = matcher.group(2);
@@ -2943,7 +2754,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         if (isLiteralExpression(expression == null ? "" : expression.trim())) {
             return false;
         }
-        Matcher matcher = IDENTIFIER.matcher(removeStringLiterals(expression));
+        Matcher matcher = IDENTIFIER.matcher(HiveSqlTextUtils.removeStringLiterals(expression));
         while (matcher.find()) {
             String token = matcher.group(1);
             if (!isKeyword(token) && !isFunctionName(expression, matcher.end())) {
@@ -2953,53 +2764,6 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         return false;
     }
 
-    private String removeStringLiterals(String expression) {
-        if (expression == null || expression.isEmpty()) {
-            return "";
-        }
-        StringBuilder builder = new StringBuilder();
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        for (int i = 0; i < expression.length(); i++) {
-            char ch = expression.charAt(i);
-            if (inSingleQuote) {
-                if (ch == '\'' && i + 1 < expression.length() && expression.charAt(i + 1) == '\'') {
-                    builder.append(' ');
-                    i++;
-                    builder.append(' ');
-                    continue;
-                }
-                if (ch == '\'') {
-                    inSingleQuote = false;
-                }
-                builder.append(' ');
-                continue;
-            }
-            if (inDoubleQuote) {
-                if (ch == '"' && i + 1 < expression.length() && expression.charAt(i + 1) == '"') {
-                    builder.append(' ');
-                    i++;
-                    builder.append(' ');
-                    continue;
-                }
-                if (ch == '"') {
-                    inDoubleQuote = false;
-                }
-                builder.append(' ');
-                continue;
-            }
-            if (ch == '\'') {
-                inSingleQuote = true;
-                builder.append(' ');
-            } else if (ch == '"') {
-                inDoubleQuote = true;
-                builder.append(' ');
-            } else {
-                builder.append(ch);
-            }
-        }
-        return builder.toString();
-    }
 
     private void addWarning(List<LineageWarning> warnings, WarningCode warningCode, String message, int statementIndex) {
         if (warnings == null) {
@@ -3027,12 +2791,6 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         ).contains(token.toLowerCase(Locale.ROOT));
     }
 
-    private boolean isAliasKeyword(String token) {
-        return Arrays.asList(
-            "on", "where", "left", "right", "inner", "outer", "full", "join", "union",
-            "group", "order", "having", "limit", "cross", "semi"
-        ).contains(token.toLowerCase(Locale.ROOT));
-    }
 
     private static final class JoinIndexCounter {
         private int next = 1;
