@@ -1,7 +1,5 @@
 package com.panfan.hivelineage.core;
 
-import com.panfan.hivelineage.metadata.HiveTableMetadata;
-import com.panfan.hivelineage.metadata.TableIdentifier;
 import com.panfan.hivelineage.request.LineageAnalyzeRequest;
 import com.panfan.hivelineage.request.LineageParseMode;
 import com.panfan.hivelineage.result.ColumnLineage;
@@ -16,15 +14,12 @@ import com.panfan.hivelineage.result.StatementParseStatus;
 import com.panfan.hivelineage.result.TableLineage;
 import com.panfan.hivelineage.result.WarningCode;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -41,10 +36,6 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     private static final Pattern CREATE_TEMPORARY_TABLE_AS_SELECT = Pattern.compile(
         "(?is)^create\\s+temporary\\s+table\\s+([a-zA-Z_][\\w.]*).*?\\bas\\s+select\\s+(.+?)\\s+from\\s+([a-zA-Z_][\\w.]*)(?:\\s+.*)?$"
     );
-    private static final Pattern SOURCE_OBJECT = Pattern.compile("(?is)\\b(?:from|join)\\s+([a-zA-Z_][\\w.]*)");
-    private static final Pattern SOURCE_ALIAS = Pattern.compile("(?is)\\b(?:from|join)\\s+([a-zA-Z_][\\w.]*)\\s+(?:as\\s+)?([a-zA-Z_][\\w]*)\\b");
-    private static final Pattern IDENTIFIER = Pattern.compile("\\b([a-zA-Z_][\\w]*)(?:\\.([a-zA-Z_][\\w]*))?\\b");
-    private static final Pattern QUALIFIED_COLUMN = Pattern.compile("\\b([a-zA-Z_][\\w]*)\\.([a-zA-Z_][\\w]*)\\b");
     private final HiveAstParserAdapter parserAdapter;
     private final HiveScriptPreprocessor scriptPreprocessor = new HiveScriptPreprocessor();
     private final HiveTargetColumnResolver targetColumnResolver = new HiveTargetColumnResolver();
@@ -514,34 +505,6 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         );
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     private List<String> alignTargetColumnsForStaticPartitions(
         List<String> targetColumns,
         int selectItemCount,
@@ -610,23 +573,6 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         }
         return dynamicColumns;
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     private StatementLineageResult failedResult(
         LineageAnalyzeRequest request,
@@ -783,55 +729,5 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         }
         return "IGNORED";
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 }

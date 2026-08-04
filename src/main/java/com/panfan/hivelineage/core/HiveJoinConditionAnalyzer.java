@@ -26,22 +26,22 @@ import java.util.regex.Pattern;
 final class HiveJoinConditionAnalyzer {
     private static final int PARSE_STATUS_SUCCESS = StatementParseStatus.SUCCESS.getCode();
     private static final Pattern QUALIFIED_COLUMN = Pattern.compile("\\b([a-zA-Z_][\\w]*)\\.([a-zA-Z_][\\w]*)\\b");
-private final HiveAstParserAdapter parserAdapter;
-private final HiveTargetColumnResolver targetColumnResolver;
-private final HiveProjectionLineageResolver projectionResolver;
-private final HiveLineageExpansionService expansionService;
+    private final HiveAstParserAdapter parserAdapter;
+    private final HiveTargetColumnResolver targetColumnResolver;
+    private final HiveProjectionLineageResolver projectionResolver;
+    private final HiveLineageExpansionService expansionService;
 
-HiveJoinConditionAnalyzer(
-    HiveAstParserAdapter parserAdapter,
-    HiveTargetColumnResolver targetColumnResolver,
-    HiveProjectionLineageResolver projectionResolver,
-    HiveLineageExpansionService expansionService
-) {
-    this.parserAdapter = parserAdapter;
-    this.targetColumnResolver = targetColumnResolver;
-    this.projectionResolver = projectionResolver;
-    this.expansionService = expansionService;
-}
+    HiveJoinConditionAnalyzer(
+        HiveAstParserAdapter parserAdapter,
+        HiveTargetColumnResolver targetColumnResolver,
+        HiveProjectionLineageResolver projectionResolver,
+        HiveLineageExpansionService expansionService
+    ) {
+        this.parserAdapter = parserAdapter;
+        this.targetColumnResolver = targetColumnResolver;
+        this.projectionResolver = projectionResolver;
+        this.expansionService = expansionService;
+    }
 
     List<JoinCondition> buildJoinConditions(
         LineageAnalyzeRequest request,
