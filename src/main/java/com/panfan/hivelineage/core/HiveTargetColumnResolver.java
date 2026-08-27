@@ -120,6 +120,24 @@ final class HiveTargetColumnResolver {
         List<DataObjectRef> inputObjects,
         Map<String, String> sourceAliases
     ) {
+        return expandStarSelectItems(
+            context,
+            targetTable,
+            selectItems,
+            inputObjects,
+            sourceAliases,
+            Collections.<String, String>emptyMap()
+        );
+    }
+
+    List<String> expandStarSelectItems(
+        ColumnResolutionContext context,
+        String targetTable,
+        List<String> selectItems,
+        List<DataObjectRef> inputObjects,
+        Map<String, String> sourceAliases,
+        Map<String, String> explicitSourceAliases
+    ) {
         LineageAnalyzeRequest request = context.getRequest();
         LineageParseMode parseMode = context.getParseMode();
         List<LineageWarning> warnings = context.getWarnings();
@@ -138,7 +156,7 @@ final class HiveTargetColumnResolver {
                 expanded.add(selectItem);
                 continue;
             }
-            String sourceTable = resolveStarSource(reference.getOwner(), inputObjects, sourceAliases);
+            String sourceTable = resolveStarSource(reference.getOwner(), inputObjects, explicitSourceAliases);
             if (sourceTable == null) {
                 addWarning(
                     warnings,
@@ -193,7 +211,7 @@ final class HiveTargetColumnResolver {
     private String resolveStarSource(
         String owner,
         List<DataObjectRef> inputObjects,
-        Map<String, String> sourceAliases
+        Map<String, String> explicitSourceAliases
     ) {
         if (owner == null) {
             return inputObjects.size() == 1 ? inputObjects.get(0).getQualifiedName() : null;
@@ -204,22 +222,20 @@ final class HiveTargetColumnResolver {
                 return inputObject.getQualifiedName();
             }
         }
+        String aliasTarget = explicitSourceAliases.get(normalizedOwner);
+        if (aliasTarget != null) {
+            for (DataObjectRef inputObject : inputObjects) {
+                if (aliasTarget.equalsIgnoreCase(inputObject.getQualifiedName())) {
+                    return inputObject.getQualifiedName();
+                }
+            }
+        }
         List<String> simpleMatches = new ArrayList<>();
         for (DataObjectRef inputObject : inputObjects) {
             String qualifiedName = inputObject.getQualifiedName();
             String simpleName = qualifiedName.substring(qualifiedName.lastIndexOf('.') + 1);
             if (normalizedOwner.equals(simpleName.toLowerCase(Locale.ROOT))) {
                 simpleMatches.add(qualifiedName);
-            }
-        }
-        String aliasTarget = sourceAliases.get(normalizedOwner);
-        if (aliasTarget != null
-            && (simpleMatches.isEmpty()
-                || (simpleMatches.size() == 1 && !aliasTarget.equalsIgnoreCase(simpleMatches.get(0))))) {
-            for (DataObjectRef inputObject : inputObjects) {
-                if (aliasTarget.equalsIgnoreCase(inputObject.getQualifiedName())) {
-                    return inputObject.getQualifiedName();
-                }
             }
         }
         return simpleMatches.size() == 1 ? simpleMatches.get(0) : null;
@@ -287,6 +303,21 @@ final class HiveTargetColumnResolver {
             String alias = aliasMatcher.group(2);
             if (alias != null && !HiveSqlTextUtils.isAliasKeyword(alias)) {
                 aliases.put(alias.toLowerCase(Locale.ROOT), tableName);
+            }
+        }
+        return aliases;
+    }
+
+    Map<String, String> extractExplicitSourceAliases(String normalizedStatement) {
+        Map<String, String> aliases = new HashMap<>();
+        Matcher aliasMatcher = SOURCE_ALIAS.matcher(normalizedStatement);
+        while (aliasMatcher.find()) {
+            String alias = aliasMatcher.group(2);
+            if (alias != null && !HiveSqlTextUtils.isAliasKeyword(alias)) {
+                aliases.put(
+                    alias.toLowerCase(Locale.ROOT),
+                    HiveSqlTextUtils.normalizeIdentifier(aliasMatcher.group(1))
+                );
             }
         }
         return aliases;

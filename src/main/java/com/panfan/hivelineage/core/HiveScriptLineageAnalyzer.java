@@ -292,13 +292,15 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         targetColumnResolver.mergeTopLevelSourceAliases(sourceAliases, topLevelSourceAliases);
         Map<String, String> topLevelProjectionSourceAliases = projectionResolver.extractProjectionSourceAliases(normalizedStatement);
         sourceAliases.putAll(topLevelProjectionSourceAliases);
+        Map<String, String> explicitSourceAliases = targetColumnResolver.extractExplicitSourceAliases(normalizedStatement);
         boolean starSelect = targetColumnResolver.isSingleStarSelect(selectItems);
         List<String> expandedSelectItems = targetColumnResolver.expandStarSelectItems(
             new ColumnResolutionContext(request, parseMode, statementWarnings, index),
             targetTable,
             selectItems,
             originalInputObjects,
-            sourceAliases
+            sourceAliases,
+            explicitSourceAliases
         );
 
         List<String> inferredTargetColumns = targetColumns;
@@ -370,6 +372,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             );
             for (int i = 0; i < expandedSelectItems.size(); i++) {
                 String expression = HiveSqlTextUtils.stripAlias(expandedSelectItems.get(i));
+                QualifiedColumnReference qualifiedReference = QualifiedColumnReference.parse(expression);
+                boolean unresolvedStarExpression = qualifiedReference != null && qualifiedReference.isStar();
                 String sourceExtractionExpression = expression;
                 String lineageExpression = setOperationQuery
                     ? projectionResolver.setOperationExpression(resolvedParsedStatement, normalizedStatement, i)
@@ -413,6 +417,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 }
                 if (sourceColumns.isEmpty()
                     && directProjection == null
+                    && !unresolvedStarExpression
                     && !projectionResolver.isConstantLineageExpression(lineageExpression)) {
                     sourceColumns = projectionResolver.extractSourceColumns(
                         sourceExtractionExpression,
@@ -432,6 +437,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 }
                 if (sourceColumns.isEmpty()
                     && directProjection == null
+                    && !unresolvedStarExpression
                     && projectionResolver.mayContainColumnReference(sourceExtractionExpression)) {
                     targetColumnResolver.addWarning(
                         statementWarnings,

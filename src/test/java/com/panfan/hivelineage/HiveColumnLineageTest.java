@@ -737,6 +737,58 @@ public class HiveColumnLineageTest {
     }
 
     @Test
+    public void unresolvedQualifiedStarDoesNotBindOwnerAsDefaultTableColumn() {
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("whc.a", "id", "field1")
+            .addTable("whc.c", "field1");
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_unknown_qualified_star")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript("insert into whc.c select missing.* from whc.a;")
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+        StatementLineageResult statement = new HiveScriptLineageAnalyzer()
+            .analyzeScript(request).getStatements().get(0);
+        assertContainsWarning(statement.getWarnings(), WarningCode.UNKNOWN_COLUMN_LINEAGE);
+        TestSupport.assertEquals(1, statement.getColumnLineages().size(), "unresolved star lineage count");
+        TestSupport.assertEquals(0, statement.getColumnLineages().get(0).getSourceColumns().size(), "unresolved star sources");
+    }
+
+    @Test
+    public void explicitAliasPrecedesCollidingSimpleTableNameForQualifiedStar() {
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("db1.a", "id", "field1")
+            .addTable("db2.b", "other")
+            .addTable("target.c", "id", "field1");
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_colliding_qualified_star")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript(
+                "insert into target.c select b.* from db1.a b "
+                    + "join db2.b y on b.id = y.other;"
+            )
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+        List<ColumnLineage> columns = new HiveScriptLineageAnalyzer()
+            .analyzeScript(request).getStatements().get(0).getColumnLineages();
+        TestSupport.assertEquals(2, columns.size(), "colliding alias lineage count");
+        assertDirectColumn(columns.get(0), "target.c.id", "db1.a.id", "colliding alias id");
+        assertDirectColumn(columns.get(1), "target.c.field1", "db1.a.field1", "colliding alias field1");
+    }
+
+    @Test
     public void subqueryAliasColumnLineageResolvesToBaseTable() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
         MapMetadataProvider metadataProvider = new MapMetadataProvider()
