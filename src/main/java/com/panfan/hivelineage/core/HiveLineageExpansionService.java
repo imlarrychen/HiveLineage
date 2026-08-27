@@ -262,7 +262,7 @@ final class HiveLineageExpansionService {
                 visitingViews
             );
             ColumnLineageProjection mappedProjection = mapping.get(columnName.toLowerCase(Locale.ROOT));
-            if (mappedProjection == null || mappedProjection.getSourceColumns().isEmpty()) {
+            if (mappedProjection == null) {
                 targetColumnResolver.addWarning(
                     warnings,
                     WarningCode.UNKNOWN_COLUMN_LINEAGE,
@@ -270,6 +270,13 @@ final class HiveLineageExpansionService {
                     statementIndex
                 );
                 addColumn(expanded, seen, sourceColumn);
+            } else if (mappedProjection.isUnresolved()) {
+                targetColumnResolver.addWarning(
+                    warnings,
+                    WarningCode.UNKNOWN_COLUMN_LINEAGE,
+                    "Unable to resolve view column " + sourceColumn.getQualifiedName(),
+                    statementIndex
+                );
             } else {
                 List<ColumnRef> recursivelyExpanded = expandViewSourceColumns(
                     context,

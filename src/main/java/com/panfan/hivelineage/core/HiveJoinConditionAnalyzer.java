@@ -52,14 +52,8 @@ final class HiveJoinConditionAnalyzer {
             return extractJoinConditions(context);
         }
         String normalizedStatement = context.getNormalizedStatement();
-        CteExtraction cteExtraction = extractCtes(normalizedStatement);
-        Map<String, Map<String, List<ColumnRef>>> cteColumnProjections = new HashMap<>();
-        for (CteBlock cteBlock : cteExtraction.getCteBlocks()) {
-            cteColumnProjections.put(
-                cteBlock.getName().toLowerCase(Locale.ROOT),
-                extractCteColumnProjections(cteBlock.getSql(), cteColumnProjections)
-            );
-        }
+        Map<String, Map<String, ColumnLineageProjection>> projectionTables =
+            projectionResolver.extractStatementProjectionTables(normalizedStatement);
 
         List<JoinCondition> conditions = new ArrayList<>();
         for (ParsedJoinCondition parsedJoinCondition : parsedStatement.getJoinConditions()) {
@@ -74,7 +68,7 @@ final class HiveJoinConditionAnalyzer {
                 directColumns,
                 sourceAliases,
                 parsedStatement.getInputObjects(),
-                cteColumnProjections
+                projectionTables
             );
             if (directObjects.isEmpty() && hasUnqualifiedColumns(directColumns)) {
                 directObjects = joinTables(joinColumns, directObjects);
@@ -187,13 +181,8 @@ final class HiveJoinConditionAnalyzer {
             return Collections.emptyList();
         }
         CteExtraction cteExtraction = extractCtes(normalizedStatement);
-        Map<String, Map<String, List<ColumnRef>>> cteColumnProjections = new HashMap<>();
-        for (CteBlock cteBlock : cteExtraction.getCteBlocks()) {
-            cteColumnProjections.put(
-                cteBlock.getName().toLowerCase(Locale.ROOT),
-                extractCteColumnProjections(cteBlock.getSql(), cteColumnProjections)
-            );
-        }
+        Map<String, Map<String, ColumnLineageProjection>> projectionTables =
+            projectionResolver.extractStatementProjectionTables(normalizedStatement);
 
         List<JoinCondition> conditions = new ArrayList<>();
         JoinIndexCounter counter = new JoinIndexCounter();
@@ -203,7 +192,7 @@ final class HiveJoinConditionAnalyzer {
                 cteBlock.getSql(),
                 "cte." + cteBlock.getName(),
                 counter,
-                cteColumnProjections,
+                projectionTables,
                 conditions
             );
         }
@@ -212,7 +201,7 @@ final class HiveJoinConditionAnalyzer {
             cteExtraction.getRootSql(),
             "root",
             counter,
-            cteColumnProjections,
+            projectionTables,
             conditions
         );
         return conditions;
@@ -222,7 +211,7 @@ final class HiveJoinConditionAnalyzer {
         String queryBlockSql,
         String queryBlockPath,
         JoinIndexCounter counter,
-        Map<String, Map<String, List<ColumnRef>>> cteColumnProjections,
+        Map<String, Map<String, ColumnLineageProjection>> projectionTables,
         List<JoinCondition> conditions
     ) {
         Map<String, String> sourceAliases = targetColumnResolver.extractTopLevelSourceAliases(queryBlockSql);
@@ -235,7 +224,7 @@ final class HiveJoinConditionAnalyzer {
                 directColumns,
                 sourceAliases,
                 inputObjectsFromSourceAliases(sourceAliases),
-                cteColumnProjections
+                projectionTables
             );
             List<DataObjectRef> joinTables = joinTables(joinColumns, directObjects);
             JoinTypeInfo joinTypeInfo = resolveJoinType(queryBlockSql, clause.getJoinKeywordIndex());
@@ -379,7 +368,7 @@ final class HiveJoinConditionAnalyzer {
         List<ColumnRef> directColumns,
         Map<String, String> sourceAliases,
         List<DataObjectRef> inputObjects,
-        Map<String, Map<String, List<ColumnRef>>> cteColumnProjections
+        Map<String, Map<String, ColumnLineageProjection>> projectionTables
     ) {
         List<ColumnRef> resolvedColumns = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
@@ -404,7 +393,7 @@ final class HiveJoinConditionAnalyzer {
                     context,
                     owner,
                     ownerResolver,
-                    cteColumnProjections
+                    projectionTables
                 );
                 sourceObjects = sourceObject == null
                     ? Collections.<String>emptyList()
@@ -415,7 +404,7 @@ final class HiveJoinConditionAnalyzer {
                     context,
                     sourceObject,
                     columnName,
-                    cteColumnProjections
+                    projectionTables
                 );
                 for (ColumnRef expandedColumn : expanded) {
                     expansionService.addColumn(resolvedColumns, seen, expandedColumn);
@@ -428,10 +417,10 @@ final class HiveJoinConditionAnalyzer {
         StatementAnalysisContext context,
         String owner,
         QualifiedOwnerResolver ownerResolver,
-        Map<String, Map<String, List<ColumnRef>>> cteColumnProjections
+        Map<String, Map<String, ColumnLineageProjection>> projectionTables
     ) {
         String normalizedOwner = owner.toLowerCase(Locale.ROOT);
-        if (cteColumnProjections.containsKey(normalizedOwner)
+        if (projectionTables.containsKey(normalizedOwner)
             || containsProjectionTable(owner, context.getTemporaryTableColumns())) {
             return owner;
         }
@@ -502,15 +491,24 @@ final class HiveJoinConditionAnalyzer {
         StatementAnalysisContext context,
         String sourceObject,
         String columnName,
-        Map<String, Map<String, List<ColumnRef>>> cteColumnProjections
+        Map<String, Map<String, ColumnLineageProjection>> projectionTables
     ) {
         ColumnLineageProjection temporaryProjection = projectionResolver.columnProjection(
             sourceObject,
             columnName,
             context.getTemporaryTableColumns()
         );
-        if (temporaryProjection != null && !temporaryProjection.getSourceColumns().isEmpty()) {
-            return temporaryProjection.getSourceColumns();
+        if (temporaryProjection != null) {
+            if (!temporaryProjection.isUnresolved()) {
+                return temporaryProjection.getSourceColumns();
+            }
+            targetColumnResolver.addWarning(
+                context.getWarnings(),
+                WarningCode.UNKNOWN_COLUMN_LINEAGE,
+                "Unable to map temporary table join column " + sourceObject + "." + columnName,
+                context.getStatementIndex()
+            );
+            return Collections.emptyList();
         }
         if (containsProjectionTable(sourceObject, context.getTemporaryTableColumns())) {
             targetColumnResolver.addWarning(
@@ -522,12 +520,24 @@ final class HiveJoinConditionAnalyzer {
             return Collections.emptyList();
         }
 
-        Map<String, List<ColumnRef>> cteProjection = cteColumnProjections.get(sourceObject.toLowerCase(Locale.ROOT));
-        if (cteProjection != null) {
-            List<ColumnRef> projectedColumns = cteProjection.get(columnName.toLowerCase(Locale.ROOT));
-            if (projectedColumns != null && !projectedColumns.isEmpty()) {
-                return projectedColumns;
+        ColumnLineageProjection statementProjection = projectionResolver.columnProjection(
+            sourceObject,
+            columnName,
+            projectionTables
+        );
+        if (statementProjection != null) {
+            if (!statementProjection.isUnresolved()) {
+                return statementProjection.getSourceColumns();
             }
+            targetColumnResolver.addWarning(
+                context.getWarnings(),
+                WarningCode.UNKNOWN_COLUMN_LINEAGE,
+                "Unable to map CTE join column " + sourceObject + "." + columnName,
+                context.getStatementIndex()
+            );
+            return Collections.emptyList();
+        }
+        if (containsProjectionTable(sourceObject, projectionTables)) {
             targetColumnResolver.addWarning(
                 context.getWarnings(),
                 WarningCode.UNKNOWN_COLUMN_LINEAGE,
@@ -542,8 +552,26 @@ final class HiveJoinConditionAnalyzer {
             sourceObject,
             columnName
         );
-        if (viewProjection != null && !viewProjection.getSourceColumns().isEmpty()) {
-            return viewProjection.getSourceColumns();
+        if (viewProjection != null) {
+            if (!viewProjection.isUnresolved()) {
+                return viewProjection.getSourceColumns();
+            }
+            targetColumnResolver.addWarning(
+                context.getWarnings(),
+                WarningCode.UNKNOWN_COLUMN_LINEAGE,
+                "Unable to map view join column " + sourceObject + "." + columnName,
+                context.getStatementIndex()
+            );
+            return Collections.emptyList();
+        }
+        if (expansionService.isKnownView(context.getRequest(), sourceObject)) {
+            targetColumnResolver.addWarning(
+                context.getWarnings(),
+                WarningCode.UNKNOWN_COLUMN_LINEAGE,
+                "Unable to map view join column " + sourceObject + "." + columnName,
+                context.getStatementIndex()
+            );
+            return Collections.emptyList();
         }
         return Collections.singletonList(new ColumnRef(sourceObject + "." + columnName));
     }
@@ -573,81 +601,6 @@ final class HiveJoinConditionAnalyzer {
             expansionService.addInputObject(tables, seen, directObject);
         }
         return tables;
-    }
-    Map<String, List<ColumnRef>> extractCteColumnProjections(
-        String cteSql,
-        Map<String, Map<String, List<ColumnRef>>> existingCteColumnProjections
-    ) {
-        int selectIndex = HiveSqlTextUtils.topLevelKeywordIndex(cteSql, "select", 0);
-        int fromIndex = HiveSqlTextUtils.topLevelKeywordIndex(cteSql, "from", selectIndex < 0 ? 0 : selectIndex);
-        if (selectIndex < 0 || fromIndex < 0 || fromIndex <= selectIndex) {
-            return Collections.emptyMap();
-        }
-        String selectList = cteSql.substring(selectIndex + 6, fromIndex);
-        Map<String, String> sourceAliases = targetColumnResolver.extractTopLevelSourceAliases(cteSql);
-        QualifiedOwnerResolver ownerResolver = QualifiedOwnerResolver.fromAliases(
-            sourceAliases,
-            targetColumnResolver.extractExplicitSourceAliases(cteSql)
-        );
-        String defaultSourceTable = firstAliasTarget(sourceAliases);
-        Map<String, List<ColumnRef>> projections = new HashMap<>();
-        for (String selectItem : HiveSqlTextUtils.splitSelectItems(selectList)) {
-            String outputColumn = HiveSqlTextUtils.extractAlias(selectItem);
-            String expression = HiveSqlTextUtils.stripAlias(selectItem);
-            if (outputColumn == null && projectionResolver.isDirectExpression(expression)) {
-                outputColumn = HiveSqlTextUtils.columnNameOf(expression);
-                if (outputColumn == null) {
-                    outputColumn = expression;
-                }
-            }
-            if (outputColumn == null) {
-                continue;
-            }
-            List<ColumnRef> sourceColumns = projectionResolver.extractSourceColumns(
-                expression,
-                defaultSourceTable,
-                sourceAliases,
-                Collections.<String, String>emptyMap(),
-                Collections.<String, String>emptyMap(),
-                ownerResolver
-            );
-            List<ColumnRef> expanded = new ArrayList<>();
-            Set<String> seen = new LinkedHashSet<>();
-            for (ColumnRef sourceColumn : sourceColumns) {
-                String sourceTable = HiveSqlTextUtils.tableNameOfColumn(sourceColumn.getQualifiedName());
-                String sourceColumnName = HiveSqlTextUtils.columnNameOf(sourceColumn.getQualifiedName());
-                List<ColumnRef> nested = sourceTable == null || sourceColumnName == null
-                    ? Collections.singletonList(sourceColumn)
-                    : expandCteProjectionColumn(sourceTable, sourceColumnName, existingCteColumnProjections);
-                for (ColumnRef nestedColumn : nested) {
-                    expansionService.addColumn(expanded, seen, nestedColumn);
-                }
-            }
-            projections.put(outputColumn.toLowerCase(Locale.ROOT), expanded);
-        }
-        return projections;
-    }
-    List<ColumnRef> expandCteProjectionColumn(
-        String sourceTable,
-        String sourceColumnName,
-        Map<String, Map<String, List<ColumnRef>>> existingCteColumnProjections
-    ) {
-        Map<String, List<ColumnRef>> projection = existingCteColumnProjections.get(sourceTable.toLowerCase(Locale.ROOT));
-        if (projection == null) {
-            return Collections.singletonList(new ColumnRef(sourceTable + "." + sourceColumnName));
-        }
-        List<ColumnRef> projectedColumns = projection.get(sourceColumnName.toLowerCase(Locale.ROOT));
-        return projectedColumns == null || projectedColumns.isEmpty()
-            ? Collections.singletonList(new ColumnRef(sourceTable + "." + sourceColumnName))
-            : projectedColumns;
-    }
-    String firstAliasTarget(Map<String, String> sourceAliases) {
-        for (Map.Entry<String, String> alias : sourceAliases.entrySet()) {
-            if (alias.getKey().equals(alias.getValue()) || alias.getValue().contains(".")) {
-                return alias.getValue();
-            }
-        }
-        return "";
     }
     CteExtraction extractCtes(String sql) {
         String trimmed = sql.trim();
