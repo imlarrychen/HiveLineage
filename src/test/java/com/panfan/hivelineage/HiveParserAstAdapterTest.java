@@ -19,6 +19,45 @@ import static com.panfan.hivelineage.AnalyzerTestSupport.*;
 
 public class HiveParserAstAdapterTest {
     @Test
+    public void hiveParserAstAdapterParsesInsertIntoDistinctTargetAndProjection() {
+        HiveAstParserAdapter adapter = new HiveParserAstAdapter();
+
+        ParsedHiveStatement statement = adapter.parse(
+            "insert into whc.c(field1) select distinct field1 from whc.a"
+        );
+
+        TestSupport.assertTrue(statement.getOutputObject() != null, "insert into distinct output object");
+        TestSupport.assertEquals("whc.c", statement.getOutputObject().getQualifiedName(), "insert into distinct target");
+        TestSupport.assertEquals(Arrays.asList("field1"), statement.getTargetColumns(), "insert into distinct target columns");
+        TestSupport.assertEquals(Arrays.asList("field1"), statement.getSelectExpressions(), "insert into distinct select expressions");
+    }
+
+    @Test
+    public void hiveParserAstAdapterParsesOptionalTableInsertIntoTarget() {
+        HiveAstParserAdapter adapter = new HiveParserAstAdapter();
+
+        ParsedHiveStatement statement = adapter.parse(
+            "insert into table whc.c(field1) select field1 from whc.a"
+        );
+
+        TestSupport.assertTrue(statement.getOutputObject() != null, "insert into table output object");
+        TestSupport.assertEquals("whc.c", statement.getOutputObject().getQualifiedName(), "insert into table target");
+        TestSupport.assertEquals(Arrays.asList("field1"), statement.getSelectExpressions(), "insert into table select expressions");
+    }
+
+    @Test
+    public void hiveParserAstAdapterKeepsInsertOverwriteTarget() {
+        HiveAstParserAdapter adapter = new HiveParserAstAdapter();
+
+        ParsedHiveStatement statement = adapter.parse(
+            "insert overwrite table whc.c select field1 from whc.a"
+        );
+
+        TestSupport.assertTrue(statement.getOutputObject() != null, "insert overwrite output object");
+        TestSupport.assertEquals("whc.c", statement.getOutputObject().getQualifiedName(), "insert overwrite target");
+    }
+
+    @Test
     public void hiveParserAstAdapterParsesInsertJoinFromAst() {
         HiveAstParserAdapter adapter = new HiveParserAstAdapter();
 
