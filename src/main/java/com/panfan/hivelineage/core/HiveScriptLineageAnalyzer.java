@@ -317,6 +317,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             targetColumns,
             starSelect,
             topLevelSetOperation,
+            analysisStatement,
             originalInputObjects,
             topLevelSourceAliases
         ) && targetColumnResolver.hasColumnMetadataWithoutWarning(request, originalInputObjects.get(0));
@@ -592,6 +593,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         List<String> targetColumns,
         boolean starSelect,
         boolean topLevelSetOperation,
+        String analysisStatement,
         List<DataObjectRef> inputObjects,
         Map<String, String> topLevelSourceAliases
     ) {
@@ -599,6 +601,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             || !targetColumns.isEmpty()
             || !starSelect
             || topLevelSetOperation
+            || !targetColumnResolver.hasSingleTopLevelDirectSourceRelation(analysisStatement)
             || inputObjects.size() != 1) {
             return false;
         }

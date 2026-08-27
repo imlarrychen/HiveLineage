@@ -43,6 +43,22 @@ public class HivePositionalStarScopeTest {
     }
 
     @Test
+    public void selfJoinBareStarDoesNotUseSingleSourcePositionalMapping() {
+        TestMetadataProvider metadata = new TestMetadataProvider()
+            .addTable("db.target", "left_id", "right_id")
+            .addTable("db.source", "id");
+
+        StatementLineageResult statement = analyze(
+            metadata,
+            "insert overwrite table db.target select * from db.source l "
+                + "join db.source r on l.id = r.id"
+        );
+
+        TestSupport.assertEquals(0, statement.getParseStatusCode(), "self-join bare star parse status");
+        TestSupport.assertEquals(null, statement.getFailureCode(), "self-join bare star failure code");
+    }
+
+    @Test
     public void missingSourceMetadataDoesNotBecomeColumnCountMismatch() {
         TestMetadataProvider metadata = new TestMetadataProvider()
             .addTable("db.target", "id", "name");

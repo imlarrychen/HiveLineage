@@ -221,6 +221,57 @@ final class HiveTargetColumnResolver {
         return metadata != null && !metadata.getColumns().isEmpty();
     }
 
+    boolean hasSingleTopLevelDirectSourceRelation(String statement) {
+        int fromIndex = HiveSqlTextUtils.topLevelKeywordIndex(statement, "from", 0);
+        if (fromIndex < 0) {
+            return false;
+        }
+        int relationStart = HiveSqlTextUtils.skipWhitespace(statement, fromIndex + 4);
+        if (relationStart >= statement.length() || statement.charAt(relationStart) == '(') {
+            return false;
+        }
+
+        int relationEnd = statement.length();
+        String[] boundaryKeywords = {
+            "where", "group", "having", "order", "limit", "distribute", "sort", "cluster",
+            "union", "intersect", "except"
+        };
+        for (String keyword : boundaryKeywords) {
+            int boundary = HiveSqlTextUtils.topLevelKeywordIndex(statement, keyword, relationStart);
+            if (boundary >= 0) {
+                relationEnd = Math.min(relationEnd, boundary);
+            }
+        }
+        int joinIndex = HiveSqlTextUtils.topLevelKeywordIndex(statement, "join", relationStart);
+        int lateralIndex = HiveSqlTextUtils.topLevelKeywordIndex(statement, "lateral", relationStart);
+        if ((joinIndex >= 0 && joinIndex < relationEnd)
+            || (lateralIndex >= 0 && lateralIndex < relationEnd)) {
+            return false;
+        }
+
+        int depth = 0;
+        char quote = 0;
+        for (int index = relationStart; index < relationEnd; index++) {
+            char ch = statement.charAt(index);
+            if (quote != 0) {
+                if (ch == quote) {
+                    quote = 0;
+                }
+                continue;
+            }
+            if (ch == '\'' || ch == '"' || ch == '`') {
+                quote = ch;
+            } else if (ch == '(') {
+                depth++;
+            } else if (ch == ')') {
+                depth = Math.max(0, depth - 1);
+            } else if (ch == ',' && depth == 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     List<String> intersectionInTargetOrder(List<String> targetColumns, List<String> sourceColumns) {
         Set<String> sourceColumnSet = new LinkedHashSet<>();
         for (String sourceColumn : sourceColumns) {
