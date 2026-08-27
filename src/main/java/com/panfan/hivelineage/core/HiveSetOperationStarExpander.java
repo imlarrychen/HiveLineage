@@ -2,6 +2,7 @@ package com.panfan.hivelineage.core;
 
 import com.panfan.hivelineage.result.DataObjectRef;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -14,85 +15,111 @@ final class HiveSetOperationStarExpander {
         this.targetColumnResolver = targetColumnResolver;
     }
 
-    boolean hasTopLevelSetOperation(String sql) {
-        return !topLevelUnionIndexes(sql).isEmpty();
-    }
-
-    String expand(ColumnResolutionContext context, String sql) {
-        List<Integer> unionIndexes = topLevelUnionIndexes(sql);
-        if (unionIndexes.isEmpty()) {
-            return sql;
+    SetOperationExpansionResult expand(ColumnResolutionContext context, String sql) {
+        List<Boundary> boundaries = topLevelBoundaries(sql);
+        if (boundaries.isEmpty()) {
+            return new SetOperationExpansionResult(sql, null, Collections.<Integer>emptyList(), Collections.<Integer>emptySet());
         }
-        StringBuilder expanded = new StringBuilder();
+        StringBuilder output = new StringBuilder();
+        List<Integer> widths = new ArrayList<>();
+        Set<Integer> unresolved = new LinkedHashSet<>();
         int branchStart = 0;
-        for (Integer unionIndex : unionIndexes) {
-            expanded.append(expandBranch(context, sql.substring(branchStart, unionIndex)));
-            int nextBranch = HiveSqlTextUtils.skipWhitespace(sql, unionIndex + 5);
-            if (HiveSqlTextUtils.matchesKeywordAt(sql, nextBranch, "all")) {
-                nextBranch = HiveSqlTextUtils.skipWhitespace(sql, nextBranch + 3);
-            }
-            expanded.append(sql.substring(unionIndex, nextBranch));
-            branchStart = nextBranch;
+        for (Boundary boundary : boundaries) {
+            appendBranch(context, sql.substring(branchStart, boundary.start), output, widths, unresolved);
+            output.append(sql.substring(boundary.start, boundary.nextBranch));
+            branchStart = boundary.nextBranch;
         }
-        expanded.append(expandBranch(context, sql.substring(branchStart)));
-        return expanded.toString();
+        appendBranch(context, sql.substring(branchStart), output, widths, unresolved);
+        return new SetOperationExpansionResult(output.toString(), boundaries.get(0).operator, widths, unresolved);
     }
 
-    private String expandBranch(ColumnResolutionContext context, String branchSql) {
+    private void appendBranch(
+        ColumnResolutionContext context,
+        String branchSql,
+        StringBuilder output,
+        List<Integer> widths,
+        Set<Integer> unresolved
+    ) {
         int selectIndex = HiveSqlTextUtils.topLevelKeywordIndex(branchSql, "select", 0);
         int fromIndex = HiveSqlTextUtils.topLevelKeywordIndex(branchSql, "from", selectIndex < 0 ? 0 : selectIndex + 6);
         if (selectIndex < 0 || fromIndex < 0) {
-            return branchSql;
+            output.append(branchSql);
+            widths.add(0);
+            return;
         }
         Map<String, String> aliases = targetColumnResolver.extractTopLevelSourceAliases(branchSql);
-        Set<String> physicalNames = new LinkedHashSet<>(aliases.values());
-        List<DataObjectRef> branchInputs = new ArrayList<>();
-        for (String physicalName : physicalNames) {
-            branchInputs.add(new DataObjectRef(physicalName));
+        List<DataObjectRef> inputs = new ArrayList<>();
+        for (String source : new LinkedHashSet<String>(aliases.values())) {
+            inputs.add(new DataObjectRef(source));
         }
-        Map<String, String> explicitAliases = targetColumnResolver.extractExplicitSourceAliases(branchSql);
-        QualifiedOwnerResolver ownerResolver = new QualifiedOwnerResolver(branchInputs, explicitAliases);
-        List<String> selectItems = HiveSqlTextUtils.splitSelectItems(
-            branchSql.substring(selectIndex + 6, fromIndex)
+        QualifiedOwnerResolver resolver = new QualifiedOwnerResolver(
+            inputs,
+            targetColumnResolver.extractExplicitSourceAliases(branchSql)
         );
-        List<String> expandedItems = targetColumnResolver.expandStarSelectItems(
-            context,
-            null,
-            selectItems,
-            branchInputs,
-            ownerResolver
-        );
-        if (expandedItems.equals(selectItems)) {
-            return branchSql;
+        List<String> expandedItems = new ArrayList<>();
+        int position = 0;
+        for (String item : HiveSqlTextUtils.splitSelectItems(branchSql.substring(selectIndex + 6, fromIndex))) {
+            List<String> itemExpansion = targetColumnResolver.expandStarSelectItems(
+                context, null, Collections.singletonList(item), inputs, resolver
+            );
+            QualifiedColumnReference reference = QualifiedColumnReference.parse(HiveSqlTextUtils.stripAlias(item));
+            if (reference != null && reference.isStar() && itemExpansion.size() == 1
+                && itemExpansion.get(0).equals(item)) {
+                unresolved.add(position);
+            }
+            expandedItems.addAll(itemExpansion);
+            position += itemExpansion.size();
         }
-        return branchSql.substring(0, selectIndex + 6)
-            + " " + HiveSqlTextUtils.joinWithComma(expandedItems) + " "
-            + branchSql.substring(fromIndex);
+        widths.add(expandedItems.size());
+        output.append(branchSql.substring(0, selectIndex + 6))
+            .append(' ').append(HiveSqlTextUtils.joinWithComma(expandedItems)).append(' ')
+            .append(branchSql.substring(fromIndex));
     }
 
-    private List<Integer> topLevelUnionIndexes(String sql) {
-        List<Integer> indexes = new ArrayList<>();
+    private List<Boundary> topLevelBoundaries(String sql) {
+        List<Boundary> boundaries = new ArrayList<>();
         int depth = 0;
         char quote = 0;
         for (int position = 0; position < sql.length(); position++) {
             char ch = sql.charAt(position);
             if (quote != 0) {
-                if (ch == quote) {
-                    quote = 0;
-                }
+                if (ch == quote) quote = 0;
                 continue;
             }
-            if (ch == '\'' || ch == '"' || ch == '`') {
-                quote = ch;
-            } else if (ch == '(') {
-                depth++;
-            } else if (ch == ')') {
-                depth = Math.max(0, depth - 1);
-            } else if (depth == 0 && HiveSqlTextUtils.matchesKeywordAt(sql, position, "union")) {
-                indexes.add(position);
-                position += 4;
+            if (ch == '\'' || ch == '"' || ch == '`') quote = ch;
+            else if (ch == '(') depth++;
+            else if (ch == ')') depth = Math.max(0, depth - 1);
+            else if (depth == 0) {
+                String operator = operatorAt(sql, position);
+                if (operator != null) {
+                    int next = HiveSqlTextUtils.skipWhitespace(sql, position + operator.length());
+                    if ("union".equals(operator) && HiveSqlTextUtils.matchesKeywordAt(sql, next, "all")) {
+                        next = HiveSqlTextUtils.skipWhitespace(sql, next + 3);
+                    }
+                    boundaries.add(new Boundary(position, next, operator));
+                    position = next - 1;
+                }
             }
         }
-        return indexes;
+        return boundaries;
+    }
+
+    private String operatorAt(String sql, int position) {
+        String[] operators = {"union", "intersect", "except"};
+        for (String operator : operators) {
+            if (HiveSqlTextUtils.matchesKeywordAt(sql, position, operator)) return operator;
+        }
+        return null;
+    }
+
+    private static final class Boundary {
+        private final int start;
+        private final int nextBranch;
+        private final String operator;
+        private Boundary(int start, int nextBranch, String operator) {
+            this.start = start;
+            this.nextBranch = nextBranch;
+            this.operator = operator;
+        }
     }
 }

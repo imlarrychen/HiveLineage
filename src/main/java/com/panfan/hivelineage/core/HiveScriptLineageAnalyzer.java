@@ -288,11 +288,15 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         }
         ColumnResolutionContext columnContext = new ColumnResolutionContext(request, parseMode, statementWarnings, index);
         HiveSetOperationStarExpander setOperationStarExpander = new HiveSetOperationStarExpander(targetColumnResolver);
-        boolean topLevelSetOperation = setOperationStarExpander.hasTopLevelSetOperation(normalizedStatement);
-        String analysisStatement = setOperationStarExpander.expand(
+        SetOperationExpansionResult setExpansion = setOperationStarExpander.expand(
             columnContext,
             normalizedStatement
         );
+        boolean topLevelSetOperation = setExpansion.isSetOperation();
+        if (topLevelSetOperation && !setExpansion.hasConsistentBranchWidths()) {
+            return failedResult(context, "COLUMN_COUNT_MISMATCH", "Set operation branch columns do not align");
+        }
+        String analysisStatement = setExpansion.getSql();
         if (!analysisStatement.equals(normalizedStatement)) {
             resolvedParsedStatement = parserAdapter.parse(analysisStatement);
             originalInputObjects = resolvedParsedStatement.getInputObjects();
@@ -385,6 +389,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 expandedSelectItems.size()
             );
             for (int i = 0; i < expandedSelectItems.size(); i++) {
+                boolean unresolvedSetPosition = setExpansion.isUnresolvedPosition(i);
                 String expression = HiveSqlTextUtils.stripAlias(expandedSelectItems.get(i));
                 QualifiedColumnReference qualifiedReference = QualifiedColumnReference.parse(expression);
                 boolean unresolvedStarExpression = qualifiedReference != null && qualifiedReference.isStar();
@@ -395,6 +400,9 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 List<ColumnRef> sourceColumns = setOperationQuery
                     ? projectionResolver.setOperationSourceColumns(resolvedParsedStatement, i)
                     : Collections.<ColumnRef>emptyList();
+                if (setOperationQuery && unresolvedSetPosition) {
+                    sourceColumns = Collections.emptyList();
+                }
                 ColumnLineageProjection directProjection = setOperationQuery
                     ? null
                     : expansionService.resolveDirectColumnProjection(
@@ -421,7 +429,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                         sourceExtractionExpression = aliasExpression;
                     }
                 }
-                if (sourceColumns.isEmpty() && setOperationQuery) {
+                if (sourceColumns.isEmpty() && setOperationQuery && !unresolvedSetPosition) {
                     sourceColumns = projectionResolver.extractSetOperationSourceColumns(
                         request,
                         expression,
@@ -432,6 +440,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 }
                 if (sourceColumns.isEmpty()
                     && directProjection == null
+                    && !unresolvedSetPosition
                     && !unresolvedStarExpression
                     && !projectionResolver.isConstantLineageExpression(lineageExpression)) {
                     sourceColumns = projectionResolver.extractSourceColumns(

@@ -1,9 +1,6 @@
 package com.panfan.hivelineage;
 
 import com.panfan.hivelineage.core.HiveScriptLineageAnalyzer;
-import com.panfan.hivelineage.core.HiveAstParserAdapter;
-import com.panfan.hivelineage.core.HiveParserAstAdapter;
-import com.panfan.hivelineage.core.ParsedHiveStatement;
 import com.panfan.hivelineage.metadata.HiveMetadataCache;
 import com.panfan.hivelineage.request.LineageAnalyzeOptions;
 import com.panfan.hivelineage.request.LineageAnalyzeRequest;
@@ -28,6 +25,32 @@ public class HiveQualifiedProjectionHardeningTest {
     }
 
     @Test
+    public void intersectBranchesExpandQualifiedStarsPositionally() {
+        assertSetStarLineage("intersect", "intersect");
+    }
+
+    @Test
+    public void exceptBranchesExpandQualifiedStarsPositionally() {
+        assertSetStarLineage("except", "except");
+    }
+
+    @Test
+    public void mismatchedExpandedSetBranchWidthsFailColumnAlignment() {
+        MapMetadataProvider metadata = new MapMetadataProvider()
+            .addTable("db1.a", "id")
+            .addTable("db2.b", "id", "name")
+            .addTable("target.union_c", "id", "name");
+        StatementLineageResult statement = analyze(
+            metadata,
+            "insert into target.union_c select a.* from db1.a a "
+                + "union all select b.* from db2.b b;"
+        );
+
+        TestSupport.assertTrue(statement.getParseStatusCode() != 0, "mismatched set branch width status");
+        TestSupport.assertEquals(0, statement.getColumnLineages().size(), "mismatched set branch lineage count");
+    }
+
+    @Test
     public void unresolvedFirstBranchAliasDoesNotBindLaterUnionAlias() {
         assertUnresolvedFirstUnionStar(
             "x.* from db1.a a union all select x.* from db2.b x",
@@ -40,6 +63,27 @@ public class HiveQualifiedProjectionHardeningTest {
         assertUnresolvedFirstUnionStar(
             "b.* from db1.a union all select b.* from db2.b",
             "later simple name"
+        );
+    }
+
+    @Test
+    public void unresolvedLaterBranchClearsResolvedFirstBranchSource() {
+        MapMetadataProvider metadata = new MapMetadataProvider()
+            .addTable("db1.a", "id")
+            .addTable("db2.b", "id")
+            .addTable("target.union_c", "id");
+        StatementLineageResult statement = analyze(
+            metadata,
+            "insert into target.union_c select a.* from db1.a a "
+                + "union all select missing.* from db2.b b;"
+        );
+
+        assertContainsWarning(statement.getWarnings(), WarningCode.UNKNOWN_COLUMN_LINEAGE);
+        TestSupport.assertEquals(1, statement.getColumnLineages().size(), "later unresolved lineage count");
+        TestSupport.assertEquals(
+            0,
+            statement.getColumnLineages().get(0).getSourceColumns().size(),
+            "later unresolved source count"
         );
     }
 
@@ -87,6 +131,19 @@ public class HiveQualifiedProjectionHardeningTest {
     }
 
     private void assertUnionStarLineage(String firstAlias, String secondAlias) {
+        assertSetStarLineage("union all", "union_all", firstAlias, secondAlias);
+    }
+
+    private void assertSetStarLineage(String operator, String expressionFunction) {
+        assertSetStarLineage(operator, expressionFunction, "x", "y");
+    }
+
+    private void assertSetStarLineage(
+        String operator,
+        String expressionFunction,
+        String firstAlias,
+        String secondAlias
+    ) {
         MapMetadataProvider metadata = new MapMetadataProvider()
             .addTable("db1.a", "id", "name")
             .addTable("db2.b", "id", "name")
@@ -94,7 +151,7 @@ public class HiveQualifiedProjectionHardeningTest {
         StatementLineageResult statement = analyze(
             metadata,
             "insert into target.union_c select " + firstAlias + ".* from db1.a " + firstAlias
-                + " union all select " + secondAlias + ".* from db2.b " + secondAlias + ";"
+                + " " + operator + " select " + secondAlias + ".* from db2.b " + secondAlias + ";"
         );
 
         List<ColumnLineage> columns = statement.getColumnLineages();
@@ -103,19 +160,18 @@ public class HiveQualifiedProjectionHardeningTest {
         assertContainsColumn(columns.get(0).getSourceColumns(), "db2.b.id");
         assertContainsColumn(columns.get(1).getSourceColumns(), "db1.a.name");
         assertContainsColumn(columns.get(1).getSourceColumns(), "db2.b.name");
-        TestSupport.assertEquals("union_all(db1.a.id, db2.b.id)", columns.get(0).getExpression(), "union id expression");
-        TestSupport.assertEquals("union_all(db1.a.name, db2.b.name)", columns.get(1).getExpression(), "union name expression");
+        TestSupport.assertEquals(expressionFunction + "(db1.a.id, db2.b.id)", columns.get(0).getExpression(), "set id expression");
+        TestSupport.assertEquals(expressionFunction + "(db1.a.name, db2.b.name)", columns.get(1).getExpression(), "set name expression");
     }
 
     private void assertUnresolvedFirstUnionStar(String unionProjection, String message) {
         MapMetadataProvider metadata = new MapMetadataProvider()
             .addTable("db1.a", "id")
-            .addTable("db2.b", "id", "name")
+            .addTable("db2.b", "id")
             .addTable("target.union_c", "id");
         StatementLineageResult statement = analyze(
             metadata,
-            "insert into target.union_c select " + unionProjection + ";",
-            new HiveScriptLineageAnalyzer(new PreservingUnionStarParser(unionProjection.substring(0, 1) + ".*"))
+            "insert into target.union_c select " + unionProjection + ";"
         );
 
         assertContainsWarning(statement.getWarnings(), WarningCode.UNKNOWN_COLUMN_LINEAGE);
@@ -129,14 +185,6 @@ public class HiveQualifiedProjectionHardeningTest {
     }
 
     private StatementLineageResult analyze(MapMetadataProvider metadata, String sql) {
-        return analyze(metadata, sql, new HiveScriptLineageAnalyzer());
-    }
-
-    private StatementLineageResult analyze(
-        MapMetadataProvider metadata,
-        String sql,
-        HiveScriptLineageAnalyzer analyzer
-    ) {
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
             .workflowId("wf_001")
             .taskId("task_qualified_projection_hardening")
@@ -149,7 +197,7 @@ public class HiveQualifiedProjectionHardeningTest {
                 .parseMode(LineageParseMode.TABLE_AND_COLUMN)
                 .build())
             .build();
-        return analyzer.analyzeScript(request).getStatements().get(0);
+        return new HiveScriptLineageAnalyzer().analyzeScript(request).getStatements().get(0);
     }
 
     private void assertUnknownEmptySource(StatementLineageResult statement, String message) {
@@ -158,32 +206,4 @@ public class HiveQualifiedProjectionHardeningTest {
         TestSupport.assertEquals(0, statement.getColumnLineages().get(0).getSourceColumns().size(), message + " sources");
     }
 
-    private static final class PreservingUnionStarParser implements HiveAstParserAdapter {
-        private final HiveParserAstAdapter delegate = new HiveParserAstAdapter();
-        private final String firstProjection;
-
-        private PreservingUnionStarParser(String firstProjection) {
-            this.firstProjection = firstProjection;
-        }
-
-        @Override
-        public ParsedHiveStatement parse(String sql) {
-            ParsedHiveStatement parsed = delegate.parse(sql);
-            return new ParsedHiveStatement(
-                parsed.getStatementType(),
-                parsed.getOutputObject(),
-                parsed.getInputObjects(),
-                parsed.getTargetColumns(),
-                java.util.Collections.singletonList(firstProjection),
-                parsed.getSourceAliases(),
-                parsed.getColumnAliasSources(),
-                parsed.getColumnAliasExpressions(),
-                parsed.getSetOperationSourceColumnsBySelectIndex(),
-                parsed.getSetOperationExpressionsBySelectIndex(),
-                parsed.getStaticPartitionValues(),
-                parsed.getJoinConditions(),
-                parsed.getNormalizedSql()
-            );
-        }
-    }
 }

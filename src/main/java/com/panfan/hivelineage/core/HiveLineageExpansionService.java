@@ -329,6 +329,10 @@ final class HiveLineageExpansionService {
             ? viewName
             : parsedView.getInputObjects().get(0).getQualifiedName();
         Map<String, String> sourceAliases = new HashMap<>(parsedView.getSourceAliases());
+        QualifiedOwnerResolver ownerResolver = new QualifiedOwnerResolver(
+            parsedView.getInputObjects(),
+            targetColumnResolver.extractExplicitSourceAliases(parsedView.getNormalizedSql())
+        );
         Map<String, String> columnOwners = targetColumnResolver.buildColumnOwners(
             request,
             viewInputs,
@@ -347,8 +351,17 @@ final class HiveLineageExpansionService {
                 defaultSourceTable,
                 sourceAliases,
                 columnOwners,
-                parsedView.getColumnAliasSources()
+                parsedView.getColumnAliasSources(),
+                ownerResolver
             );
+            if (sourceColumns.isEmpty() && projectionResolver.mayContainColumnReference(expression)) {
+                targetColumnResolver.addWarning(
+                    warnings,
+                    WarningCode.UNKNOWN_COLUMN_LINEAGE,
+                    "Unable to resolve source columns for view expression: " + expression,
+                    statementIndex
+                );
+            }
             sourceColumns = expandViewSourceColumns(context, sourceColumns, depth + 1, visitingViews);
             LineageType lineageType = projectionResolver.resolveLineageType(lineageExpression, expression, sourceColumns);
             mapping.put(

@@ -124,8 +124,13 @@ final class HiveAstProjectionExtractor {
             return null;
         }
         String text = node.getText();
-        if (text != null && text.toUpperCase(Locale.ROOT).startsWith("TOK_UNION")) {
-            return node;
+        if (text != null) {
+            String upperText = text.toUpperCase(Locale.ROOT);
+            if (upperText.startsWith("TOK_UNION")
+                || upperText.startsWith("TOK_INTERSECT")
+                || upperText.startsWith("TOK_EXCEPT")) {
+                return node;
+            }
         }
         for (int i = 0; i < node.getChildCount(); i++) {
             ASTNode found = findUnionNode((ASTNode) node.getChild(i));

@@ -572,23 +572,6 @@ final class HiveProjectionLineageResolver {
         String defaultSourceTable,
         Map<String, String> sourceAliases,
         Map<String, String> columnOwners,
-        Map<String, String> columnAliasSources
-    ) {
-        return extractSourceColumns(
-            expression,
-            defaultSourceTable,
-            sourceAliases,
-            columnOwners,
-            columnAliasSources,
-            null
-        );
-    }
-
-    List<ColumnRef> extractSourceColumns(
-        String expression,
-        String defaultSourceTable,
-        Map<String, String> sourceAliases,
-        Map<String, String> columnOwners,
         Map<String, String> columnAliasSources,
         QualifiedOwnerResolver ownerResolver
     ) {
@@ -619,13 +602,9 @@ final class HiveProjectionLineageResolver {
                     addMappedColumn(columns, mappedSource, defaultSourceTable, sourceAliases);
                     continue;
                 }
-                String owner = ownerResolver == null
-                    ? sourceAliases.get(ownerName)
-                    : ownerResolver.resolve(ownerName);
+                String owner = ownerResolver.resolve(ownerName);
                 if (owner != null) {
                     columns.add(owner + "." + columnName);
-                } else if (ownerResolver == null) {
-                    columns.add(ownerName + "." + columnName);
                 }
             }
         }

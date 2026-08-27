@@ -554,6 +554,10 @@ final class HiveJoinConditionAnalyzer {
         }
         String selectList = cteSql.substring(selectIndex + 6, fromIndex);
         Map<String, String> sourceAliases = targetColumnResolver.extractTopLevelSourceAliases(cteSql);
+        QualifiedOwnerResolver ownerResolver = QualifiedOwnerResolver.fromAliases(
+            sourceAliases,
+            targetColumnResolver.extractExplicitSourceAliases(cteSql)
+        );
         String defaultSourceTable = firstAliasTarget(sourceAliases);
         Map<String, List<ColumnRef>> projections = new HashMap<>();
         for (String selectItem : HiveSqlTextUtils.splitSelectItems(selectList)) {
@@ -573,7 +577,8 @@ final class HiveJoinConditionAnalyzer {
                 defaultSourceTable,
                 sourceAliases,
                 Collections.<String, String>emptyMap(),
-                Collections.<String, String>emptyMap()
+                Collections.<String, String>emptyMap(),
+                ownerResolver
             );
             List<ColumnRef> expanded = new ArrayList<>();
             Set<String> seen = new LinkedHashSet<>();
