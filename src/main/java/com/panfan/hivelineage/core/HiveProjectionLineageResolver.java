@@ -224,6 +224,9 @@ final class HiveProjectionLineageResolver {
                 }
                 expressions.add(projection.getExpression());
             }
+            if (unresolved) {
+                sourceColumns.clear();
+            }
             merged.put(
                 outputColumn,
                 new ColumnLineageProjection(
@@ -406,14 +409,15 @@ final class HiveProjectionLineageResolver {
                 position++;
                 continue;
             }
-            if (depth == 0 && HiveSqlTextUtils.matchesKeywordAt(sql, position, "union")) {
+            String operator = depth == 0 ? setOperatorAt(sql, position) : null;
+            if (operator != null) {
                 branches.add(sql.substring(branchStart, position).trim());
-                int next = HiveSqlTextUtils.skipWhitespace(sql, position + 5);
-                if (HiveSqlTextUtils.matchesKeywordAt(sql, next, "all")) {
+                int next = HiveSqlTextUtils.skipWhitespace(sql, position + operator.length());
+                if ("union".equals(operator) && HiveSqlTextUtils.matchesKeywordAt(sql, next, "all")) {
                     functionName = "union_all";
                     branchStart = HiveSqlTextUtils.skipWhitespace(sql, next + 3);
                 } else {
-                    functionName = "union_distinct";
+                    functionName = "union".equals(operator) ? "union_distinct" : operator;
                     branchStart = next;
                 }
                 position = branchStart;
@@ -426,6 +430,15 @@ final class HiveProjectionLineageResolver {
         }
         branches.add(sql.substring(branchStart).trim());
         return new SetOperationParts(functionName, branches);
+    }
+    private String setOperatorAt(String sql, int position) {
+        String[] operators = {"union", "intersect", "except"};
+        for (String operator : operators) {
+            if (HiveSqlTextUtils.matchesKeywordAt(sql, position, operator)) {
+                return operator;
+            }
+        }
+        return null;
     }
     List<ColumnRef> extractSetOperationSourceColumns(
         LineageAnalyzeRequest request,

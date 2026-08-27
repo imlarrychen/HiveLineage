@@ -460,11 +460,12 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                         new LinkedHashSet<String>()
                     );
                 }
-                if (sourceColumns.isEmpty()
+                boolean unresolvedDirectProjection = directProjection != null && directProjection.isUnresolved();
+                if (unresolvedDirectProjection
+                    || (sourceColumns.isEmpty()
+                    && directProjection == null
                     && !unresolvedStarExpression
-                    && ((directProjection == null
-                        && projectionResolver.mayContainColumnReference(sourceExtractionExpression))
-                        || (directProjection != null && directProjection.isUnresolved()))) {
+                    && projectionResolver.mayContainColumnReference(sourceExtractionExpression))) {
                     targetColumnResolver.addWarning(
                         statementWarnings,
                         WarningCode.UNKNOWN_COLUMN_LINEAGE,
