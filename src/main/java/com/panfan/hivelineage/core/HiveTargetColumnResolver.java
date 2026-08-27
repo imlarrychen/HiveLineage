@@ -309,18 +309,9 @@ final class HiveTargetColumnResolver {
     }
 
     Map<String, String> extractExplicitSourceAliases(String normalizedStatement) {
-        Map<String, String> aliases = new HashMap<>();
-        Matcher aliasMatcher = SOURCE_ALIAS.matcher(normalizedStatement);
-        while (aliasMatcher.find()) {
-            String alias = aliasMatcher.group(2);
-            if (alias != null && !HiveSqlTextUtils.isAliasKeyword(alias)) {
-                aliases.put(
-                    alias.toLowerCase(Locale.ROOT),
-                    HiveSqlTextUtils.normalizeIdentifier(aliasMatcher.group(1))
-                );
-            }
-        }
-        return aliases;
+        Map<String, String> explicitAliases = new HashMap<>();
+        scanTopLevelSourceAliases(normalizedStatement, new HashMap<String, String>(), explicitAliases);
+        return explicitAliases;
     }
 
     void mergeTopLevelSourceAliases(Map<String, String> sourceAliases, Map<String, String> topLevelAliases) {
@@ -357,6 +348,15 @@ final class HiveTargetColumnResolver {
 
     Map<String, String> extractTopLevelSourceAliases(String normalizedStatement) {
         Map<String, String> aliases = new HashMap<>();
+        scanTopLevelSourceAliases(normalizedStatement, aliases, null);
+        return aliases;
+    }
+
+    private void scanTopLevelSourceAliases(
+        String normalizedStatement,
+        Map<String, String> aliases,
+        Map<String, String> explicitAliases
+    ) {
         int start = HiveSqlTextUtils.lastTopLevelKeywordIndex(normalizedStatement, "insert");
         if (start < 0) {
             start = HiveSqlTextUtils.lastTopLevelKeywordIndex(normalizedStatement, "select");
@@ -392,12 +392,16 @@ final class HiveTargetColumnResolver {
                 continue;
             }
             if (depth == 0 && isSourceKeywordAt(normalizedStatement, position)) {
-                position = captureTopLevelSourceAlias(normalizedStatement, position, aliases) + 1;
+                position = captureTopLevelSourceAlias(
+                    normalizedStatement,
+                    position,
+                    aliases,
+                    explicitAliases
+                ) + 1;
                 continue;
             }
             position++;
         }
-        return aliases;
     }
 
     private boolean isSourceKeywordAt(String statement, int position) {
@@ -406,6 +410,15 @@ final class HiveTargetColumnResolver {
     }
 
     int captureTopLevelSourceAlias(String statement, int keywordIndex, Map<String, String> aliases) {
+        return captureTopLevelSourceAlias(statement, keywordIndex, aliases, null);
+    }
+
+    private int captureTopLevelSourceAlias(
+        String statement,
+        int keywordIndex,
+        Map<String, String> aliases,
+        Map<String, String> explicitAliases
+    ) {
         int position = HiveSqlTextUtils.skipWhitespace(statement, keywordIndex);
         position = HiveSqlTextUtils.readIdentifier(statement, position);
         position = HiveSqlTextUtils.skipWhitespace(statement, position);
@@ -433,6 +446,9 @@ final class HiveTargetColumnResolver {
             String alias = statement.substring(aliasStart, aliasEnd);
             if (!HiveSqlTextUtils.isAliasKeyword(alias)) {
                 aliases.put(alias.toLowerCase(Locale.ROOT), tableName);
+                if (explicitAliases != null) {
+                    explicitAliases.put(alias.toLowerCase(Locale.ROOT), tableName);
+                }
             }
         }
         return tableEnd;
