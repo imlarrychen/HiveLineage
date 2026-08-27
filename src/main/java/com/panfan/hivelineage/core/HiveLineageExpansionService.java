@@ -421,7 +421,8 @@ final class HiveLineageExpansionService {
         List<DataObjectRef> originalInputObjects,
         Map<String, String> sourceAliases,
         Map<String, String> topLevelProjectionSourceAliases,
-        Map<String, Map<String, ColumnLineageProjection>> statementProjectionTables
+        Map<String, Map<String, ColumnLineageProjection>> statementProjectionTables,
+        QualifiedOwnerResolver ownerResolver
     ) {
         DirectColumn directColumn = projectionResolver.parseDirectColumn(expression);
         if (directColumn == null) {
@@ -437,10 +438,16 @@ final class HiveLineageExpansionService {
             if (ownerProjection != null) {
                 return ownerProjection;
             }
-            tableName = sourceAliases.get(directColumn.getOwner());
-            if (tableName == null) {
-                tableName = directColumn.getOwner();
+            String aliasedProjectionTable = sourceAliases.get(directColumn.getOwner());
+            ColumnLineageProjection aliasedProjection = projectionResolver.columnProjection(
+                aliasedProjectionTable == null ? "" : aliasedProjectionTable,
+                directColumn.getColumn(),
+                statementProjectionTables
+            );
+            if (aliasedProjection != null) {
+                return aliasedProjection;
             }
+            tableName = ownerResolver.resolve(directColumn.getOwner());
         } else {
             tableName = projectionResolver.singleProjectionTable(topLevelProjectionSourceAliases, statementProjectionTables);
             if (tableName == null && originalInputObjects.size() == 1) {

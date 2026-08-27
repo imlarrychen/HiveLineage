@@ -286,21 +286,31 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         if (originalInputObjects.isEmpty()) {
             return failedResult(context, "SQL_PARSE_ERROR", "No input object found");
         }
-        Map<String, String> sourceAliases = targetColumnResolver.extractSourceAliases(normalizedStatement);
+        ColumnResolutionContext columnContext = new ColumnResolutionContext(request, parseMode, statementWarnings, index);
+        String analysisStatement = new HiveSetOperationStarExpander(targetColumnResolver).expand(
+            columnContext,
+            normalizedStatement
+        );
+        if (!analysisStatement.equals(normalizedStatement)) {
+            resolvedParsedStatement = parserAdapter.parse(analysisStatement);
+            originalInputObjects = resolvedParsedStatement.getInputObjects();
+            selectItems = resolvedParsedStatement.getSelectExpressions();
+        }
+        Map<String, String> sourceAliases = targetColumnResolver.extractSourceAliases(analysisStatement);
         sourceAliases.putAll(resolvedParsedStatement.getSourceAliases());
-        Map<String, String> topLevelSourceAliases = targetColumnResolver.extractTopLevelSourceAliases(normalizedStatement);
+        Map<String, String> topLevelSourceAliases = targetColumnResolver.extractTopLevelSourceAliases(analysisStatement);
         targetColumnResolver.mergeTopLevelSourceAliases(sourceAliases, topLevelSourceAliases);
-        Map<String, String> topLevelProjectionSourceAliases = projectionResolver.extractProjectionSourceAliases(normalizedStatement);
+        Map<String, String> topLevelProjectionSourceAliases = projectionResolver.extractProjectionSourceAliases(analysisStatement);
         sourceAliases.putAll(topLevelProjectionSourceAliases);
-        Map<String, String> explicitSourceAliases = targetColumnResolver.extractExplicitSourceAliases(normalizedStatement);
+        Map<String, String> explicitSourceAliases = targetColumnResolver.extractExplicitSourceAliases(analysisStatement);
+        QualifiedOwnerResolver ownerResolver = new QualifiedOwnerResolver(originalInputObjects, explicitSourceAliases);
         boolean starSelect = targetColumnResolver.isSingleStarSelect(selectItems);
         List<String> expandedSelectItems = targetColumnResolver.expandStarSelectItems(
-            new ColumnResolutionContext(request, parseMode, statementWarnings, index),
+            columnContext,
             targetTable,
             selectItems,
             originalInputObjects,
-            sourceAliases,
-            explicitSourceAliases
+            ownerResolver
         );
 
         List<String> inferredTargetColumns = targetColumns;
@@ -320,14 +330,14 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             inferredTargetColumns,
             expandedSelectItems.size(),
             resolvedParsedStatement.getStaticPartitionValues(),
-            extractDynamicPartitionColumns(normalizedStatement)
+            extractDynamicPartitionColumns(analysisStatement)
         );
         if (resolvedTargetColumns.size() != expandedSelectItems.size()) {
             return failedResult(context, "COLUMN_COUNT_MISMATCH", "Target columns and select items do not align");
         }
 
         Map<String, Map<String, ColumnLineageProjection>> statementProjectionTables =
-            projectionResolver.extractStatementProjectionTables(normalizedStatement);
+            projectionResolver.extractStatementProjectionTables(analysisStatement);
         boolean throughTemporaryTable = expansionService.containsTemporaryTable(
             originalInputObjects,
             context.getTemporaryTableSources()
@@ -376,7 +386,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 boolean unresolvedStarExpression = qualifiedReference != null && qualifiedReference.isStar();
                 String sourceExtractionExpression = expression;
                 String lineageExpression = setOperationQuery
-                    ? projectionResolver.setOperationExpression(resolvedParsedStatement, normalizedStatement, i)
+                    ? projectionResolver.setOperationExpression(resolvedParsedStatement, analysisStatement, i)
                     : projectionResolver.normalizeLineageExpression(expression);
                 List<ColumnRef> sourceColumns = setOperationQuery
                     ? projectionResolver.setOperationSourceColumns(resolvedParsedStatement, i)
@@ -389,7 +399,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                         originalInputObjects,
                         sourceAliases,
                         topLevelProjectionSourceAliases,
-                        statementProjectionTables
+                        statementProjectionTables,
+                        ownerResolver
                     );
                 if (directProjection != null) {
                     sourceColumns = directProjection.getSourceColumns();
@@ -424,7 +435,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                         defaultColumnSourceTable,
                         sourceAliases,
                         columnOwners,
-                        columnAliasSources
+                        columnAliasSources,
+                        ownerResolver
                     );
                 }
                 if (directProjection == null) {

@@ -21,7 +21,10 @@ import java.util.regex.Pattern;
 
 final class HiveProjectionLineageResolver {
     private static final Pattern IDENTIFIER = Pattern.compile(
-        "\\b([a-zA-Z_][\\w]*(?:\\.[a-zA-Z_][\\w]*){0,2})\\b"
+        "(?<![\\w.])([a-zA-Z_][\\w]*(?:\\.[a-zA-Z_][\\w]*){0,2})(?![\\w.])"
+    );
+    private static final Pattern DOTTED_IDENTIFIER = Pattern.compile(
+        "(?<![\\w.])[a-zA-Z_][\\w]*(?:\\.[a-zA-Z_][\\w]*)+(?![\\w.])"
     );
     private final HiveAstParserAdapter parserAdapter;
     private final HiveTargetColumnResolver targetColumnResolver;
@@ -238,6 +241,10 @@ final class HiveProjectionLineageResolver {
         }
         String selectList = sql.substring(selectIndex + 6, fromIndex);
         Map<String, String> sourceAliases = extractProjectionSourceAliases(sql);
+        QualifiedOwnerResolver ownerResolver = QualifiedOwnerResolver.fromAliases(
+            sourceAliases,
+            targetColumnResolver.extractExplicitSourceAliases(sql)
+        );
         String defaultSourceTable = firstAliasTarget(sourceAliases);
         Map<String, ColumnLineageProjection> projections = new LinkedHashMap<>();
         for (String selectItem : HiveSqlTextUtils.splitSelectItems(selectList)) {
@@ -254,7 +261,13 @@ final class HiveProjectionLineageResolver {
             }
             projections.put(
                 outputColumn.toLowerCase(Locale.ROOT),
-                projectionForExpression(expression, defaultSourceTable, sourceAliases, existingProjections)
+                projectionForExpression(
+                    expression,
+                    defaultSourceTable,
+                    sourceAliases,
+                    existingProjections,
+                    ownerResolver
+                )
             );
         }
         return projections;
@@ -263,14 +276,16 @@ final class HiveProjectionLineageResolver {
         String expression,
         String defaultSourceTable,
         Map<String, String> sourceAliases,
-        Map<String, Map<String, ColumnLineageProjection>> existingProjections
+        Map<String, Map<String, ColumnLineageProjection>> existingProjections,
+        QualifiedOwnerResolver ownerResolver
     ) {
         List<ColumnRef> rawSourceColumns = extractSourceColumns(
             expression,
             defaultSourceTable,
             sourceAliases,
             Collections.<String, String>emptyMap(),
-            Collections.<String, String>emptyMap()
+            Collections.<String, String>emptyMap(),
+            ownerResolver
         );
         List<ColumnRef> expandedSourceColumns = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
@@ -556,6 +571,24 @@ final class HiveProjectionLineageResolver {
         Map<String, String> columnOwners,
         Map<String, String> columnAliasSources
     ) {
+        return extractSourceColumns(
+            expression,
+            defaultSourceTable,
+            sourceAliases,
+            columnOwners,
+            columnAliasSources,
+            null
+        );
+    }
+
+    List<ColumnRef> extractSourceColumns(
+        String expression,
+        String defaultSourceTable,
+        Map<String, String> sourceAliases,
+        Map<String, String> columnOwners,
+        Map<String, String> columnAliasSources,
+        QualifiedOwnerResolver ownerResolver
+    ) {
         Set<String> columns = new LinkedHashSet<>();
         Matcher matcher = IDENTIFIER.matcher(HiveSqlTextUtils.removeStringLiterals(expression));
         while (matcher.find()) {
@@ -583,8 +616,14 @@ final class HiveProjectionLineageResolver {
                     addMappedColumn(columns, mappedSource, defaultSourceTable, sourceAliases);
                     continue;
                 }
-                String owner = sourceAliases.get(ownerName);
-                columns.add((owner == null ? ownerName : owner) + "." + columnName);
+                String owner = ownerResolver == null
+                    ? sourceAliases.get(ownerName)
+                    : ownerResolver.resolve(ownerName);
+                if (owner != null) {
+                    columns.add(owner + "." + columnName);
+                } else if (ownerResolver == null) {
+                    columns.add(ownerName + "." + columnName);
+                }
             }
         }
         List<ColumnRef> refs = new ArrayList<>();
@@ -626,7 +665,11 @@ final class HiveProjectionLineageResolver {
         if (isLiteralExpression(expression == null ? "" : expression.trim())) {
             return false;
         }
-        Matcher matcher = IDENTIFIER.matcher(HiveSqlTextUtils.removeStringLiterals(expression));
+        String expressionWithoutLiterals = HiveSqlTextUtils.removeStringLiterals(expression);
+        if (DOTTED_IDENTIFIER.matcher(expressionWithoutLiterals).find()) {
+            return true;
+        }
+        Matcher matcher = IDENTIFIER.matcher(expressionWithoutLiterals);
         while (matcher.find()) {
             String token = matcher.group(1);
             if (!isKeyword(token) && !isFunctionName(expression, matcher.end())) {

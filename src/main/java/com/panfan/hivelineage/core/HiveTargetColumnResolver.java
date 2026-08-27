@@ -94,7 +94,8 @@ final class HiveTargetColumnResolver {
             ),
             null,
             selectItems,
-            inputObjects
+            inputObjects,
+            new QualifiedOwnerResolver(inputObjects, Collections.<String, String>emptyMap())
         );
     }
 
@@ -109,7 +110,7 @@ final class HiveTargetColumnResolver {
             targetTable,
             selectItems,
             inputObjects,
-            Collections.<String, String>emptyMap()
+            new QualifiedOwnerResolver(inputObjects, Collections.<String, String>emptyMap())
         );
     }
 
@@ -118,25 +119,7 @@ final class HiveTargetColumnResolver {
         String targetTable,
         List<String> selectItems,
         List<DataObjectRef> inputObjects,
-        Map<String, String> sourceAliases
-    ) {
-        return expandStarSelectItems(
-            context,
-            targetTable,
-            selectItems,
-            inputObjects,
-            sourceAliases,
-            Collections.<String, String>emptyMap()
-        );
-    }
-
-    List<String> expandStarSelectItems(
-        ColumnResolutionContext context,
-        String targetTable,
-        List<String> selectItems,
-        List<DataObjectRef> inputObjects,
-        Map<String, String> sourceAliases,
-        Map<String, String> explicitSourceAliases
+        QualifiedOwnerResolver ownerResolver
     ) {
         LineageAnalyzeRequest request = context.getRequest();
         LineageParseMode parseMode = context.getParseMode();
@@ -156,7 +139,7 @@ final class HiveTargetColumnResolver {
                 expanded.add(selectItem);
                 continue;
             }
-            String sourceTable = resolveStarSource(reference.getOwner(), inputObjects, explicitSourceAliases);
+            String sourceTable = ownerResolver.resolve(reference.getOwner());
             if (sourceTable == null) {
                 addWarning(
                     warnings,
@@ -206,39 +189,6 @@ final class HiveTargetColumnResolver {
             return selectItems;
         }
         return new ArrayList<>(sourceMetadata.getColumns());
-    }
-
-    private String resolveStarSource(
-        String owner,
-        List<DataObjectRef> inputObjects,
-        Map<String, String> explicitSourceAliases
-    ) {
-        if (owner == null) {
-            return inputObjects.size() == 1 ? inputObjects.get(0).getQualifiedName() : null;
-        }
-        String normalizedOwner = owner.toLowerCase(Locale.ROOT);
-        for (DataObjectRef inputObject : inputObjects) {
-            if (normalizedOwner.equals(inputObject.getQualifiedName().toLowerCase(Locale.ROOT))) {
-                return inputObject.getQualifiedName();
-            }
-        }
-        String aliasTarget = explicitSourceAliases.get(normalizedOwner);
-        if (aliasTarget != null) {
-            for (DataObjectRef inputObject : inputObjects) {
-                if (aliasTarget.equalsIgnoreCase(inputObject.getQualifiedName())) {
-                    return inputObject.getQualifiedName();
-                }
-            }
-        }
-        List<String> simpleMatches = new ArrayList<>();
-        for (DataObjectRef inputObject : inputObjects) {
-            String qualifiedName = inputObject.getQualifiedName();
-            String simpleName = qualifiedName.substring(qualifiedName.lastIndexOf('.') + 1);
-            if (normalizedOwner.equals(simpleName.toLowerCase(Locale.ROOT))) {
-                simpleMatches.add(qualifiedName);
-            }
-        }
-        return simpleMatches.size() == 1 ? simpleMatches.get(0) : null;
     }
 
     boolean isSingleStarSelect(List<String> selectItems) {
