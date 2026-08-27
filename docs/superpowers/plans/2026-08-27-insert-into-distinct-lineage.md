@@ -4,7 +4,7 @@
 
 **Goal:** Make `INSERT INTO ... SELECT DISTINCT ...` use the complete Hive AST path so `DISTINCT` never becomes a source column.
 
-**Architecture:** Extend only the INSERT target lookup in `HiveParserAstAdapter` to accept both Hive AST destination node variants. Keep projection extraction, fallback parsing, partition handling, and lineage generation unchanged, then prove the complete behavior at AST and analyzer levels.
+**Architecture:** Extend the INSERT target lookup in `HiveParserAstAdapter` to accept both Hive AST destination node variants, and preserve qualified-star owners when the formal AST exposes `TOK_ALLCOLREF` with a `TOK_TABNAME` child. Keep fallback parsing, partition handling, and lineage generation unchanged, then prove the complete behavior at AST and analyzer levels.
 
 **Tech Stack:** Java 8, Apache Hive Parser 4.0.1, JUnit 4, Maven Surefire
 
@@ -13,6 +13,7 @@
 ## File map
 
 - Modify `src/main/java/com/panfan/hivelineage/core/HiveParserAstAdapter.java`: resolve table targets from `TOK_INSERT_INTO` as well as `TOK_DESTINATION`.
+- Modify `src/main/java/com/panfan/hivelineage/core/HiveAstExpressionExtractor.java`: preserve `a.*`/`db.table.*` owners from qualified `TOK_ALLCOLREF` nodes while retaining bare `*`.
 - Modify `src/test/java/com/panfan/hivelineage/HiveParserAstAdapterTest.java`: cover AST target and projection extraction for INSERT INTO variants and preserve INSERT OVERWRITE.
 - Create `src/test/java/com/panfan/hivelineage/HiveInsertIntoDistinctLineageTest.java`: cover the reported end-to-end DISTINCT lineage and static-partition scope.
 - Create `docs/bugfixes/2026-08-27-insert-into-distinct-lineage.md`: record symptom, root cause, scope, tests, and final verification evidence.
@@ -176,8 +177,9 @@ git commit -m "test: reproduce insert into distinct lineage bug"
 
 **Files:**
 - Modify: `src/main/java/com/panfan/hivelineage/core/HiveParserAstAdapter.java`
+- Modify: `src/main/java/com/panfan/hivelineage/core/HiveAstExpressionExtractor.java`
 
-- [ ] **Step 1: Implement the minimal target-node fallback**
+- [x] **Step 1: Implement the minimal target-node fallback**
 
 Replace the `INSERT_SELECT` branch in `resolveOutputObject` with:
 
@@ -192,9 +194,10 @@ if (statementType == StatementType.INSERT_SELECT) {
 }
 ```
 
-Do not change `sqlForHiveParser`, `resolveSelectExpressions`, or the regex fallback.
+Do not change `sqlForHiveParser`, `resolveSelectExpressions`, or the regex fallback. This
+production change was committed as `cab12f9` (`fix: resolve insert into targets from ast`).
 
-- [ ] **Step 2: Run the focused tests and verify GREEN**
+- [x] **Step 2: Run the initial focused tests and verify GREEN**
 
 Run:
 
@@ -205,7 +208,19 @@ Run:
 
 Expected: 9 tests, 0 failures, 0 errors.
 
-- [ ] **Step 3: Run related parser and field-lineage regressions**
+After the target lookup switched the reported statement to the formal AST path, the existing
+`HiveColumnLineageTest` was run as a second RED check: 31 tests, with 5 qualified-star
+failures. The failures showed that `TOK_ALLCOLREF` owner information was being dropped by
+the AST expression unparser.
+
+- [x] **Step 3: Preserve qualified-star owners exposed by the AST**
+
+Update `HiveAstExpressionExtractor.unparse` so a `TOK_ALLCOLREF` with a `TOK_TABNAME`
+child reconstructs `owner.*` (including `db.table.*`); a bare `TOK_ALLCOLREF` remains `*`.
+This is the minimal compatibility fix and was committed as `e7956b0` (`fix: preserve qualified
+star owners from ast`).
+
+- [x] **Step 4: Run related parser and field-lineage regressions**
 
 Run:
 
@@ -216,11 +231,16 @@ Run:
 
 Expected: 47 tests, 0 failures, 0 errors.
 
-- [ ] **Step 4: Commit the production fix**
+The focused 9-test suite and related 47-test suite both passed after the two production commits.
+
+- [x] **Step 5: Record the production commits**
 
 ```bash
 git add src/main/java/com/panfan/hivelineage/core/HiveParserAstAdapter.java
 git commit -m "fix: resolve insert into targets from ast"
+
+git add src/main/java/com/panfan/hivelineage/core/HiveAstExpressionExtractor.java
+git commit -m "fix: preserve qualified star owners from ast"
 ```
 
 ### Task 3: Document and fully verify the fix
@@ -228,7 +248,7 @@ git commit -m "fix: resolve insert into targets from ast"
 **Files:**
 - Create: `docs/bugfixes/2026-08-27-insert-into-distinct-lineage.md`
 
-- [ ] **Step 1: Create the bugfix record**
+- [x] **Step 1: Create the bugfix record**
 
 Create the document with these sections and verified facts:
 
@@ -266,7 +286,7 @@ INSERT 目标解析同时支持 `TOK_DESTINATION` 和 `TOK_INSERT_INTO`；投影
 - 5 个跳过项为需要外部 MySQL JDBC 参数的集成测试。
 ```
 
-- [ ] **Step 2: Run the full test suite**
+- [x] **Step 2: Run the full test suite**
 
 Run:
 
@@ -276,7 +296,7 @@ Run:
 
 Expected: 140 tests, 0 failures, 0 errors, 5 skipped, `BUILD SUCCESS`.
 
-- [ ] **Step 3: Check the final diff**
+- [x] **Step 3: Check the final diff**
 
 Run:
 
@@ -285,11 +305,13 @@ git diff --check
 git status --short
 ```
 
-Expected: no whitespace errors; only the bugfix document remains uncommitted, while the user's existing `release/` and `补充案例/` directories remain untouched.
+Expected: no whitespace errors; only the three requested documentation files remain uncommitted, while the user's existing `release/` and `补充案例/` directories remain untouched.
 
-- [ ] **Step 4: Commit the bugfix record**
+- [x] **Step 4: Commit the documentation records**
 
 ```bash
-git add docs/bugfixes/2026-08-27-insert-into-distinct-lineage.md
+git add docs/superpowers/specs/2026-08-27-insert-into-distinct-lineage-design.md \
+  docs/superpowers/plans/2026-08-27-insert-into-distinct-lineage.md \
+  docs/bugfixes/2026-08-27-insert-into-distinct-lineage.md
 git commit -m "docs: record insert into distinct lineage fix"
 ```

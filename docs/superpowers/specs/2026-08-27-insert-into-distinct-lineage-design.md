@@ -24,6 +24,12 @@ Hive Parser 对两类写入语句使用不同的目标节点：
 不满足完整 AST 血缘结构，随后退回正则解析路径。正则路径把 `select` 后面的
 `distinct field1` 整体作为投影表达式，最终将 `distinct` 错当成来源字段。
 
+目标节点修复后，正式 AST 路径还会暴露 `TOK_ALLCOLREF` 的兼容性问题：Hive 将
+`a.*` 或 `db.table.*` 表示为带 `TOK_TABNAME` 子节点的限定星号，但原表达式提取器
+只返回裸 `*`，丢失 owner。为保持既有 `a.*`/`db.table.*` 行为，带 `TOK_TABNAME`
+时需要还原为 `owner.*`；没有 owner 的裸星号仍返回 `*`。这是本次 AST 路径修复所需的
+必要兼容修复，不改变其他问题范围。
+
 ## 范围
 
 本次从 AST 根因修复所有目标为表的 `INSERT INTO ... SELECT ...`，包括：
@@ -41,7 +47,8 @@ Hive Parser 对两类写入语句使用不同的目标节点：
 ### 方案一：补全 AST 目标节点识别（采用）
 
 同时从 `TOK_DESTINATION` 和 `TOK_INSERT_INTO` 下读取 `TOK_TAB/TOK_TABNAME`。
-该方案修复产生回退的根因，保留 AST 已正确提取的投影、分区和别名信息，改动集中。
+该方案修复产生回退的根因，保留 AST 已正确提取的投影、分区和别名信息；同时在
+`TOK_ALLCOLREF` 带 `TOK_TABNAME` 时恢复 `owner.*`，保留既有限定星号行为，改动集中。
 
 ### 方案二：在正则回退路径剥离 DISTINCT
 
@@ -76,10 +83,14 @@ TOK_TABREF -> whc.a
 已有 `TOK_SELECTDI` 支持只遍历 `TOK_SELEXPR`，因此 `DISTINCT` 不进入投影表达式，
 最终只生成 `whc.a.field1 -> whc.c.field1`。
 
+对星号投影，`TOK_ALLCOLREF` 携带 `TOK_TABNAME` 时恢复为 `a.*` 或 `db.table.*`；
+无子节点 owner 的裸星号保持为 `*`，从而不改变既有星号展开语义。
+
 ### 兼容性与失败处理
 
 - 不改变 `INSERT OVERWRITE`、CTAS、View 的目标解析路径；
 - 不修改正则回退逻辑，避免扩大本次修复范围；
+- 仅为正式 AST 路径恢复限定星号 owner；裸星号和正则回退行为保持不变；
 - 带静态分区的 `TOK_PARTSPEC` 仍由已有逻辑处理；
 - AST 确实无法形成完整血缘结构时，继续使用现有回退或失败行为。
 
