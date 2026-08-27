@@ -42,6 +42,19 @@ final class HiveAstExpressionExtractor {
         }
         String text = expression.getText();
         if (expression.getType() == HiveParser.TOK_ALLCOLREF) {
+            if (expression.getChildCount() == 1) {
+                ASTNode owner = (ASTNode) expression.getChild(0);
+                if (owner.getType() == HiveParser.TOK_TABNAME && owner.getChildCount() > 0) {
+                    StringBuilder qualifiedOwner = new StringBuilder();
+                    for (int i = 0; i < owner.getChildCount(); i++) {
+                        if (qualifiedOwner.length() > 0) {
+                            qualifiedOwner.append('.');
+                        }
+                        qualifiedOwner.append(stripIdentifier(((ASTNode) owner.getChild(i)).getText()));
+                    }
+                    return qualifiedOwner.append(".*").toString();
+                }
+            }
             return "*";
         }
         if (expression.getType() == HiveParser.TOK_TABLE_OR_COL && expression.getChildCount() == 1) {
