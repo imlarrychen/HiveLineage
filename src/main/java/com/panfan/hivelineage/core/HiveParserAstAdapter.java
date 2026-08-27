@@ -94,6 +94,9 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
         ASTNode tableName = null;
         if (statementType == StatementType.INSERT_SELECT) {
             ASTNode destinationNode = astWalker.first(mainInsert, HiveParser.TOK_DESTINATION);
+            if (destinationNode == null) {
+                destinationNode = astWalker.first(mainInsert, HiveParser.TOK_INSERT_INTO);
+            }
             ASTNode tabNode = astWalker.first(destinationNode, HiveParser.TOK_TAB);
             tableName = astWalker.first(tabNode, HiveParser.TOK_TABNAME);
         } else if (statementType == StatementType.CREATE_TABLE_AS_SELECT) {
