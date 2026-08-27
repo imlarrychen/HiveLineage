@@ -20,8 +20,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 final class HiveProjectionLineageResolver {
-    private static final Pattern IDENTIFIER = Pattern.compile("\\b([a-zA-Z_][\\w]*)(?:\\.([a-zA-Z_][\\w]*))?\\b");
-    private static final Pattern QUALIFIED_COLUMN = Pattern.compile("\\b([a-zA-Z_][\\w]*)\\.([a-zA-Z_][\\w]*)\\b");
+    private static final Pattern IDENTIFIER = Pattern.compile(
+        "\\b([a-zA-Z_][\\w]*(?:\\.[a-zA-Z_][\\w]*){0,2})\\b"
+    );
     private final HiveAstParserAdapter parserAdapter;
     private final HiveTargetColumnResolver targetColumnResolver;
 
@@ -455,21 +456,11 @@ final class HiveProjectionLineageResolver {
         return columnAliasExpressions.get(directColumn.getColumn().toLowerCase(Locale.ROOT));
     }
     DirectColumn parseDirectColumn(String expression) {
-        if (expression == null) {
+        QualifiedColumnReference reference = QualifiedColumnReference.parse(expression);
+        if (reference == null || reference.isStar()) {
             return null;
         }
-        String trimmed = expression.trim();
-        if (!isDirectExpression(trimmed)) {
-            return null;
-        }
-        int dotIndex = trimmed.indexOf('.');
-        if (dotIndex < 0) {
-            return new DirectColumn(null, trimmed.toLowerCase(Locale.ROOT));
-        }
-        return new DirectColumn(
-            trimmed.substring(0, dotIndex).toLowerCase(Locale.ROOT),
-            trimmed.substring(dotIndex + 1).toLowerCase(Locale.ROOT)
-        );
+        return new DirectColumn(reference.getOwner(), reference.getColumn());
     }
     boolean containsColumn(HiveTableMetadata metadata, String normalizedColumn) {
         for (String column : metadata.getColumns()) {
@@ -480,7 +471,8 @@ final class HiveProjectionLineageResolver {
         return false;
     }
     boolean isDirectExpression(String expression) {
-        return expression.matches("[a-zA-Z_][\\w]*(?:\\.[a-zA-Z_][\\w]*)?");
+        QualifiedColumnReference reference = QualifiedColumnReference.parse(expression);
+        return reference != null && !reference.isStar();
     }
     LineageType resolveLineageType(String lineageExpression, String rawExpression, List<ColumnRef> sourceColumns) {
         if (isConstantLineageExpression(lineageExpression)) {
@@ -567,28 +559,32 @@ final class HiveProjectionLineageResolver {
         Set<String> columns = new LinkedHashSet<>();
         Matcher matcher = IDENTIFIER.matcher(HiveSqlTextUtils.removeStringLiterals(expression));
         while (matcher.find()) {
-            String first = matcher.group(1);
-            String second = matcher.group(2);
-            if (isKeyword(first) || isFunctionName(expression, matcher.end())) {
+            QualifiedColumnReference reference = QualifiedColumnReference.parse(matcher.group(1));
+            if (reference == null) {
                 continue;
             }
-            if (second == null) {
-                String mappedSource = columnAliasSources.get(first.toLowerCase(Locale.ROOT));
+            String ownerName = reference.getOwner();
+            String columnName = reference.getColumn();
+            if (isFunctionName(expression, matcher.end())
+                || (ownerName == null && isKeyword(columnName))) {
+                continue;
+            }
+            if (ownerName == null) {
+                String mappedSource = columnAliasSources.get(columnName);
                 if (mappedSource != null) {
                     addMappedColumn(columns, mappedSource, defaultSourceTable, sourceAliases);
                     continue;
                 }
-                String owner = columnOwners.get(first.toLowerCase(Locale.ROOT));
-                columns.add((owner == null ? defaultSourceTable : owner) + "." + first);
+                String owner = columnOwners.get(columnName);
+                columns.add((owner == null ? defaultSourceTable : owner) + "." + columnName);
             } else {
-                String alias = first.toLowerCase(Locale.ROOT);
-                String mappedSource = columnAliasSources.get((alias + "." + second).toLowerCase(Locale.ROOT));
+                String mappedSource = columnAliasSources.get(ownerName + "." + columnName);
                 if (mappedSource != null) {
                     addMappedColumn(columns, mappedSource, defaultSourceTable, sourceAliases);
                     continue;
                 }
-                String owner = sourceAliases.get(alias);
-                columns.add((owner == null ? first : owner) + "." + second);
+                String owner = sourceAliases.get(ownerName);
+                columns.add((owner == null ? ownerName : owner) + "." + columnName);
             }
         }
         List<ColumnRef> refs = new ArrayList<>();

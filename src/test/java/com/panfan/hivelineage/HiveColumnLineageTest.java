@@ -682,6 +682,61 @@ public class HiveColumnLineageTest {
     }
 
     @Test
+    public void qualifiedStarExpandsMatchedPhysicalTableInSelectPosition() {
+        assertQualifiedStarLineage(
+            "insert into whc.c select whc.a.field1, whc.b.* "
+                + "from whc.a left join whc.b on whc.a.id = whc.b.id;",
+            "physical qualified owner"
+        );
+    }
+
+    @Test
+    public void threePartProjectionColumnResolvesAsOneDirectSource() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("whc.a", "id", "field1")
+            .addTable("whc.c", "field1", "id", "name", "value");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_three_part_projection")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript("insert into whc.c select whc.a.field1 from whc.a;")
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        List<ColumnLineage> columns = analyzer.analyzeScript(request).getStatements().get(0).getColumnLineages();
+
+        TestSupport.assertEquals(1, columns.size(), "three-part projection lineage count");
+        TestSupport.assertEquals(LineageType.DIRECT, columns.get(0).getLineageType(), "three-part projection type");
+        TestSupport.assertEquals(1, columns.get(0).getSourceColumns().size(), "three-part projection source count");
+        TestSupport.assertEquals("whc.a.field1", columns.get(0).getSourceColumns().get(0).getQualifiedName(), "three-part projection source");
+    }
+
+    @Test
+    public void qualifiedStarExpandsExplicitAliasInSelectPosition() {
+        assertQualifiedStarLineage(
+            "insert into whc.c select x.field1, y.* "
+                + "from whc.a x left join whc.b y on x.id = y.id;",
+            "explicit alias owner"
+        );
+    }
+
+    @Test
+    public void qualifiedStarExpandsUniqueSimpleTableNameInSelectPosition() {
+        assertQualifiedStarLineage(
+            "insert into whc.c select a.field1, b.* "
+                + "from whc.a left join whc.b on a.id = b.id;",
+            "simple table owner"
+        );
+    }
+
+    @Test
     public void subqueryAliasColumnLineageResolvesToBaseTable() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
         MapMetadataProvider metadataProvider = new MapMetadataProvider()
@@ -853,5 +908,41 @@ public class HiveColumnLineageTest {
         assertContainsColumn(statement.getColumnLineages().get(1).getSourceColumns(), "ods.user_base.tags");
         TestSupport.assertEquals(LineageType.DERIVED, statement.getColumnLineages().get(1).getLineageType(), "lateral explode tag type");
         TestSupport.assertEquals("explode(tags)", statement.getColumnLineages().get(1).getExpression(), "lateral explode tag expression");
+    }
+
+    private void assertQualifiedStarLineage(String sql, String messagePrefix) {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addTable("whc.a", "id", "field1")
+            .addTable("whc.b", "id", "name", "value")
+            .addTable("whc.c", "field1", "id", "name", "value");
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_qualified_star")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript(sql)
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .build())
+            .build();
+
+        List<ColumnLineage> columns = analyzer.analyzeScript(request).getStatements().get(0).getColumnLineages();
+
+        TestSupport.assertEquals(4, columns.size(), messagePrefix + " lineage count");
+        assertDirectColumn(columns.get(0), "whc.c.field1", "whc.a.field1", messagePrefix + " field1");
+        assertDirectColumn(columns.get(1), "whc.c.id", "whc.b.id", messagePrefix + " id");
+        assertDirectColumn(columns.get(2), "whc.c.name", "whc.b.name", messagePrefix + " name");
+        assertDirectColumn(columns.get(3), "whc.c.value", "whc.b.value", messagePrefix + " value");
+    }
+
+    private void assertDirectColumn(ColumnLineage lineage, String target, String source, String messagePrefix) {
+        TestSupport.assertEquals(target, lineage.getTargetColumn().getQualifiedName(), messagePrefix + " target");
+        TestSupport.assertEquals(LineageType.DIRECT, lineage.getLineageType(), messagePrefix + " type");
+        TestSupport.assertEquals(1, lineage.getSourceColumns().size(), messagePrefix + " source count");
+        TestSupport.assertEquals(source, lineage.getSourceColumns().get(0).getQualifiedName(), messagePrefix + " source");
     }
 }

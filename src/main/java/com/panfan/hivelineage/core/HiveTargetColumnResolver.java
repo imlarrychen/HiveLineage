@@ -104,20 +104,76 @@ final class HiveTargetColumnResolver {
         List<String> selectItems,
         List<DataObjectRef> inputObjects
     ) {
+        return expandStarSelectItems(
+            context,
+            targetTable,
+            selectItems,
+            inputObjects,
+            Collections.<String, String>emptyMap()
+        );
+    }
+
+    List<String> expandStarSelectItems(
+        ColumnResolutionContext context,
+        String targetTable,
+        List<String> selectItems,
+        List<DataObjectRef> inputObjects,
+        Map<String, String> sourceAliases
+    ) {
         LineageAnalyzeRequest request = context.getRequest();
         LineageParseMode parseMode = context.getParseMode();
         List<LineageWarning> warnings = context.getWarnings();
         int statementIndex = context.getStatementIndex();
         if ((parseMode != LineageParseMode.COLUMN_ONLY && parseMode != LineageParseMode.TABLE_AND_COLUMN)
-            || selectItems.size() != 1
-            || !"*".equals(selectItems.get(0).trim())
-            || inputObjects.size() != 1) {
+            || inputObjects.isEmpty()) {
             return selectItems;
         }
+        if (isSingleStarSelect(selectItems) && inputObjects.size() == 1) {
+            return expandSingleInputStar(context, targetTable, selectItems, inputObjects.get(0));
+        }
+        List<String> expanded = new ArrayList<>();
+        for (String selectItem : selectItems) {
+            QualifiedColumnReference reference = QualifiedColumnReference.parse(HiveSqlTextUtils.stripAlias(selectItem));
+            if (reference == null || !reference.isStar()) {
+                expanded.add(selectItem);
+                continue;
+            }
+            String sourceTable = resolveStarSource(reference.getOwner(), inputObjects, sourceAliases);
+            if (sourceTable == null) {
+                addWarning(
+                    warnings,
+                    WarningCode.UNKNOWN_COLUMN_LINEAGE,
+                    "Unable to resolve source table for star expression: " + selectItem.trim(),
+                    statementIndex
+                );
+                expanded.add(selectItem);
+                continue;
+            }
+            HiveTableMetadata sourceMetadata = loadTableMetadata(request, sourceTable, warnings, statementIndex);
+            if (sourceMetadata == null || sourceMetadata.getColumns().isEmpty()) {
+                expanded.add(selectItem);
+                continue;
+            }
+            for (String column : sourceMetadata.getColumns()) {
+                expanded.add(sourceTable + "." + column);
+            }
+        }
+        return expanded;
+    }
+
+    private List<String> expandSingleInputStar(
+        ColumnResolutionContext context,
+        String targetTable,
+        List<String> selectItems,
+        DataObjectRef inputObject
+    ) {
+        LineageAnalyzeRequest request = context.getRequest();
+        List<LineageWarning> warnings = context.getWarnings();
+        int statementIndex = context.getStatementIndex();
         if (targetTable != null) {
             HiveTableMetadata targetMetadata = loadTableMetadata(request, targetTable, warnings, statementIndex);
             if (targetMetadata != null && !targetMetadata.getColumns().isEmpty()) {
-                HiveTableMetadata sourceMetadata = loadTableMetadataWithoutWarning(request, inputObjects.get(0).getQualifiedName());
+                HiveTableMetadata sourceMetadata = loadTableMetadataWithoutWarning(request, inputObject.getQualifiedName());
                 if (sourceMetadata != null && !sourceMetadata.getColumns().isEmpty()) {
                     List<String> intersection = intersectionInTargetOrder(targetMetadata.getColumns(), sourceMetadata.getColumns());
                     if (!intersection.isEmpty()) {
@@ -127,11 +183,46 @@ final class HiveTargetColumnResolver {
                 return new ArrayList<>(targetMetadata.getColumns());
             }
         }
-        HiveTableMetadata sourceMetadata = loadTableMetadata(request, inputObjects.get(0).getQualifiedName(), warnings, statementIndex);
+        HiveTableMetadata sourceMetadata = loadTableMetadata(request, inputObject.getQualifiedName(), warnings, statementIndex);
         if (sourceMetadata == null || sourceMetadata.getColumns().isEmpty()) {
             return selectItems;
         }
         return new ArrayList<>(sourceMetadata.getColumns());
+    }
+
+    private String resolveStarSource(
+        String owner,
+        List<DataObjectRef> inputObjects,
+        Map<String, String> sourceAliases
+    ) {
+        if (owner == null) {
+            return inputObjects.size() == 1 ? inputObjects.get(0).getQualifiedName() : null;
+        }
+        String normalizedOwner = owner.toLowerCase(Locale.ROOT);
+        for (DataObjectRef inputObject : inputObjects) {
+            if (normalizedOwner.equals(inputObject.getQualifiedName().toLowerCase(Locale.ROOT))) {
+                return inputObject.getQualifiedName();
+            }
+        }
+        List<String> simpleMatches = new ArrayList<>();
+        for (DataObjectRef inputObject : inputObjects) {
+            String qualifiedName = inputObject.getQualifiedName();
+            String simpleName = qualifiedName.substring(qualifiedName.lastIndexOf('.') + 1);
+            if (normalizedOwner.equals(simpleName.toLowerCase(Locale.ROOT))) {
+                simpleMatches.add(qualifiedName);
+            }
+        }
+        String aliasTarget = sourceAliases.get(normalizedOwner);
+        if (aliasTarget != null
+            && (simpleMatches.isEmpty()
+                || (simpleMatches.size() == 1 && !aliasTarget.equalsIgnoreCase(simpleMatches.get(0))))) {
+            for (DataObjectRef inputObject : inputObjects) {
+                if (aliasTarget.equalsIgnoreCase(inputObject.getQualifiedName())) {
+                    return inputObject.getQualifiedName();
+                }
+            }
+        }
+        return simpleMatches.size() == 1 ? simpleMatches.get(0) : null;
     }
 
     boolean isSingleStarSelect(List<String> selectItems) {

@@ -286,12 +286,19 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         if (originalInputObjects.isEmpty()) {
             return failedResult(context, "SQL_PARSE_ERROR", "No input object found");
         }
+        Map<String, String> sourceAliases = targetColumnResolver.extractSourceAliases(normalizedStatement);
+        sourceAliases.putAll(resolvedParsedStatement.getSourceAliases());
+        Map<String, String> topLevelSourceAliases = targetColumnResolver.extractTopLevelSourceAliases(normalizedStatement);
+        targetColumnResolver.mergeTopLevelSourceAliases(sourceAliases, topLevelSourceAliases);
+        Map<String, String> topLevelProjectionSourceAliases = projectionResolver.extractProjectionSourceAliases(normalizedStatement);
+        sourceAliases.putAll(topLevelProjectionSourceAliases);
         boolean starSelect = targetColumnResolver.isSingleStarSelect(selectItems);
         List<String> expandedSelectItems = targetColumnResolver.expandStarSelectItems(
             new ColumnResolutionContext(request, parseMode, statementWarnings, index),
             targetTable,
             selectItems,
-            originalInputObjects
+            originalInputObjects,
+            sourceAliases
         );
 
         List<String> inferredTargetColumns = targetColumns;
@@ -352,12 +359,6 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
 
         List<ColumnLineage> columnLineages = new ArrayList<>();
         if (parseMode == LineageParseMode.COLUMN_ONLY || parseMode == LineageParseMode.TABLE_AND_COLUMN) {
-            Map<String, String> sourceAliases = targetColumnResolver.extractSourceAliases(normalizedStatement);
-            sourceAliases.putAll(resolvedParsedStatement.getSourceAliases());
-            Map<String, String> topLevelSourceAliases = targetColumnResolver.extractTopLevelSourceAliases(normalizedStatement);
-            targetColumnResolver.mergeTopLevelSourceAliases(sourceAliases, topLevelSourceAliases);
-            Map<String, String> topLevelProjectionSourceAliases = projectionResolver.extractProjectionSourceAliases(normalizedStatement);
-            sourceAliases.putAll(topLevelProjectionSourceAliases);
             Map<String, String> columnAliasSources = targetColumnResolver.filterColumnAliasSources(
                 resolvedParsedStatement.getColumnAliasSources(),
                 topLevelSourceAliases
