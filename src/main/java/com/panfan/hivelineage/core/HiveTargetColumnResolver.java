@@ -130,7 +130,7 @@ final class HiveTargetColumnResolver {
             return selectItems;
         }
         if (isSingleStarSelect(selectItems) && inputObjects.size() == 1) {
-            return expandSingleInputStar(context, selectItems, inputObjects.get(0));
+            return expandSingleInputStar(context, targetTable, selectItems, inputObjects.get(0));
         }
         List<String> expanded = new ArrayList<>();
         for (String selectItem : selectItems) {
@@ -164,12 +164,40 @@ final class HiveTargetColumnResolver {
 
     private List<String> expandSingleInputStar(
         ColumnResolutionContext context,
+        String targetTable,
         List<String> selectItems,
         DataObjectRef inputObject
     ) {
         LineageAnalyzeRequest request = context.getRequest();
+        List<LineageWarning> warnings = context.getWarnings();
+        int statementIndex = context.getStatementIndex();
+        if (targetTable != null) {
+            HiveTableMetadata targetMetadata = loadTableMetadata(request, targetTable, warnings, statementIndex);
+            if (targetMetadata != null && !targetMetadata.getColumns().isEmpty()) {
+                HiveTableMetadata sourceMetadata = loadTableMetadataWithoutWarning(request, inputObject.getQualifiedName());
+                if (sourceMetadata != null && !sourceMetadata.getColumns().isEmpty()) {
+                    List<String> intersection = intersectionInTargetOrder(targetMetadata.getColumns(), sourceMetadata.getColumns());
+                    if (!intersection.isEmpty()) {
+                        return intersection;
+                    }
+                }
+                return new ArrayList<>(targetMetadata.getColumns());
+            }
+        }
+        HiveTableMetadata sourceMetadata = loadTableMetadata(request, inputObject.getQualifiedName(), warnings, statementIndex);
+        if (sourceMetadata == null || sourceMetadata.getColumns().isEmpty()) {
+            return selectItems;
+        }
+        return new ArrayList<>(sourceMetadata.getColumns());
+    }
+
+    List<String> expandPositionalSingleInputStar(
+        ColumnResolutionContext context,
+        List<String> selectItems,
+        DataObjectRef inputObject
+    ) {
         HiveTableMetadata sourceMetadata = loadTableMetadata(
-            request,
+            context.getRequest(),
             inputObject.getQualifiedName(),
             context.getWarnings(),
             context.getStatementIndex()
@@ -186,6 +214,25 @@ final class HiveTargetColumnResolver {
 
     boolean isSingleStarSelect(List<String> selectItems) {
         return selectItems.size() == 1 && "*".equals(selectItems.get(0).trim());
+    }
+
+    boolean hasColumnMetadataWithoutWarning(LineageAnalyzeRequest request, DataObjectRef inputObject) {
+        HiveTableMetadata metadata = loadTableMetadataWithoutWarning(request, inputObject.getQualifiedName());
+        return metadata != null && !metadata.getColumns().isEmpty();
+    }
+
+    List<String> intersectionInTargetOrder(List<String> targetColumns, List<String> sourceColumns) {
+        Set<String> sourceColumnSet = new LinkedHashSet<>();
+        for (String sourceColumn : sourceColumns) {
+            sourceColumnSet.add(sourceColumn.toLowerCase(Locale.ROOT));
+        }
+        List<String> intersection = new ArrayList<>();
+        for (String targetColumn : targetColumns) {
+            if (sourceColumnSet.contains(targetColumn.toLowerCase(Locale.ROOT))) {
+                intersection.add(targetColumn);
+            }
+        }
+        return intersection;
     }
 
     List<String> resolveStarTargetColumns(
@@ -210,6 +257,14 @@ final class HiveTargetColumnResolver {
                 : reference.getColumn());
         }
         return inferred;
+    }
+
+    HiveTableMetadata loadTableMetadataWithoutWarning(LineageAnalyzeRequest request, String tableName) {
+        if (request.getMetadataProvider() == null) {
+            return null;
+        }
+        TableIdentifier tableIdentifier = TableIdentifier.parse(tableName, request.getClusterName(), request.getDefaultDatabase());
+        return request.getMetadataCache().getTableMetadata(tableIdentifier, request.getMetadataProvider());
     }
 
     HiveTableMetadata loadTableMetadata(LineageAnalyzeRequest request, String tableName) {

@@ -19,7 +19,7 @@ public class HivePositionalStarInsertLineageTest {
 
         StatementLineageResult statement = analyze(
             metadata,
-            "insert overwrite table whc.whc_hive_01 select * from whc.whc_hive_02"
+            "insert into whc.whc_hive_01 select * from whc.whc_hive_02"
         );
 
         TestSupport.assertEquals(0, statement.getParseStatusCode(), "positional star parse status");

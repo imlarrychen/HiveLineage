@@ -20,6 +20,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -311,8 +312,22 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         Map<String, String> explicitSourceAliases = targetColumnResolver.extractExplicitSourceAliases(analysisStatement);
         QualifiedOwnerResolver ownerResolver = new QualifiedOwnerResolver(originalInputObjects, explicitSourceAliases);
         boolean starSelect = targetColumnResolver.isSingleStarSelect(selectItems);
+        boolean positionalSingleDirectSourceStar = isPositionalSingleDirectSourceStar(
+            operation,
+            targetColumns,
+            starSelect,
+            topLevelSetOperation,
+            originalInputObjects,
+            topLevelSourceAliases
+        ) && targetColumnResolver.hasColumnMetadataWithoutWarning(request, originalInputObjects.get(0));
         List<String> expandedSelectItems = topLevelSetOperation
             ? selectItems
+            : positionalSingleDirectSourceStar
+            ? targetColumnResolver.expandPositionalSingleInputStar(
+                columnContext,
+                selectItems,
+                originalInputObjects.get(0)
+            )
             : targetColumnResolver.expandStarSelectItems(
                 columnContext,
                 targetTable,
@@ -323,7 +338,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
 
         List<String> inferredTargetColumns = targetColumns;
         if (targetColumns.isEmpty()) {
-            inferredTargetColumns = starSelect
+            inferredTargetColumns = positionalSingleDirectSourceStar
                 ? targetColumnResolver.resolveStarTargetColumns(
                     request,
                     targetTable,
@@ -332,6 +347,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                     statementWarnings,
                     index
                 )
+                : starSelect
+                ? new ArrayList<>(expandedSelectItems)
                 : targetColumnResolver.resolveTargetColumns(
                     request,
                     targetTable,
@@ -568,6 +585,26 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             Collections.emptyList(),
             context.getWarnings()
         );
+    }
+
+    private boolean isPositionalSingleDirectSourceStar(
+        String operation,
+        List<String> targetColumns,
+        boolean starSelect,
+        boolean topLevelSetOperation,
+        List<DataObjectRef> inputObjects,
+        Map<String, String> topLevelSourceAliases
+    ) {
+        if (!operation.startsWith("INSERT_")
+            || !targetColumns.isEmpty()
+            || !starSelect
+            || topLevelSetOperation
+            || inputObjects.size() != 1) {
+            return false;
+        }
+        Set<String> topLevelSources = new LinkedHashSet<>(topLevelSourceAliases.values());
+        return topLevelSources.size() == 1
+            && topLevelSources.iterator().next().equalsIgnoreCase(inputObjects.get(0).getQualifiedName());
     }
 
     private List<String> alignTargetColumnsForStaticPartitions(

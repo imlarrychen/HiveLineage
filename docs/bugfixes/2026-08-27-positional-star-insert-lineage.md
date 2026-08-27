@@ -20,7 +20,7 @@ whc.whc_hive_02(id, name, sex)
 SQL：
 
 ```sql
-insert overwrite table whc.whc_hive_01
+insert into whc.whc_hive_01
 select * from whc.whc_hive_02;
 ```
 
@@ -46,11 +46,12 @@ whc.whc_hive_02.sex  -> whc.whc_hive_01.age
 
 ## 修复方案
 
-- 单来源裸星号只按来源元数据顺序展开为带物理表名的来源表达式。
+- 仅当语句为 INSERT、无显式目标字段、顶层来源是唯一直接物理表且来源元数据可用时，启用位置映射路径。
+- 位置映射路径按来源元数据顺序展开为带物理表名的来源表达式。
 - 新增星号目标字段专用解析入口，独立读取完整目标元数据字段顺序。
 - 分别得到来源表达式和目标字段后按索引生成血缘。
 - 复用现有列数校验；数量不一致时整条语句返回 `COLUMN_COUNT_MISMATCH`。
-- 删除不再使用的同名交集和无告警元数据加载路径。
+- 派生表、CTE、多来源裸星号、来源元数据缺失、显式目标字段、CTAS 和 View 保留原有星号处理路径。
 
 ## 影响范围
 
@@ -64,13 +65,19 @@ whc.whc_hive_02.sex  -> whc.whc_hive_01.age
 - 测试方法：`singleSourceStarFailsWhenTargetHasExtraColumns`
 - 测试类：`HiveColumnLineageTest`
 - 测试方法：`selectStarFailsWhenSourceHasExtraColumns`
+- 测试类：`HivePositionalStarScopeTest`
+- 测试方法：`derivedTableStarKeepsExistingProjectionBehavior`
+- 测试方法：`multiSourceBareStarKeepsExistingUnresolvedBehavior`
+- 测试方法：`missingSourceMetadataDoesNotBecomeColumnCountMismatch`
+- 测试方法：`explicitTargetColumnsKeepExistingStarBehavior`
 - 既有成功案例：`selectStarExpandsColumnsFromMetadata`
 - RED 证据：3 个问题测试全部失败；异名位置实际只有 2 条血缘，两种列数不一致场景的状态码均错误为成功 `0`。
-- GREEN 证据：3 个问题测试全部通过；相关星号回归共 35 个测试全部通过。
+- 范围 RED 证据：4 个范围测试全部失败，均被错误改成 `COLUMN_COUNT_MISMATCH`。
+- GREEN 证据：7 个核心行为与范围测试全部通过；相关星号回归共 39 个测试全部通过。
 
 ## 完整验证
 
 - 命令：`/Users/panfan/.m2/wrapper/dists/apache-maven-3.9.12/6068d197/bin/mvn test`
-- 结果：130 tests，0 failures，0 errors，5 skipped，`BUILD SUCCESS`。
+- 结果：134 tests，0 failures，0 errors，5 skipped，`BUILD SUCCESS`。
 - 条件跳过项：5 个 `JdbcMetadataColumnV2ProviderIntegrationTest` 需要外部 MySQL JDBC 参数。
 - 生成测试：`GeneratedSqlTestSetTest` 2 tests，0 failures，0 errors；`lineage_case_04` 元数据调整为源、目标列数一致的成功路径，并刷新血缘快照。
