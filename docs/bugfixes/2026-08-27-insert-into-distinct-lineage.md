@@ -72,8 +72,22 @@ RED 证据：初始专项 9 tests 中有 4 failures；目标解析切换到正�
 
 ## 完整验证
 
-- 专项测试：9 tests，0 failures，0 errors。
-- 相关测试：47 tests，0 failures，0 errors。
+- 专项测试命令：
+
+  ```bash
+  /Users/panfan/.m2/wrapper/dists/apache-maven-3.9.12/6068d197/bin/mvn \
+    -Dtest=HiveParserAstAdapterTest,HiveInsertIntoDistinctLineageTest test
+  ```
+
+- 专项测试结果：9 tests，0 failures，0 errors。
+- 相关测试命令：
+
+  ```bash
+  /Users/panfan/.m2/wrapper/dists/apache-maven-3.9.12/6068d197/bin/mvn \
+    -Dtest=HiveParserAstAdapterTest,HiveInsertIntoDistinctLineageTest,HiveColumnLineageTest,HivePositionalStarInsertLineageTest,HivePositionalStarScopeTest test
+  ```
+
+- 相关测试结果：47 tests，0 failures，0 errors。
 - 全量命令：`/Users/panfan/.m2/wrapper/dists/apache-maven-3.9.12/6068d197/bin/mvn test`
 - 全量结果：140 tests，0 failures，0 errors，5 skipped，`BUILD SUCCESS`。
 - 5 个 skipped 为需要外部 MySQL JDBC 参数的条件测试。

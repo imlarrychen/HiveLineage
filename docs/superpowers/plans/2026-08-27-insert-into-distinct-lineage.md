@@ -24,7 +24,7 @@
 - Modify: `src/test/java/com/panfan/hivelineage/HiveParserAstAdapterTest.java`
 - Create: `src/test/java/com/panfan/hivelineage/HiveInsertIntoDistinctLineageTest.java`
 
-- [ ] **Step 1: Add the AST-level regression tests**
+- [x] **Step 1: Add the AST-level regression tests**
 
 Append these tests to `HiveParserAstAdapterTest`:
 
@@ -69,7 +69,7 @@ public void hiveParserAstAdapterKeepsInsertOverwriteTarget() {
 }
 ```
 
-- [ ] **Step 2: Add the end-to-end regression test class**
+- [x] **Step 2: Add the end-to-end regression test class**
 
 Create `HiveInsertIntoDistinctLineageTest.java` with the reported case and a static-partition scope case:
 
@@ -154,7 +154,7 @@ public class HiveInsertIntoDistinctLineageTest {
 }
 ```
 
-- [ ] **Step 3: Run the new tests and verify RED**
+- [x] **Step 3: Run the new tests and verify RED**
 
 Run:
 
@@ -165,13 +165,15 @@ Run:
 
 Expected: the new `INSERT INTO` AST assertions fail because `getOutputObject()` is null, and the reported DISTINCT lineage assertion fails because the fallback path includes `whc.a.distinct`.
 
-- [ ] **Step 4: Commit only the failing tests**
+- [x] **Step 4: Commit only the failing tests**
 
 ```bash
 git add src/test/java/com/panfan/hivelineage/HiveParserAstAdapterTest.java \
   src/test/java/com/panfan/hivelineage/HiveInsertIntoDistinctLineageTest.java
 git commit -m "test: reproduce insert into distinct lineage bug"
 ```
+
+测试提交：`ea33d6a`（`test: reproduce insert into distinct lineage bug`）。
 
 ### Task 2: Resolve INSERT INTO targets from the Hive AST
 
@@ -246,7 +248,9 @@ git commit -m "fix: preserve qualified star owners from ast"
 ### Task 3: Document and fully verify the fix
 
 **Files:**
-- Create: `docs/bugfixes/2026-08-27-insert-into-distinct-lineage.md`
+- Modify: `docs/superpowers/specs/2026-08-27-insert-into-distinct-lineage-design.md`：记录正式 AST 目标路径和限定星号 owner 兼容性。
+- Modify: `docs/superpowers/plans/2026-08-27-insert-into-distinct-lineage.md`：记录实际 RED/GREEN、提交和验证追踪状态。
+- Create: `docs/bugfixes/2026-08-27-insert-into-distinct-lineage.md`：记录问题、根因、范围、回归案例和最终证据。
 
 - [x] **Step 1: Create the bugfix record**
 

@@ -9,7 +9,7 @@ insert into whc.c(field1)
 select distinct field1 from whc.a;
 ```
 
-预期只生成 `whc.a.field1 -> whc.c.field1`，当前结果却额外生成
+预期只生成 `whc.a.field1 -> whc.c.field1`，修复前结果却额外生成
 `whc.a.distinct -> whc.c.field1`。
 
 ## 根因
@@ -19,7 +19,7 @@ Hive Parser 对两类写入语句使用不同的目标节点：
 - `INSERT OVERWRITE`：`TOK_DESTINATION`
 - `INSERT INTO`：`TOK_INSERT_INTO`
 
-`HiveParserAstAdapter.resolveOutputObject` 当前只从 `TOK_DESTINATION` 读取目标表。
+`HiveParserAstAdapter.resolveOutputObject` 修复前只从 `TOK_DESTINATION` 读取目标表。
 因此 `INSERT INTO` 虽然能正确解析出 `TOK_SELECTDI` 及其中的 `field1`，却无法解析输出表，
 不满足完整 AST 血缘结构，随后退回正则解析路径。正则路径把 `select` 后面的
 `distinct field1` 整体作为投影表达式，最终将 `distinct` 错当成来源字段。
@@ -52,7 +52,7 @@ Hive Parser 对两类写入语句使用不同的目标节点：
 
 ### 方案二：在正则回退路径剥离 DISTINCT
 
-可以消除当前伪字段，但其他 `INSERT INTO` 仍会丢失 AST 信息，而且以后遇到其他
+可以消除该伪字段，但其他 `INSERT INTO` 仍会丢失 AST 信息，而且以后遇到其他
 投影修饰符还会出现同类问题，因此不采用。
 
 ### 方案三：预处理时改写 INSERT INTO
@@ -68,7 +68,7 @@ Hive Parser 对两类写入语句使用不同的目标节点：
 1. 优先读取现有的 `TOK_DESTINATION` 节点，保持 `INSERT OVERWRITE` 行为不变；
 2. 未找到时读取 `TOK_INSERT_INTO` 节点；
 3. 在选中的目标节点下解析 `TOK_TAB/TOK_TABNAME`，生成目标 `DataObjectRef`；
-4. 两种节点均不存在时保持当前无法解析目标的行为，不进行猜测。
+4. 两种节点均不存在时保持既有无法解析目标的行为，不进行猜测。
 
 ### 投影与血缘数据流
 
