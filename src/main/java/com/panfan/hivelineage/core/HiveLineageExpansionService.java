@@ -364,9 +364,12 @@ final class HiveLineageExpansionService {
             }
             sourceColumns = expandViewSourceColumns(context, sourceColumns, depth + 1, visitingViews);
             LineageType lineageType = projectionResolver.resolveLineageType(lineageExpression, expression, sourceColumns);
+            boolean unresolved = sourceColumns.isEmpty()
+                && projectionResolver.mayContainColumnReference(expression)
+                && !projectionResolver.isConstantLineageExpression(expression);
             mapping.put(
                 targetColumns.get(i).toLowerCase(Locale.ROOT),
-                new ColumnLineageProjection(sourceColumns, lineageExpression, lineageType)
+                new ColumnLineageProjection(sourceColumns, lineageExpression, lineageType, unresolved)
             );
         }
         viewColumnLineageCache.put(viewName, mapping);

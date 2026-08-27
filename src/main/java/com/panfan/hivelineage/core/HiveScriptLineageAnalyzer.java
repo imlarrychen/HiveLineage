@@ -461,9 +461,10 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                     );
                 }
                 if (sourceColumns.isEmpty()
-                    && directProjection == null
                     && !unresolvedStarExpression
-                    && projectionResolver.mayContainColumnReference(sourceExtractionExpression)) {
+                    && ((directProjection == null
+                        && projectionResolver.mayContainColumnReference(sourceExtractionExpression))
+                        || (directProjection != null && directProjection.isUnresolved()))) {
                     targetColumnResolver.addWarning(
                         statementWarnings,
                         WarningCode.UNKNOWN_COLUMN_LINEAGE,

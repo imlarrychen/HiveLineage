@@ -212,11 +212,13 @@ final class HiveProjectionLineageResolver {
             List<ColumnRef> sourceColumns = new ArrayList<>();
             Set<String> seen = new LinkedHashSet<>();
             List<String> expressions = new ArrayList<>();
+            boolean unresolved = false;
             for (Map<String, ColumnLineageProjection> branchProjection : branchProjections) {
                 if (i >= branchProjection.size()) {
                     continue;
                 }
                 ColumnLineageProjection projection = new ArrayList<>(branchProjection.values()).get(i);
+                unresolved = unresolved || projection.isUnresolved();
                 for (ColumnRef sourceColumn : projection.getSourceColumns()) {
                     addColumn(sourceColumns, seen, sourceColumn);
                 }
@@ -227,7 +229,8 @@ final class HiveProjectionLineageResolver {
                 new ColumnLineageProjection(
                     sourceColumns,
                     setOperationParts.getFunctionName() + "(" + HiveSqlTextUtils.joinWithComma(expressions) + ")",
-                    LineageType.DERIVED
+                    LineageType.DERIVED,
+                    unresolved
                 )
             );
         }
@@ -293,6 +296,9 @@ final class HiveProjectionLineageResolver {
         List<ColumnRef> expandedSourceColumns = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         ColumnLineageProjection singleProjection = null;
+        boolean unresolved = rawSourceColumns.isEmpty()
+            && mayContainColumnReference(expression)
+            && !isConstantLineageExpression(expression);
         for (ColumnRef rawSourceColumn : rawSourceColumns) {
             String sourceTable = HiveSqlTextUtils.tableNameOfColumn(rawSourceColumn.getQualifiedName());
             String sourceColumnName = HiveSqlTextUtils.columnNameOf(rawSourceColumn.getQualifiedName());
@@ -303,6 +309,7 @@ final class HiveProjectionLineageResolver {
                 addColumn(expandedSourceColumns, seen, rawSourceColumn);
                 continue;
             }
+            unresolved = unresolved || projection.isUnresolved();
             singleProjection = rawSourceColumns.size() == 1 ? projection : null;
             for (ColumnRef projectedSourceColumn : projection.getSourceColumns()) {
                 addColumn(expandedSourceColumns, seen, projectedSourceColumn);
@@ -320,7 +327,7 @@ final class HiveProjectionLineageResolver {
             lineageExpression = normalizeLineageExpression(expression);
             lineageType = resolveLineageType(lineageExpression, expression, expandedSourceColumns);
         }
-        return new ColumnLineageProjection(expandedSourceColumns, lineageExpression, lineageType);
+        return new ColumnLineageProjection(expandedSourceColumns, lineageExpression, lineageType, unresolved);
     }
     Map<String, String> extractProjectionSourceAliases(String sql) {
         Map<String, String> aliases = targetColumnResolver.extractTopLevelSourceAliases(sql);

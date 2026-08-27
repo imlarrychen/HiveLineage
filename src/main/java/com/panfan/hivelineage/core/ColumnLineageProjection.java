@@ -10,22 +10,37 @@ final class ColumnLineageProjection {
     final List<ColumnRef> sourceColumns;
     final String expression;
     final LineageType lineageType;
+    final boolean unresolved;
 
     ColumnLineageProjection(List<ColumnRef> sourceColumns, String expression, LineageType lineageType) {
-            this.sourceColumns = Collections.unmodifiableList(new ArrayList<>(sourceColumns));
-            this.expression = expression;
-            this.lineageType = lineageType;
-        }
+        this(sourceColumns, expression, lineageType, false);
+    }
+
+    ColumnLineageProjection(
+        List<ColumnRef> sourceColumns,
+        String expression,
+        LineageType lineageType,
+        boolean unresolved
+    ) {
+        this.sourceColumns = Collections.unmodifiableList(new ArrayList<>(sourceColumns));
+        this.expression = expression;
+        this.lineageType = lineageType;
+        this.unresolved = unresolved;
+    }
 
     List<ColumnRef> getSourceColumns() {
-            return sourceColumns;
-        }
+        return sourceColumns;
+    }
 
     String getExpression() {
-            return expression;
-        }
+        return expression;
+    }
 
     LineageType getLineageType() {
-            return lineageType;
-        }
+        return lineageType;
+    }
+
+    boolean isUnresolved() {
+        return unresolved;
+    }
 }
