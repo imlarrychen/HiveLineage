@@ -647,7 +647,7 @@ public class HiveColumnLineageTest {
     }
 
     @Test
-    public void selectStarAlignsToTargetMetadataWhenSourceHasExtraColumns() {
+    public void selectStarFailsWhenSourceHasExtraColumns() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
         MapMetadataProvider metadataProvider = new MapMetadataProvider()
             .addTable("ods.user_base", "user_id", "id", "name", "user_name", "dept_id", "tags", "dt", "amount", "status")
@@ -666,19 +666,11 @@ public class HiveColumnLineageTest {
                 .build())
             .build();
 
-        List<ColumnLineage> columns = analyzer.analyzeScript(request).getStatements().get(0).getColumnLineages();
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
 
-        TestSupport.assertEquals(6, columns.size(), "target metadata select star column count");
-        TestSupport.assertEquals("dwd.user_base_snapshot.user_id", columns.get(0).getTargetColumn().getQualifiedName(), "target star user_id");
-        TestSupport.assertEquals("ods.user_base.user_id", columns.get(0).getSourceColumns().get(0).getQualifiedName(), "source star user_id");
-        TestSupport.assertEquals("dwd.user_base_snapshot.user_name", columns.get(1).getTargetColumn().getQualifiedName(), "target star user_name");
-        TestSupport.assertEquals("ods.user_base.user_name", columns.get(1).getSourceColumns().get(0).getQualifiedName(), "source star user_name");
-        TestSupport.assertEquals("dwd.user_base_snapshot.status", columns.get(3).getTargetColumn().getQualifiedName(), "target star status");
-        TestSupport.assertEquals("ods.user_base.status", columns.get(3).getSourceColumns().get(0).getQualifiedName(), "source star status");
-        TestSupport.assertEquals("dwd.user_base_snapshot.tags", columns.get(4).getTargetColumn().getQualifiedName(), "target star tags");
-        TestSupport.assertEquals("ods.user_base.tags", columns.get(4).getSourceColumns().get(0).getQualifiedName(), "source star tags");
-        TestSupport.assertEquals("dwd.user_base_snapshot.dt", columns.get(5).getTargetColumn().getQualifiedName(), "target star dt");
-        TestSupport.assertEquals("ods.user_base.dt", columns.get(5).getSourceColumns().get(0).getQualifiedName(), "source star dt");
+        TestSupport.assertEquals(2, statement.getParseStatusCode(), "source extra star parse status");
+        TestSupport.assertEquals("COLUMN_COUNT_MISMATCH", statement.getFailureCode(), "source extra star failure code");
+        TestSupport.assertEquals(0, statement.getColumnLineages().size(), "source extra star lineage count");
     }
 
     @Test

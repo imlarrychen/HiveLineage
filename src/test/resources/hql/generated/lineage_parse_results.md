@@ -554,7 +554,7 @@ where dt = '${bizdate}'
 
 ```sql
 -- 覆盖点：select * 元数据展开 + insert overwrite table 未显式目标字段
--- 预期：字段血缘必须依赖元数据把 ods.user_base 的 user_id,user_name,dept_id,status,tags,dt 展开到 dwd.user_base_snapshot。
+-- 预期：字段血缘必须依赖元数据，按字段位置把 ods.user_base 的完整字段列表展开到 dwd.user_base_snapshot。
 insert overwrite table dwd.user_base_snapshot
 select *
 from ods.user_base
@@ -576,7 +576,7 @@ where dt = '${bizdate}';
 
 ```sql
 -- 覆盖点：select * 元数据展开 + insert overwrite table 未显式目标字段
--- 预期：字段血缘必须依赖元数据把 ods.user_base 的 user_id,user_name,dept_id,status,tags,dt 展开到 dwd.user_base_snapshot。
+-- 预期：字段血缘必须依赖元数据，按字段位置把 ods.user_base 的完整字段列表展开到 dwd.user_base_snapshot。
 insert overwrite table dwd.user_base_snapshot
 select *
 from ods.user_base
@@ -606,12 +606,17 @@ where dt = '${bizdate}'
 
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| dwd.user_base_snapshot.user_id | ods.user_base.user_id | ods.user_base | DIRECT | user_id |  | false | true |
-| dwd.user_base_snapshot.user_name | ods.user_base.user_name | ods.user_base | DIRECT | user_name |  | false | true |
-| dwd.user_base_snapshot.dept_id | ods.user_base.dept_id | ods.user_base | DIRECT | dept_id |  | false | true |
-| dwd.user_base_snapshot.status | ods.user_base.status | ods.user_base | DIRECT | status |  | false | true |
-| dwd.user_base_snapshot.tags | ods.user_base.tags | ods.user_base | DIRECT | tags |  | false | true |
-| dwd.user_base_snapshot.dt | ods.user_base.dt | ods.user_base | DIRECT | dt |  | false | true |
+| dwd.user_base_snapshot.user_id | ods.user_base.user_id | ods.user_base | DIRECT | ods.user_base.user_id |  | false | true |
+| dwd.user_base_snapshot.id | ods.user_base.id | ods.user_base | DIRECT | ods.user_base.id |  | false | true |
+| dwd.user_base_snapshot.name | ods.user_base.name | ods.user_base | DIRECT | ods.user_base.name |  | false | true |
+| dwd.user_base_snapshot.user_name | ods.user_base.user_name | ods.user_base | DIRECT | ods.user_base.user_name |  | false | true |
+| dwd.user_base_snapshot.first_name | ods.user_base.first_name | ods.user_base | DIRECT | ods.user_base.first_name |  | false | true |
+| dwd.user_base_snapshot.last_name | ods.user_base.last_name | ods.user_base | DIRECT | ods.user_base.last_name |  | false | true |
+| dwd.user_base_snapshot.dept_id | ods.user_base.dept_id | ods.user_base | DIRECT | ods.user_base.dept_id |  | false | true |
+| dwd.user_base_snapshot.dt | ods.user_base.dt | ods.user_base | DIRECT | ods.user_base.dt |  | false | true |
+| dwd.user_base_snapshot.tags | ods.user_base.tags | ods.user_base | DIRECT | ods.user_base.tags |  | false | true |
+| dwd.user_base_snapshot.amount | ods.user_base.amount | ods.user_base | DIRECT | ods.user_base.amount |  | false | true |
+| dwd.user_base_snapshot.status | ods.user_base.status | ods.user_base | DIRECT | ods.user_base.status |  | false | true |
 
 #### Warnings
 

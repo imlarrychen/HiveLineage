@@ -49,7 +49,7 @@
 
 | 表 | 字段 |
 | --- | --- |
-| `dwd.user_base_snapshot` | `user_id`, `user_name`, `dept_id`, `status`, `tags`, `dt` |
+| `dwd.user_base_snapshot` | `user_id`, `id`, `name`, `user_name`, `first_name`, `last_name`, `dept_id`, `dt`, `tags`, `amount`, `status` |
 | `dwd.user_order_summary` | `user_id`, `total_amount`, `order_cnt`, `last_pay_time` |
 | `dwd.user_profile_enriched` | `user_id`, `user_name`, `dept_name`, `user_status`, `process_date` |
 | `dwd.active_user_profile` | `user_id`, `user_name`, `dept_name` |

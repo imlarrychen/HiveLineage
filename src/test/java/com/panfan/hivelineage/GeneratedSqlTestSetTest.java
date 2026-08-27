@@ -102,7 +102,7 @@ public class GeneratedSqlTestSetTest {
             .addTable("dwd.ctas_like_target", "user_id", "user_name")
             .addTable("ads.final_user", "user_id", "user_name")
             .addTable("ads.audit_user", "user_id", "user_name")
-            .addTable("dwd.user_base_snapshot", "user_id", "user_name", "dept_id", "status", "tags", "dt")
+            .addTable("dwd.user_base_snapshot", "user_id", "id", "name", "user_name", "first_name", "last_name", "dept_id", "dt", "tags", "amount", "status")
             .addTable("dwd.user_order_summary", "user_id", "total_amount", "order_cnt", "last_pay_time")
             .addTable("dwd.user_profile_enriched", "user_id", "user_name", "dept_name", "user_status", "process_date")
             .addTable("dwd.active_user_profile", "user_id", "user_name", "dept_name")

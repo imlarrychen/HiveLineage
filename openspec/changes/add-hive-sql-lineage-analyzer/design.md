@@ -249,7 +249,7 @@ Map<String, String> builtInFallbackVariables = Map.of(
 - `COLUMN_ONLY` 模式：只在解析字段映射、展开 `*`、解析无表别名前缀字段、目标字段对齐、临时表字段串联时加载必要元数据。
 - `TABLE_AND_COLUMN` 模式：表级血缘先基于 SQL 结构解析，字段级血缘阶段再按需加载元数据。
 
-对于 `insert overwrite table target select * from source` 这类未显式目标字段的语句，如果目标表和源表字段元数据都可用，字段血缘按目标表字段顺序取目标字段与源字段的交集；源表独有字段不生成目标血缘，目标表独有字段也不凭空生成来源。
+对于 `insert overwrite table target select * from source` 这类未显式目标字段的单来源语句，如果目标表和源表字段元数据都可用，分别按来源表和目标表的字段顺序展开，并按位置生成字段血缘。源、目标有效字段数量不一致时返回 `COLUMN_COUNT_MISMATCH`，不生成部分字段血缘。
 
 元数据查询通过接口隔离：
 

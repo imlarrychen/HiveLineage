@@ -324,7 +324,14 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         List<String> inferredTargetColumns = targetColumns;
         if (targetColumns.isEmpty()) {
             inferredTargetColumns = starSelect
-                ? new ArrayList<>(expandedSelectItems)
+                ? targetColumnResolver.resolveStarTargetColumns(
+                    request,
+                    targetTable,
+                    expandedSelectItems,
+                    parseMode,
+                    statementWarnings,
+                    index
+                )
                 : targetColumnResolver.resolveTargetColumns(
                     request,
                     targetTable,
