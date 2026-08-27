@@ -41,7 +41,10 @@ final class HiveProjectionLineageResolver {
         }
         List<ColumnRef> refs = new ArrayList<>();
         for (String sourceColumn : sourceColumns) {
-            refs.add(new ColumnRef(sourceColumn));
+            QualifiedColumnReference reference = QualifiedColumnReference.parse(sourceColumn);
+            if (reference == null || !reference.isStar()) {
+                refs.add(new ColumnRef(sourceColumn));
+            }
         }
         return refs;
     }

@@ -1,6 +1,9 @@
 package com.panfan.hivelineage;
 
 import com.panfan.hivelineage.core.HiveScriptLineageAnalyzer;
+import com.panfan.hivelineage.core.HiveAstParserAdapter;
+import com.panfan.hivelineage.core.HiveParserAstAdapter;
+import com.panfan.hivelineage.core.ParsedHiveStatement;
 import com.panfan.hivelineage.metadata.HiveMetadataCache;
 import com.panfan.hivelineage.request.LineageAnalyzeOptions;
 import com.panfan.hivelineage.request.LineageAnalyzeRequest;
@@ -22,6 +25,22 @@ public class HiveQualifiedProjectionHardeningTest {
     @Test
     public void unionBranchesExpandDistinctAliasesWithinEachBranch() {
         assertUnionStarLineage("x", "y");
+    }
+
+    @Test
+    public void unresolvedFirstBranchAliasDoesNotBindLaterUnionAlias() {
+        assertUnresolvedFirstUnionStar(
+            "x.* from db1.a a union all select x.* from db2.b x",
+            "later alias"
+        );
+    }
+
+    @Test
+    public void unresolvedFirstBranchSimpleNameDoesNotBindLaterUnionTable() {
+        assertUnresolvedFirstUnionStar(
+            "b.* from db1.a union all select b.* from db2.b",
+            "later simple name"
+        );
     }
 
     @Test
@@ -88,11 +107,36 @@ public class HiveQualifiedProjectionHardeningTest {
         TestSupport.assertEquals("union_all(db1.a.name, db2.b.name)", columns.get(1).getExpression(), "union name expression");
     }
 
+    private void assertUnresolvedFirstUnionStar(String unionProjection, String message) {
+        MapMetadataProvider metadata = new MapMetadataProvider()
+            .addTable("db1.a", "id")
+            .addTable("db2.b", "id", "name")
+            .addTable("target.union_c", "id");
+        StatementLineageResult statement = analyze(
+            metadata,
+            "insert into target.union_c select " + unionProjection + ";",
+            new HiveScriptLineageAnalyzer(new PreservingUnionStarParser(unionProjection.substring(0, 1) + ".*"))
+        );
+
+        assertContainsWarning(statement.getWarnings(), WarningCode.UNKNOWN_COLUMN_LINEAGE);
+        TestSupport.assertEquals(1, statement.getColumnLineages().size(), message + " lineage count");
+        ColumnLineage column = statement.getColumnLineages().get(0);
+        TestSupport.assertEquals(0, column.getSourceColumns().size(), message + " source count");
+    }
+
     private MapMetadataProvider baseMetadata() {
         return new MapMetadataProvider().addTable("target.c", "id");
     }
 
     private StatementLineageResult analyze(MapMetadataProvider metadata, String sql) {
+        return analyze(metadata, sql, new HiveScriptLineageAnalyzer());
+    }
+
+    private StatementLineageResult analyze(
+        MapMetadataProvider metadata,
+        String sql,
+        HiveScriptLineageAnalyzer analyzer
+    ) {
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
             .workflowId("wf_001")
             .taskId("task_qualified_projection_hardening")
@@ -105,12 +149,41 @@ public class HiveQualifiedProjectionHardeningTest {
                 .parseMode(LineageParseMode.TABLE_AND_COLUMN)
                 .build())
             .build();
-        return new HiveScriptLineageAnalyzer().analyzeScript(request).getStatements().get(0);
+        return analyzer.analyzeScript(request).getStatements().get(0);
     }
 
     private void assertUnknownEmptySource(StatementLineageResult statement, String message) {
         assertContainsWarning(statement.getWarnings(), WarningCode.UNKNOWN_COLUMN_LINEAGE);
         TestSupport.assertEquals(1, statement.getColumnLineages().size(), message + " lineage count");
         TestSupport.assertEquals(0, statement.getColumnLineages().get(0).getSourceColumns().size(), message + " sources");
+    }
+
+    private static final class PreservingUnionStarParser implements HiveAstParserAdapter {
+        private final HiveParserAstAdapter delegate = new HiveParserAstAdapter();
+        private final String firstProjection;
+
+        private PreservingUnionStarParser(String firstProjection) {
+            this.firstProjection = firstProjection;
+        }
+
+        @Override
+        public ParsedHiveStatement parse(String sql) {
+            ParsedHiveStatement parsed = delegate.parse(sql);
+            return new ParsedHiveStatement(
+                parsed.getStatementType(),
+                parsed.getOutputObject(),
+                parsed.getInputObjects(),
+                parsed.getTargetColumns(),
+                java.util.Collections.singletonList(firstProjection),
+                parsed.getSourceAliases(),
+                parsed.getColumnAliasSources(),
+                parsed.getColumnAliasExpressions(),
+                parsed.getSetOperationSourceColumnsBySelectIndex(),
+                parsed.getSetOperationExpressionsBySelectIndex(),
+                parsed.getStaticPartitionValues(),
+                parsed.getJoinConditions(),
+                parsed.getNormalizedSql()
+            );
+        }
     }
 }

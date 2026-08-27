@@ -14,6 +14,10 @@ final class HiveSetOperationStarExpander {
         this.targetColumnResolver = targetColumnResolver;
     }
 
+    boolean hasTopLevelSetOperation(String sql) {
+        return !topLevelUnionIndexes(sql).isEmpty();
+    }
+
     String expand(ColumnResolutionContext context, String sql) {
         List<Integer> unionIndexes = topLevelUnionIndexes(sql);
         if (unionIndexes.isEmpty()) {

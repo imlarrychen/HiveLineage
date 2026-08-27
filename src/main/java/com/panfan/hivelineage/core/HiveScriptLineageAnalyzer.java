@@ -287,7 +287,9 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             return failedResult(context, "SQL_PARSE_ERROR", "No input object found");
         }
         ColumnResolutionContext columnContext = new ColumnResolutionContext(request, parseMode, statementWarnings, index);
-        String analysisStatement = new HiveSetOperationStarExpander(targetColumnResolver).expand(
+        HiveSetOperationStarExpander setOperationStarExpander = new HiveSetOperationStarExpander(targetColumnResolver);
+        boolean topLevelSetOperation = setOperationStarExpander.hasTopLevelSetOperation(normalizedStatement);
+        String analysisStatement = setOperationStarExpander.expand(
             columnContext,
             normalizedStatement
         );
@@ -305,13 +307,15 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         Map<String, String> explicitSourceAliases = targetColumnResolver.extractExplicitSourceAliases(analysisStatement);
         QualifiedOwnerResolver ownerResolver = new QualifiedOwnerResolver(originalInputObjects, explicitSourceAliases);
         boolean starSelect = targetColumnResolver.isSingleStarSelect(selectItems);
-        List<String> expandedSelectItems = targetColumnResolver.expandStarSelectItems(
-            columnContext,
-            targetTable,
-            selectItems,
-            originalInputObjects,
-            ownerResolver
-        );
+        List<String> expandedSelectItems = topLevelSetOperation
+            ? selectItems
+            : targetColumnResolver.expandStarSelectItems(
+                columnContext,
+                targetTable,
+                selectItems,
+                originalInputObjects,
+                ownerResolver
+            );
 
         List<String> inferredTargetColumns = targetColumns;
         if (targetColumns.isEmpty()) {
