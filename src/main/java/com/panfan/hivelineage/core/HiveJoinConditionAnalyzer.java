@@ -24,7 +24,9 @@ import java.util.regex.Pattern;
 
 final class HiveJoinConditionAnalyzer {
     private static final int PARSE_STATUS_SUCCESS = StatementParseStatus.SUCCESS.getCode();
-    private static final Pattern QUALIFIED_COLUMN = Pattern.compile("\\b([a-zA-Z_][\\w]*)\\.([a-zA-Z_][\\w]*)\\b");
+    private static final Pattern QUALIFIED_COLUMN = Pattern.compile(
+        "(?<![\\w.])([a-zA-Z_][\\w]*(?:\\.[a-zA-Z_][\\w]*){1,2})(?![\\w.])"
+    );
     private final HiveAstParserAdapter parserAdapter;
     private final HiveTargetColumnResolver targetColumnResolver;
     private final HiveProjectionLineageResolver projectionResolver;
@@ -349,9 +351,7 @@ final class HiveJoinConditionAnalyzer {
         Set<String> seen = new LinkedHashSet<>();
         Matcher matcher = QUALIFIED_COLUMN.matcher(HiveSqlTextUtils.removeStringLiterals(expression));
         while (matcher.find()) {
-            String owner = matcher.group(1);
-            String column = matcher.group(2);
-            String qualifiedName = owner + "." + column;
+            String qualifiedName = matcher.group(1);
             if (seen.add(qualifiedName.toLowerCase(Locale.ROOT))) {
                 columns.add(new ColumnRef(qualifiedName));
             }
@@ -383,21 +383,33 @@ final class HiveJoinConditionAnalyzer {
     ) {
         List<ColumnRef> resolvedColumns = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
+        QualifiedOwnerResolver ownerResolver = new QualifiedOwnerResolver(inputObjects, sourceAliases);
         for (ColumnRef directColumn : directColumns) {
             String owner = HiveSqlTextUtils.tableNameOfColumn(directColumn.getQualifiedName());
             String columnName = owner == null ? directColumn.getQualifiedName() : HiveSqlTextUtils.columnNameOf(directColumn.getQualifiedName());
             if (columnName == null) {
                 continue;
             }
-            List<String> sourceObjects = owner == null
-                ? resolveUnqualifiedJoinColumnOwners(
+            List<String> sourceObjects;
+            if (owner == null) {
+                sourceObjects = resolveUnqualifiedJoinColumnOwners(
                     context.getRequest(),
                     columnName,
                     inputObjects,
                     context.getWarnings(),
                     context.getStatementIndex()
-                )
-                : Collections.singletonList(resolveSourceObject(owner, sourceAliases));
+                );
+            } else {
+                String sourceObject = resolveQualifiedJoinOwner(
+                    context,
+                    owner,
+                    ownerResolver,
+                    cteColumnProjections
+                );
+                sourceObjects = sourceObject == null
+                    ? Collections.<String>emptyList()
+                    : Collections.singletonList(sourceObject);
+            }
             for (String sourceObject : sourceObjects) {
                 List<ColumnRef> expanded = expandJoinColumn(
                     context,
@@ -412,9 +424,28 @@ final class HiveJoinConditionAnalyzer {
         }
         return resolvedColumns;
     }
-    String resolveSourceObject(String owner, Map<String, String> sourceAliases) {
-        String sourceObject = sourceAliases.get(owner.toLowerCase(Locale.ROOT));
-        return sourceObject == null ? owner : sourceObject;
+    private String resolveQualifiedJoinOwner(
+        StatementAnalysisContext context,
+        String owner,
+        QualifiedOwnerResolver ownerResolver,
+        Map<String, Map<String, List<ColumnRef>>> cteColumnProjections
+    ) {
+        String normalizedOwner = owner.toLowerCase(Locale.ROOT);
+        if (cteColumnProjections.containsKey(normalizedOwner)
+            || containsProjectionTable(owner, context.getTemporaryTableColumns())) {
+            return owner;
+        }
+        String resolved = ownerResolver.resolve(owner);
+        if (resolved != null) {
+            return resolved;
+        }
+        targetColumnResolver.addWarning(
+            context.getWarnings(),
+            WarningCode.UNKNOWN_COLUMN_LINEAGE,
+            "Unable to resolve qualified join owner " + owner,
+            context.getStatementIndex()
+        );
+        return null;
     }
     List<String> resolveUnqualifiedJoinColumnOwners(
         LineageAnalyzeRequest request,

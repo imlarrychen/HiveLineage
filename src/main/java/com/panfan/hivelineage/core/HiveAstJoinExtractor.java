@@ -258,14 +258,14 @@ final class HiveAstJoinExtractor {
         Set<String> owners = new LinkedHashSet<>();
         boolean hasUnqualifiedColumn = false;
         for (String directColumn : directColumns) {
-            int dotIndex = directColumn.indexOf('.');
-            if (dotIndex <= 0) {
+            String owner = HiveSqlTextUtils.tableNameOfColumn(directColumn);
+            if (owner == null) {
                 hasUnqualifiedColumn = true;
                 continue;
             }
-            String owner = directColumn.substring(0, dotIndex).toLowerCase(Locale.ROOT);
-            String sourceObject = directAliases.get(owner);
-            owners.add(sourceObject == null ? owner : sourceObject.toLowerCase(Locale.ROOT));
+            String normalizedOwner = owner.toLowerCase(Locale.ROOT);
+            String sourceObject = directAliases.get(normalizedOwner);
+            owners.add(sourceObject == null ? normalizedOwner : sourceObject.toLowerCase(Locale.ROOT));
         }
         return owners.size() >= 2 || hasUnqualifiedColumn;
     }
@@ -445,13 +445,13 @@ final class HiveAstJoinExtractor {
     private List<String> directObjectsForColumns(List<String> directColumns, Map<String, String> directAliases) {
         LinkedHashSet<String> objects = new LinkedHashSet<>();
         for (String column : directColumns) {
-            int dotIndex = column.indexOf('.');
-            if (dotIndex <= 0) {
+            String owner = HiveSqlTextUtils.tableNameOfColumn(column);
+            if (owner == null) {
                 continue;
             }
-            String owner = column.substring(0, dotIndex).toLowerCase(Locale.ROOT);
-            String object = directAliases.get(owner);
-            objects.add(object == null ? owner : object);
+            String normalizedOwner = owner.toLowerCase(Locale.ROOT);
+            String object = directAliases.get(normalizedOwner);
+            objects.add(object == null ? normalizedOwner : object);
         }
         return new ArrayList<>(objects);
     }
