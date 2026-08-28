@@ -9,6 +9,21 @@ final class ScriptAnalysisState {
     private final Map<String, List<DataObjectRef>> temporaryTableSources = new HashMap<>();
     private final Map<String, Map<String, ColumnLineageProjection>> temporaryTableColumns = new HashMap<>();
     private final Map<String, Map<String, ColumnLineageProjection>> viewColumnLineageCache = new HashMap<>();
+    private final HivePhysicalNameResolver nameResolver;
+    private String currentDatabase;
+
+    ScriptAnalysisState(String defaultDatabase, HivePhysicalNameResolver nameResolver) {
+        this.nameResolver = nameResolver;
+        this.currentDatabase = nameResolver.normalizeDatabase(defaultDatabase);
+    }
+
+    String getCurrentDatabase() {
+        return currentDatabase;
+    }
+
+    void useDatabase(String database) {
+        currentDatabase = nameResolver.normalizeDatabase(database);
+    }
 
     Map<String, List<DataObjectRef>> getTemporaryTableSources() {
         return temporaryTableSources;

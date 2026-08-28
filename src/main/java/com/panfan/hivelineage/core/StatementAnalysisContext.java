@@ -12,6 +12,7 @@ final class StatementAnalysisContext {
     private final String normalizedStatement;
     private final int statementIndex;
     private final ScriptAnalysisState scriptState;
+    private final String statementDatabase;
     private final List<LineageWarning> warnings;
 
     StatementAnalysisContext(
@@ -20,6 +21,7 @@ final class StatementAnalysisContext {
         String normalizedStatement,
         int statementIndex,
         ScriptAnalysisState scriptState,
+        String statementDatabase,
         List<LineageWarning> warnings
     ) {
         this.request = request;
@@ -27,6 +29,7 @@ final class StatementAnalysisContext {
         this.normalizedStatement = normalizedStatement;
         this.statementIndex = statementIndex;
         this.scriptState = scriptState;
+        this.statementDatabase = statementDatabase;
         this.warnings = warnings;
     }
 
@@ -44,6 +47,10 @@ final class StatementAnalysisContext {
 
     int getStatementIndex() {
         return statementIndex;
+    }
+
+    String getStatementDatabase() {
+        return statementDatabase;
     }
 
     Map<String, List<DataObjectRef>> getTemporaryTableSources() {

@@ -39,6 +39,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         "(?is)^create\\s+temporary\\s+table\\s+([a-zA-Z_][\\w.]*).*?\\bas\\s+select\\s+(.+?)\\s+from\\s+([a-zA-Z_][\\w.]*)(?:\\s+.*)?$"
     );
     private final HiveAstParserAdapter parserAdapter;
+    private final HivePhysicalNameResolver nameResolver;
     private final HiveScriptPreprocessor scriptPreprocessor = new HiveScriptPreprocessor();
     private final HiveTargetColumnResolver targetColumnResolver = new HiveTargetColumnResolver();
     private final HiveProjectionLineageResolver projectionResolver;
@@ -51,6 +52,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
 
     public HiveScriptLineageAnalyzer(HiveAstParserAdapter parserAdapter) {
         this.parserAdapter = parserAdapter == null ? new HeuristicHiveAstParserAdapter() : parserAdapter;
+        this.nameResolver = new HivePhysicalNameResolver();
         this.projectionResolver = new HiveProjectionLineageResolver(this.parserAdapter, targetColumnResolver);
         this.expansionService = new HiveLineageExpansionService(this.parserAdapter, targetColumnResolver, projectionResolver);
         this.joinAnalyzer = new HiveJoinConditionAnalyzer(this.parserAdapter, targetColumnResolver, projectionResolver, expansionService);
@@ -61,7 +63,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         List<String> statements = scriptPreprocessor.splitStatements(request.getRawScript());
         List<StatementLineageResult> results = new ArrayList<>();
         Map<String, String> sessionVariables = new HashMap<>(request.getRuntimeVariables());
-        ScriptAnalysisState scriptState = new ScriptAnalysisState();
+        ScriptAnalysisState scriptState = new ScriptAnalysisState(request.getDefaultDatabase(), nameResolver);
         int ignored = 0;
         int failed = 0;
 
@@ -98,6 +100,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 normalized,
                 i,
                 scriptState,
+                scriptState.getCurrentDatabase(),
                 statementWarnings
             );
             if (skipReason != null) {

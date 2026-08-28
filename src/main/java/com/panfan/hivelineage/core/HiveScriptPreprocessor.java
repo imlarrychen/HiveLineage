@@ -11,8 +11,30 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 final class HiveScriptPreprocessor {
+    private static final Pattern USE_DATABASE_CANDIDATE = Pattern.compile("(?is)^use(?:\\s|$)");
+    private static final Pattern USE_DATABASE = Pattern.compile(
+        "(?is)^use\\s+(`[^`\\s.]+`|[a-zA-Z_][\\w]*)\\s*$"
+    );
+    private final HivePhysicalNameResolver nameResolver = new HivePhysicalNameResolver();
+
     boolean isSetStatement(String statement) {
         return statement.trim().toLowerCase(Locale.ROOT).startsWith("set ");
+    }
+
+    boolean isUseDatabaseCandidate(String statement) {
+        String trimmed = statement == null ? "" : statement.trim();
+        return USE_DATABASE_CANDIDATE.matcher(trimmed).find();
+    }
+
+    UseDatabaseResolution resolveUseDatabase(String statement, boolean hasUnresolvedVariable) {
+        if (hasUnresolvedVariable) {
+            return UseDatabaseResolution.invalid("USE database contains an unresolved variable");
+        }
+        Matcher matcher = USE_DATABASE.matcher(statement == null ? "" : statement.trim());
+        if (!matcher.matches()) {
+            return UseDatabaseResolution.invalid("Invalid USE database statement");
+        }
+        return UseDatabaseResolution.valid(nameResolver.normalizeDatabase(matcher.group(1)));
     }
 
     void applySetStatement(String statement, Map<String, String> sessionVariables) {
