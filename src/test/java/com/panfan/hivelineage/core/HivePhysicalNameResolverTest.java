@@ -35,4 +35,50 @@ public class HivePhysicalNameResolverTest {
     public void bareTableWithTrailingDotFails() {
         resolver.qualifyTable("t.", "whc");
     }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void databaseWithTrailingDotFails() {
+        resolver.qualifyTable("t", "db.");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void databaseWithMultiplePartsFails() {
+        resolver.qualifyTable("t", "db.other");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void databaseWithInternalWhitespaceFails() {
+        resolver.qualifyTable("t", "db other");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void databaseWithUnpairedBacktickFails() {
+        resolver.qualifyTable("t", "`db");
+    }
+
+    @Test
+    public void emptyDatabaseVariantsFailDatabaseResolution() {
+        assertDatabaseResolutionFailure("");
+        assertDatabaseResolutionFailure("   ");
+        assertDatabaseResolutionFailure("``");
+    }
+
+    @Test(expected = DatabaseResolutionException.class)
+    public void nullTableNameFailsDatabaseResolution() {
+        resolver.qualifyTable(null, "db");
+    }
+
+    @Test(expected = DatabaseResolutionException.class)
+    public void emptyTableNameFailsDatabaseResolution() {
+        resolver.qualifyTable("", "db");
+    }
+
+    private void assertDatabaseResolutionFailure(String database) {
+        try {
+            resolver.qualifyTable("t", database);
+        } catch (DatabaseResolutionException expected) {
+            return;
+        }
+        throw new AssertionError("Expected DatabaseResolutionException for database: " + database);
+    }
 }
