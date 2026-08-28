@@ -277,7 +277,7 @@ LEFT JOIN whc.d ON t.field1 = d.field1;
 
 ## 测试沉淀
 
-- 独立测试：`HiveNestedSelectPseudoColumnRegressionTest`。
+- 独立测试：`HiveNestedSelectPseudoColumnRegressionTest#nestedSelectDoesNotBecomeSourceColumn`。
 - 专项测试：1 test，0 failures，0 errors。
 - 相关测试：53 tests，0 failures，0 errors。
 - 全量测试：141 tests，0 failures，0 errors，5 skipped。
