@@ -105,7 +105,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 scriptState.getCurrentDatabase(),
                 statementWarnings
             );
-            if (scriptPreprocessor.isUseDatabaseCandidate(executableStatement)) {
+            if (scriptPreprocessor.isUseDatabaseCandidate(normalized)) {
                 UseDatabaseResolution useResolution = scriptPreprocessor.resolveUseDatabase(
                     normalized,
                     hasUnresolvedVariable(statementWarnings)

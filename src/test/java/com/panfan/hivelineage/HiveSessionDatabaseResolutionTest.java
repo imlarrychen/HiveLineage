@@ -133,6 +133,27 @@ public class HiveSessionDatabaseResolutionTest {
     }
 
     @Test
+    public void statementVariableCanResolveToUseDatabase() {
+        LineageAnalyzeResult result = analyze(
+            "db1",
+            "set command=use db2; ${command}; insert into out_t(id) select id from in_t;",
+            LineageAnalyzeOptions.builder().includeIgnoredStatements(true).build(),
+            null
+        );
+
+        assertEquals(3, result.getTotalStatementCount());
+        assertEquals(2, result.getIgnoredStatementCount());
+        assertEquals(0, result.getFailedStatementCount());
+        assertEquals(3, result.getStatements().size());
+        StatementLineageResult useStatement = result.getStatements().get(1);
+        assertEquals("USE", useStatement.getStatementType());
+        assertEquals(Integer.valueOf(3), useStatement.getParseStatusCode());
+        assertEquals("USE_DATABASE", useStatement.getSkipReason());
+        assertEquals("db2.out_t", result.getStatements().get(2).getOutputObject().getQualifiedName());
+        assertContainsSource(result.getStatements().get(2), "db2.in_t");
+    }
+
+    @Test
     public void bareTableWithoutDatabaseFailsButLaterUseRecovers() {
         LineageAnalyzeResult result = analyze(
             null,
