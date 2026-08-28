@@ -34,7 +34,6 @@ import com.panfan.hivelineage.request.LineageAnalyzeOptions;
 import com.panfan.hivelineage.request.LineageAnalyzeRequest;
 import com.panfan.hivelineage.request.LineageParseMode;
 import com.panfan.hivelineage.result.ColumnLineage;
-import com.panfan.hivelineage.result.ColumnRef;
 import com.panfan.hivelineage.result.DataObjectRef;
 import com.panfan.hivelineage.result.JoinCondition;
 import com.panfan.hivelineage.result.LineageType;
@@ -123,13 +122,10 @@ public class HiveNestedSelectPseudoColumnRegressionTest {
     private Set<String> resolvedJoinPairs(List<JoinCondition> conditions) {
         Set<String> pairs = new HashSet<>();
         for (JoinCondition condition : conditions) {
-            if (condition.getJoinColumns().size() != 2) {
-                continue;
-            }
+            TestSupport.assertEquals(2, condition.getJoinColumns().size(), "resolved join column count");
             List<String> columns = new ArrayList<>();
-            for (ColumnRef column : condition.getJoinColumns()) {
-                columns.add(column.getQualifiedName());
-            }
+            columns.add(condition.getJoinColumns().get(0).getQualifiedName());
+            columns.add(condition.getJoinColumns().get(1).getQualifiedName());
             Collections.sort(columns);
             pairs.add(columns.get(0) + " = " + columns.get(1));
         }
