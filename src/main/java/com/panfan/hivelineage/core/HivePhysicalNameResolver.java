@@ -13,8 +13,13 @@ final class HivePhysicalNameResolver {
         if (normalizedTable == null || normalizedTable.isEmpty()) {
             throw new DatabaseResolutionException(String.valueOf(tableName));
         }
-        String[] parts = normalizedTable.split("\\.");
-        if (parts.length == 2 && !parts[0].isEmpty() && !parts[1].isEmpty()) {
+        String[] parts = normalizedTable.split("\\.", -1);
+        for (String part : parts) {
+            if (part.isEmpty()) {
+                throw new IllegalArgumentException("Expected non-empty identifier parts, got " + tableName);
+            }
+        }
+        if (parts.length == 2) {
             return normalizedTable;
         }
         if (parts.length != 1) {

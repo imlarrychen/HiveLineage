@@ -25,4 +25,14 @@ public class HivePhysicalNameResolverTest {
     public void bareTableWithoutDatabaseFails() {
         resolver.qualifyTable("t1", null);
     }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void qualifiedTableWithTrailingDotFails() {
+        resolver.qualifyTable("db.t.", "whc");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void bareTableWithTrailingDotFails() {
+        resolver.qualifyTable("t.", "whc");
+    }
 }
