@@ -133,7 +133,9 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                     && joinAnalyzer.hasJoinConditionCandidate(normalized)) {
                     try {
                         parseStatement(context, normalized);
-                        results.add(joinAnalyzer.joinConditionOnlyResult(context));
+                        StatementLineageResult joinResult = joinAnalyzer.joinConditionOnlyResult(context);
+                        validateJoinPhysicalObjects(context, joinResult);
+                        results.add(joinResult);
                     } catch (DatabaseResolutionException ex) {
                         results.add(failedResult(
                             context,
@@ -687,6 +689,23 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             }
         }
         return false;
+    }
+
+    private void validateJoinPhysicalObjects(
+        StatementAnalysisContext context,
+        StatementLineageResult joinResult
+    ) {
+        Set<String> logicalObjects = new LinkedHashSet<>();
+        logicalObjects.addAll(projectionResolver
+            .extractStatementProjectionTables(context.getNormalizedStatement())
+            .keySet());
+        logicalObjects.addAll(context.getTemporaryTableSources().keySet());
+        for (DataObjectRef inputObject : joinResult.getInputObjects()) {
+            String qualifiedName = inputObject.getQualifiedName();
+            if (!logicalObjects.contains(qualifiedName.toLowerCase(Locale.ROOT))) {
+                nameResolver.qualifyTable(qualifiedName, context.getStatementDatabase());
+            }
+        }
     }
 
     private boolean isPositionalSingleDirectSourceStar(

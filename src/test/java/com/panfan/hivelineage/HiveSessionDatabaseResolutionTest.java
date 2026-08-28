@@ -256,6 +256,35 @@ public class HiveSessionDatabaseResolutionTest {
     }
 
     @Test
+    public void fallbackJoinWithoutDatabaseFailsWhenTablesAreBare() {
+        LineageAnalyzeResult result = analyze(
+            null,
+            "select ??? from left_t a join right_t b on a.id=b.id;",
+            LineageAnalyzeOptions.builder().parseJoinConditions(true).build(),
+            null
+        );
+
+        assertEquals(1, result.getFailedStatementCount());
+        assertEquals(1, result.getStatements().size());
+        assertEquals("SELECT", result.getStatements().get(0).getStatementType());
+        assertEquals("DATABASE_NOT_RESOLVED", result.getStatements().get(0).getFailureCode());
+    }
+
+    @Test
+    public void fallbackJoinWithQualifiedTablesDoesNotRequireDatabase() {
+        LineageAnalyzeResult result = analyze(
+            null,
+            "select ??? from db1.left_t a join db2.right_t b on a.id=b.id;",
+            LineageAnalyzeOptions.builder().parseJoinConditions(true).build(),
+            null
+        );
+
+        assertEquals(0, result.getFailedStatementCount());
+        assertEquals(1, result.getStatements().size());
+        assertEquals(Integer.valueOf(0), result.getStatements().get(0).getParseStatusCode());
+    }
+
+    @Test
     public void pureSelectWithoutDatabaseRemainsIgnoredWhenJoinParsingIsOff() {
         LineageAnalyzeResult result = analyze(
             null,
