@@ -57,6 +57,19 @@ public class HiveSessionDatabaseResolutionTest {
         assertContainsSource(statement, "db3.source_t");
     }
 
+    @Test
+    public void backtickAliasQualifiesSourceColumn() {
+        StatementLineageResult statement = analyze(
+            "d",
+            "insert into out_t(id) select `S`.`ID` from source_t `S`;",
+            LineageAnalyzeOptions.builder().parseMode(LineageParseMode.TABLE_AND_COLUMN).build(),
+            null
+        ).getStatements().get(0);
+
+        assertEquals(Integer.valueOf(0), statement.getParseStatusCode());
+        assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "d.source_t.id");
+    }
+
     private LineageAnalyzeResult analyze(
         String defaultDatabase,
         String script,

@@ -477,32 +477,68 @@ final class HiveTargetColumnResolver {
             return Math.max(keywordIndex, position - 1);
         }
         int tableStart = position;
-        int tableEnd = HiveSqlTextUtils.readIdentifier(statement, tableStart);
+        int tableEnd = readPossiblyQuotedIdentifier(statement, tableStart);
         if (tableEnd == tableStart) {
             return position;
         }
-        String tableName = HiveSqlTextUtils.normalizeIdentifier(statement.substring(tableStart, tableEnd));
+        String tableName = normalizePossiblyQuotedIdentifier(statement.substring(tableStart, tableEnd));
         String simpleTableName = tableName.contains(".") ? tableName.substring(tableName.lastIndexOf('.') + 1) : tableName;
         aliases.put(tableName, tableName);
         aliases.put(simpleTableName, tableName);
 
         position = HiveSqlTextUtils.skipWhitespace(statement, tableEnd);
         int aliasStart = position;
-        int aliasEnd = HiveSqlTextUtils.readIdentifier(statement, aliasStart);
+        int aliasEnd = readPossiblyQuotedIdentifier(statement, aliasStart);
         if (aliasEnd > aliasStart && "as".equalsIgnoreCase(statement.substring(aliasStart, aliasEnd))) {
             aliasStart = HiveSqlTextUtils.skipWhitespace(statement, aliasEnd);
-            aliasEnd = HiveSqlTextUtils.readIdentifier(statement, aliasStart);
+            aliasEnd = readPossiblyQuotedIdentifier(statement, aliasStart);
         }
         if (aliasEnd > aliasStart) {
-            String alias = statement.substring(aliasStart, aliasEnd);
+            String alias = normalizePossiblyQuotedIdentifier(statement.substring(aliasStart, aliasEnd));
             if (!HiveSqlTextUtils.isAliasKeyword(alias)) {
-                aliases.put(alias.toLowerCase(Locale.ROOT), tableName);
+                aliases.put(alias, tableName);
                 if (explicitAliases != null) {
-                    explicitAliases.put(alias.toLowerCase(Locale.ROOT), tableName);
+                    explicitAliases.put(alias, tableName);
                 }
             }
         }
         return tableEnd;
+    }
+
+    private int readPossiblyQuotedIdentifier(String statement, int position) {
+        int cursor = position;
+        boolean consumedPart = false;
+        while (cursor < statement.length()) {
+            int partStart = cursor;
+            if (statement.charAt(cursor) == '`') {
+                int closingBacktick = statement.indexOf('`', cursor + 1);
+                if (closingBacktick < 0 || closingBacktick == cursor + 1) {
+                    return position;
+                }
+                cursor = closingBacktick + 1;
+            } else {
+                while (cursor < statement.length()) {
+                    char ch = statement.charAt(cursor);
+                    if (!Character.isLetterOrDigit(ch) && ch != '_') {
+                        break;
+                    }
+                    cursor++;
+                }
+                if (cursor == partStart) {
+                    break;
+                }
+            }
+            consumedPart = true;
+            if (cursor >= statement.length() || statement.charAt(cursor) != '.') {
+                break;
+            }
+            cursor++;
+        }
+        return consumedPart ? cursor : position;
+    }
+
+    private String normalizePossiblyQuotedIdentifier(String identifier) {
+        return HiveSqlTextUtils.normalizeIdentifier(identifier.replace("`", ""));
     }
 
 
