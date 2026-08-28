@@ -48,6 +48,8 @@ public class HiveScriptPreprocessorUseDatabaseTest {
         assertInvalid(preprocessor.resolveUseDatabase("use ``", false));
         assertInvalid(preprocessor.resolveUseDatabase("use `db one`", false));
         assertInvalid(preprocessor.resolveUseDatabase("use `db\u2003name`", false));
+        assertInvalid(preprocessor.resolveUseDatabase("use `db\u00a0name`", false));
+        assertInvalid(preprocessor.resolveUseDatabase("use `db\u202fname`", false));
         assertInvalid(preprocessor.resolveUseDatabase("use `db`name`", false));
         assertInvalid(preprocessor.resolveUseDatabase("use `db", false));
     }
@@ -74,6 +76,11 @@ public class HiveScriptPreprocessorUseDatabaseTest {
     @Test(expected = IllegalArgumentException.class)
     public void validResolutionRejectsBlankDatabase() {
         UseDatabaseResolution.valid("\u2003");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void validResolutionRejectsNonBreakingSpaceDatabase() {
+        UseDatabaseResolution.valid("\u00a0");
     }
 
     @Test(expected = IllegalArgumentException.class)

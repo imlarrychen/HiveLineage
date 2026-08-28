@@ -76,6 +76,21 @@ public class HivePhysicalNameResolverTest {
         resolver.qualifyTable("ta`ble", "db");
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void databaseWithNonBreakingSpaceFails() {
+        resolver.qualifyTable("t", "db\u00a0name");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void tableWithNonBreakingSpaceFails() {
+        resolver.qualifyTable("ta\u00a0ble", "db");
+    }
+
+    @Test(expected = DatabaseResolutionException.class)
+    public void onlyNonBreakingSpaceDatabaseMeansNoDatabase() {
+        resolver.qualifyTable("t", "\u00a0");
+    }
+
     @Test
     public void emptyDatabaseVariantsFailDatabaseResolution() {
         assertDatabaseResolutionFailure("");

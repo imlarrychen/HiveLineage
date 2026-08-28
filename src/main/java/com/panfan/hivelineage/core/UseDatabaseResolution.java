@@ -22,21 +22,9 @@ final class UseDatabaseResolution {
     }
 
     private static void requireNonBlank(String value, String fieldName) {
-        if (isBlank(value)) {
+        if (HivePhysicalNameResolver.isBlank(value)) {
             throw new IllegalArgumentException(fieldName + " must not be blank");
         }
-    }
-
-    private static boolean isBlank(String value) {
-        if (value == null || value.isEmpty()) {
-            return true;
-        }
-        for (int i = 0; i < value.length(); i++) {
-            if (!Character.isWhitespace(value.charAt(i))) {
-                return false;
-            }
-        }
-        return true;
     }
 
     boolean isValid() {

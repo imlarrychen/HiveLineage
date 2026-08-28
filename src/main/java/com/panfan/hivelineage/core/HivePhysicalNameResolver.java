@@ -4,7 +4,7 @@ import java.util.Locale;
 
 final class HivePhysicalNameResolver {
     String normalizeDatabase(String database) {
-        if (database == null) {
+        if (isBlank(database)) {
             return null;
         }
         String[] parts = normalizeParts(database);
@@ -63,9 +63,25 @@ final class HivePhysicalNameResolver {
         } else if (trimmed.contains("`")) {
             throw new IllegalArgumentException("Malformed quoted identifier part: " + part);
         }
-        if (trimmed.chars().anyMatch(Character::isWhitespace)) {
+        if (trimmed.chars().anyMatch(HivePhysicalNameResolver::isIdentifierWhitespace)) {
             throw new IllegalArgumentException("Whitespace is not allowed in identifier part: " + part);
         }
         return trimmed.toLowerCase(Locale.ROOT);
+    }
+
+    static boolean isBlank(String value) {
+        if (value == null || value.isEmpty()) {
+            return true;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            if (!isIdentifierWhitespace(value.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isIdentifierWhitespace(int character) {
+        return Character.isWhitespace(character) || Character.isSpaceChar(character);
     }
 }

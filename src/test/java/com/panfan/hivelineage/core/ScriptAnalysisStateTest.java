@@ -24,6 +24,7 @@ public class ScriptAnalysisStateTest {
     public void blankDefaultDatabaseMeansNoCurrentDatabase() {
         assertNull(new ScriptAnalysisState("   ", nameResolver).getCurrentDatabase());
         assertNull(new ScriptAnalysisState("\u2003", nameResolver).getCurrentDatabase());
+        assertNull(new ScriptAnalysisState("\u00a0", nameResolver).getCurrentDatabase());
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -37,6 +38,8 @@ public class ScriptAnalysisStateTest {
 
         assertRejectedDatabaseSwitch(state, null);
         assertRejectedDatabaseSwitch(state, "   ");
+        assertRejectedDatabaseSwitch(state, "\u00a0");
+        assertRejectedDatabaseSwitch(state, "db\u00a0name");
     }
 
     @Test
