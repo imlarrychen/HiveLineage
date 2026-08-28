@@ -40,25 +40,25 @@ public class HiveColumnLineageTest {
         TestSupport.assertEquals(0, statement.getParseStatusCode(), "parse status");
         TestSupport.assertTrue(statement.isFormalLineageProduced(), "formal lineage produced");
         TestSupport.assertEquals(1, statement.getTableLineages().size(), "table lineage count");
-        TestSupport.assertEquals("test_b", statement.getTableLineages().get(0).getSourceObjects().get(0).getQualifiedName(), "source table");
-        TestSupport.assertEquals("test_a", statement.getTableLineages().get(0).getTargetObject().getQualifiedName(), "target table");
+        TestSupport.assertEquals("default.test_b", statement.getTableLineages().get(0).getSourceObjects().get(0).getQualifiedName(), "source table");
+        TestSupport.assertEquals("default.test_a", statement.getTableLineages().get(0).getTargetObject().getQualifiedName(), "target table");
 
         List<ColumnLineage> columns = statement.getColumnLineages();
         TestSupport.assertEquals(2, columns.size(), "column lineage count");
 
         ColumnLineage a1 = columns.get(0);
-        TestSupport.assertEquals("test_a.a1", a1.getTargetColumn().getQualifiedName(), "a1 target");
+        TestSupport.assertEquals("default.test_a.a1", a1.getTargetColumn().getQualifiedName(), "a1 target");
         TestSupport.assertEquals(LineageType.DERIVED, a1.getLineageType(), "a1 lineage type");
         TestSupport.assertEquals("b1 + b2", a1.getExpression(), "a1 expression");
         TestSupport.assertTrue(a1.isExpressionExtracted(), "a1 expression extracted");
-        TestSupport.assertEquals("test_b.b1", a1.getSourceColumns().get(0).getQualifiedName(), "a1 first source column");
-        TestSupport.assertEquals("test_b.b2", a1.getSourceColumns().get(1).getQualifiedName(), "a1 second source column");
+        TestSupport.assertEquals("default.test_b.b1", a1.getSourceColumns().get(0).getQualifiedName(), "a1 first source column");
+        TestSupport.assertEquals("default.test_b.b2", a1.getSourceColumns().get(1).getQualifiedName(), "a1 second source column");
 
         ColumnLineage a2 = columns.get(1);
-        TestSupport.assertEquals("test_a.a2", a2.getTargetColumn().getQualifiedName(), "a2 target");
+        TestSupport.assertEquals("default.test_a.a2", a2.getTargetColumn().getQualifiedName(), "a2 target");
         TestSupport.assertEquals(LineageType.DIRECT, a2.getLineageType(), "a2 lineage type");
         TestSupport.assertEquals("b3", a2.getExpression(), "a2 expression");
-        TestSupport.assertEquals("test_b.b3", a2.getSourceColumns().get(0).getQualifiedName(), "a2 source column");
+        TestSupport.assertEquals("default.test_b.b3", a2.getSourceColumns().get(0).getQualifiedName(), "a2 source column");
     }
 
     @Test

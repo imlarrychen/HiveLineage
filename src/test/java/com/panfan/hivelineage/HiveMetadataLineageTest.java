@@ -45,8 +45,8 @@ public class HiveMetadataLineageTest {
 
         TestSupport.assertEquals(2, result.getStatements().size(), "statement count");
         TestSupport.assertEquals(1, metadataProvider.getLoadCount(), "metadata load count");
-        TestSupport.assertEquals("test_a.a1", result.getStatements().get(0).getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "first target");
-        TestSupport.assertEquals("test_a.a1", result.getStatements().get(1).getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "second target");
+        TestSupport.assertEquals("default.test_a.a1", result.getStatements().get(0).getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "first target");
+        TestSupport.assertEquals("default.test_a.a1", result.getStatements().get(1).getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "second target");
     }
 
     @Test

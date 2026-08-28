@@ -97,6 +97,27 @@ final class HiveProjectionLineageResolver {
         projections.putAll(extractInlineProjectionTables(cteExtraction.getRootSql(), projections));
         return projections;
     }
+    Map<String, Map<String, ColumnLineageProjection>> bindPhysicalProjectionSources(
+        Map<String, Map<String, ColumnLineageProjection>> projections,
+        Map<String, String> physicalAliases,
+        HiveStatementDatabaseBinder binder
+    ) {
+        Map<String, Map<String, ColumnLineageProjection>> bound = new HashMap<>();
+        for (Map.Entry<String, Map<String, ColumnLineageProjection>> table : projections.entrySet()) {
+            Map<String, ColumnLineageProjection> columns = new HashMap<>();
+            for (Map.Entry<String, ColumnLineageProjection> column : table.getValue().entrySet()) {
+                ColumnLineageProjection value = column.getValue();
+                columns.put(column.getKey(), new ColumnLineageProjection(
+                    binder.bindColumns(value.getSourceColumns(), physicalAliases),
+                    value.getExpression(),
+                    value.getLineageType(),
+                    value.isUnresolved()
+                ));
+            }
+            bound.put(table.getKey(), columns);
+        }
+        return bound;
+    }
     Map<String, Map<String, ColumnLineageProjection>> extractInlineProjectionTables(
         String sql,
         Map<String, Map<String, ColumnLineageProjection>> existingProjections

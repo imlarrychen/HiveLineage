@@ -56,8 +56,8 @@ where dt = '${hiveconf:bizdate}'
 | parseStatusCode | 0 |
 | formalLineageProduced | true |
 | parseMode | TABLE_AND_COLUMN |
-| outputObject | test_a |
-| inputObjects | test_b |
+| outputObject | default.test_a |
+| inputObjects | default.test_b |
 | skipReason |  |
 | failureCode |  |
 | failureMessage |  |
@@ -66,14 +66,14 @@ where dt = '${hiveconf:bizdate}'
 
 | Target | Sources | Operation | Through Temporary Table |
 | --- | --- | --- | --- |
-| test_a | test_b | INSERT_INTO | false |
+| default.test_a | default.test_b | INSERT_INTO | false |
 
 #### Column Lineage
 
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| test_a.a1 | test_b.b1<br>test_b.b2 | test_b | DERIVED | b1 + b2 |  | true | true |
-| test_a.a2 | test_b.b3 | test_b | DERIVED | nvl(b3, 0) | nvl | true | true |
+| default.test_a.a1 | default.test_b.b1<br>default.test_b.b2 | default.test_b | DERIVED | b1 + b2 |  | true | true |
+| default.test_a.a2 | default.test_b.b3 | default.test_b | DERIVED | nvl(b3, 0) | nvl | true | true |
 
 #### Warnings
 
@@ -521,8 +521,8 @@ where dt = '${bizdate}'
 | parseStatusCode | 0 |
 | formalLineageProduced | true |
 | parseMode | TABLE_AND_COLUMN |
-| outputObject | test_a |
-| inputObjects | test_b |
+| outputObject | default.test_a |
+| inputObjects | default.test_b |
 | skipReason |  |
 | failureCode |  |
 | failureMessage |  |
@@ -531,16 +531,16 @@ where dt = '${bizdate}'
 
 | Target | Sources | Operation | Through Temporary Table |
 | --- | --- | --- | --- |
-| test_a | test_b | INSERT_INTO | false |
+| default.test_a | default.test_b | INSERT_INTO | false |
 
 #### Column Lineage
 
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| test_a.a1 | test_b.b1<br>test_b.b2 | test_b | DERIVED | b1 + b2 |  | true | true |
-| test_a.a2 | test_b.b3 | test_b | DERIVED | nvl(b3, 20) | nvl | true | true |
-| test_a.ds |  | test_b | CONSTANT | constant('20260701') |  | false | true |
-| test_a.env_name |  | test_b | CONSTANT | constant('fallback_value') |  | false | true |
+| default.test_a.a1 | default.test_b.b1<br>default.test_b.b2 | default.test_b | DERIVED | b1 + b2 |  | true | true |
+| default.test_a.a2 | default.test_b.b3 | default.test_b | DERIVED | nvl(b3, 20) | nvl | true | true |
+| default.test_a.ds |  | default.test_b | CONSTANT | constant('20260701') |  | false | true |
+| default.test_a.env_name |  | default.test_b | CONSTANT | constant('fallback_value') |  | false | true |
 
 #### Warnings
 
