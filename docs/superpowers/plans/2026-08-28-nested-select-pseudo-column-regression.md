@@ -34,15 +34,14 @@ import com.panfan.hivelineage.request.LineageAnalyzeOptions;
 import com.panfan.hivelineage.request.LineageAnalyzeRequest;
 import com.panfan.hivelineage.request.LineageParseMode;
 import com.panfan.hivelineage.result.ColumnLineage;
-import com.panfan.hivelineage.result.DataObjectRef;
 import com.panfan.hivelineage.result.JoinCondition;
 import com.panfan.hivelineage.result.LineageType;
 import com.panfan.hivelineage.result.LineageWarning;
 import com.panfan.hivelineage.result.StatementLineageResult;
+import com.panfan.hivelineage.result.TableLineage;
 import com.panfan.hivelineage.result.WarningCode;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -57,6 +56,9 @@ public class HiveNestedSelectPseudoColumnRegressionTest {
             .addTable("whc.c", "field1", "id", "name", "value")
             .addTable("whc.d", "field1", "id", "name", "value");
 
+        String sql = "insert into whc.c(field1) select t.field1 from "
+            + "(select a.field1 from whc.a left join whc.b on a.id = b.id) as t "
+            + "left join whc.d on t.field1 = d.field1";
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
             .workflowId("wf_nested_select_regression")
             .taskId("task_nested_select_regression")
@@ -64,13 +66,7 @@ public class HiveNestedSelectPseudoColumnRegressionTest {
             .defaultDatabase("whc")
             .metadataProvider(metadata)
             .metadataCache(new HiveMetadataCache())
-            .rawScript(
-                "insert into whc.c(field1) "
-                    + "select t.field1 "
-                    + "from (select a.field1 from whc.a "
-                    + "left join whc.b on a.id = b.id) as t "
-                    + "left join whc.d on t.field1 = d.field1"
-            )
+            .rawScript(sql)
             .options(LineageAnalyzeOptions.builder()
                 .parseMode(LineageParseMode.TABLE_AND_COLUMN)
                 .parseJoinConditions(true)
@@ -78,65 +74,59 @@ public class HiveNestedSelectPseudoColumnRegressionTest {
             .build();
 
         StatementLineageResult statement = new HiveScriptLineageAnalyzer()
-            .analyzeScript(request).getStatements().get(0);
+            .analyzeScript(request)
+            .getStatements()
+            .get(0);
 
         TestSupport.assertEquals(0, statement.getParseStatusCode(), "nested select parse status");
-        TestSupport.assertEquals(1, statement.getColumnLineages().size(), "nested select lineage count");
-        assertDirectFieldLineage(statement.getColumnLineages().get(0));
-        TestSupport.assertEquals(
-            new HashSet<>(Arrays.asList("whc.a", "whc.b", "whc.d")),
-            sourceTableNames(statement),
-            "nested select table inputs"
-        );
-        TestSupport.assertEquals(
-            new HashSet<>(Arrays.asList(
-                "whc.a.field1 = whc.d.field1",
-                "whc.a.id = whc.b.id"
-            )),
-            resolvedJoinPairs(statement.getJoinConditions()),
-            "nested select physical join semantics"
-        );
-        assertNoUnknownColumnWarning(statement.getWarnings());
+        TestSupport.assertEquals(1, statement.getColumnLineages().size(), "nested select field lineage count");
+        assertDirectFieldLineage(statement.getColumnLineages().get(0), "whc.c.field1", "whc.a.field1");
+
+        TestSupport.assertEquals(1, statement.getTableLineages().size(), "nested select table lineage count");
+        Set<String> expectedSourceTables = new HashSet<>(Arrays.asList("whc.a", "whc.b", "whc.d"));
+        TestSupport.assertEquals(expectedSourceTables, sourceTableNames(statement.getTableLineages().get(0)), "nested select source tables");
+
+        Set<String> expectedJoinPairs = new HashSet<>(Arrays.asList(
+            "whc.a.field1 = whc.d.field1",
+            "whc.a.id = whc.b.id"
+        ));
+        TestSupport.assertEquals(expectedJoinPairs, resolvedJoinPairs(statement), "nested select resolved join pairs");
+        assertNoUnknownColumnWarning(statement);
     }
 
-    private void assertDirectFieldLineage(ColumnLineage lineage) {
-        TestSupport.assertEquals("whc.c.field1", lineage.getTargetColumn().getQualifiedName(), "field target");
-        TestSupport.assertEquals(1, lineage.getSourceColumns().size(), "field source count");
-        TestSupport.assertEquals(
-            "whc.a.field1",
-            lineage.getSourceColumns().get(0).getQualifiedName(),
-            "field source"
-        );
-        TestSupport.assertEquals(LineageType.DIRECT, lineage.getLineageType(), "field lineage type");
+    private void assertDirectFieldLineage(ColumnLineage lineage, String targetColumn, String sourceColumn) {
+        TestSupport.assertEquals(targetColumn, lineage.getTargetColumn().getQualifiedName(), "direct target column");
+        TestSupport.assertEquals(1, lineage.getSourceColumns().size(), "direct source column count");
+        TestSupport.assertEquals(sourceColumn, lineage.getSourceColumns().get(0).getQualifiedName(), "direct source column");
+        TestSupport.assertEquals(LineageType.DIRECT, lineage.getLineageType(), "direct lineage type");
     }
 
-    private Set<String> sourceTableNames(StatementLineageResult statement) {
-        TestSupport.assertEquals(1, statement.getTableLineages().size(), "table lineage count");
-        Set<String> names = new HashSet<>();
-        for (DataObjectRef source : statement.getTableLineages().get(0).getSourceObjects()) {
-            names.add(source.getQualifiedName());
+    private Set<String> sourceTableNames(TableLineage tableLineage) {
+        Set<String> sourceNames = new HashSet<>();
+        for (com.panfan.hivelineage.result.DataObjectRef sourceObject : tableLineage.getSourceObjects()) {
+            sourceNames.add(sourceObject.getQualifiedName());
         }
-        return names;
+        return sourceNames;
     }
 
-    private Set<String> resolvedJoinPairs(List<JoinCondition> conditions) {
+    private Set<String> resolvedJoinPairs(StatementLineageResult statement) {
         Set<String> pairs = new HashSet<>();
-        for (JoinCondition condition : conditions) {
+        for (JoinCondition condition : statement.getJoinConditions()) {
             TestSupport.assertEquals(2, condition.getJoinColumns().size(), "resolved join column count");
             List<String> columns = new ArrayList<>();
             columns.add(condition.getJoinColumns().get(0).getQualifiedName());
             columns.add(condition.getJoinColumns().get(1).getQualifiedName());
-            Collections.sort(columns);
+            java.util.Collections.sort(columns);
             pairs.add(columns.get(0) + " = " + columns.get(1));
         }
         return pairs;
     }
 
-    private void assertNoUnknownColumnWarning(List<LineageWarning> warnings) {
-        for (LineageWarning warning : warnings) {
+    private void assertNoUnknownColumnWarning(StatementLineageResult statement) {
+        for (LineageWarning warning : statement.getWarnings()) {
             TestSupport.assertTrue(
                 warning.getWarningCode() != WarningCode.UNKNOWN_COLUMN_LINEAGE,
-                "nested select should not emit unknown column warning"
+                "nested select should not emit unknown column lineage warning"
             );
         }
     }
@@ -209,7 +199,31 @@ Create `docs/bugfixes/2026-08-28-nested-select-pseudo-column-regression.md` with
 
 - 日期：2026-08-28
 - 状态：已修复并完成独立回归保护
-- 生产修复来源：问题 3 的 `TOK_INSERT_INTO` AST 目标解析修复
+- 生产修复来源：问题 3 已在提交 `cab12f9 fix: resolve insert into targets from ast` 中完成的 `TOK_INSERT_INTO` AST 目标解析修复
+
+## 最小复现
+
+四表最小字段定义如下：
+
+- `whc.a`：`id`、`field1`
+- `whc.b`：`id`、`name`、`value`
+- `whc.c`：`field1`、`id`、`name`、`value`
+- `whc.d`：`field1`、`id`、`name`、`value`
+
+完整复现 SQL：
+
+```sql
+INSERT INTO whc.c(field1)
+SELECT t.field1
+FROM (
+    SELECT a.field1
+    FROM whc.a
+    LEFT JOIN whc.b ON a.id = b.id
+) AS t
+LEFT JOIN whc.d ON t.field1 = d.field1;
+```
+
+修复前该 SQL 错误生成 `whc.a.select` 伪来源字段。
 
 ## 问题现象
 
@@ -224,7 +238,7 @@ Create `docs/bugfixes/2026-08-28-nested-select-pseudo-column-regression.md` with
 
 ## 修复结果
 
-问题 3 已使该 SQL 进入完整 AST 路径。本问题不再修改生产代码，并新增原始 SQL
+问题 3 的 `cab12f9` 已使该 SQL 进入完整 AST 路径。本问题不再修改生产代码，并新增原始 SQL
 端到端回归测试。
 
 - 字段血缘仅为 `whc.a.field1 -> whc.c.field1`，类型 `DIRECT`。
@@ -232,6 +246,34 @@ Create `docs/bugfixes/2026-08-28-nested-select-pseudo-column-regression.md` with
 - Join 条件按物理字段去重后的语义为
   `whc.a.id = whc.b.id` 和 `whc.a.field1 = whc.d.field1`。
 - 不存在 `select` 伪来源字段或未知字段血缘告警。
+
+## 验证命令
+
+专项测试：
+
+```bash
+/Users/panfan/.m2/wrapper/dists/apache-maven-3.9.12/6068d197/bin/mvn \
+  -Dtest=HiveNestedSelectPseudoColumnRegressionTest test
+```
+
+实际结果：1 test，0 failures，0 errors。
+
+相关回归：
+
+```bash
+/Users/panfan/.m2/wrapper/dists/apache-maven-3.9.12/6068d197/bin/mvn \
+  -Dtest=HiveNestedSelectPseudoColumnRegressionTest,HiveColumnLineageTest,HiveJoinLineageTest,HiveParserAstAdapterTest,HiveInsertIntoDistinctLineageTest test
+```
+
+实际结果：53 tests，0 failures，0 errors。
+
+全量 fresh 回归：
+
+```bash
+/Users/panfan/.m2/wrapper/dists/apache-maven-3.9.12/6068d197/bin/mvn clean test
+```
+
+实际结果：141 tests，0 failures，0 errors，5 skipped，`BUILD SUCCESS`；5 个跳过项为需要外部 MySQL JDBC 参数的条件集成测试。
 
 ## 测试沉淀
 
