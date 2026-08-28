@@ -49,14 +49,17 @@ final class HivePhysicalNameResolver {
 
     private String normalizePart(String part) {
         String trimmed = part.trim();
-        if (trimmed.startsWith("`") || trimmed.endsWith("`")) {
-            if (trimmed.length() < 2 || !trimmed.endsWith("`")
+        boolean startsWithBacktick = trimmed.startsWith("`");
+        boolean endsWithBacktick = trimmed.endsWith("`");
+        if (startsWithBacktick != endsWithBacktick) {
+            throw new IllegalArgumentException("Malformed quoted identifier part: " + part);
+        }
+        if (startsWithBacktick) {
+            if (trimmed.length() < 2
                     || trimmed.substring(1, trimmed.length() - 1).contains("`")) {
                 throw new IllegalArgumentException("Malformed quoted identifier part: " + part);
             }
             trimmed = trimmed.substring(1, trimmed.length() - 1);
-        } else if (trimmed.contains("`")) {
-            throw new IllegalArgumentException("Malformed quoted identifier part: " + part);
         }
         if (trimmed.chars().anyMatch(Character::isWhitespace)) {
             throw new IllegalArgumentException("Whitespace is not allowed in identifier part: " + part);
