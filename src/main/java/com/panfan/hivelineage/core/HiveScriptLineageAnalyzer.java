@@ -105,11 +105,44 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 scriptState.getCurrentDatabase(),
                 statementWarnings
             );
+            if (scriptPreprocessor.isUseDatabaseCandidate(executableStatement)) {
+                UseDatabaseResolution useResolution = scriptPreprocessor.resolveUseDatabase(
+                    normalized,
+                    hasUnresolvedVariable(statementWarnings)
+                );
+                if (!useResolution.isValid()) {
+                    results.add(failedResult(
+                        context,
+                        "USE",
+                        "INVALID_USE_DATABASE",
+                        useResolution.getFailureMessage()
+                    ));
+                    failed++;
+                    continue;
+                }
+                scriptState.useDatabase(useResolution.getDatabase());
+                ignored++;
+                if (request.getOptions().isIncludeIgnoredStatements()) {
+                    results.add(ignoredResult(context, "USE", "USE_DATABASE"));
+                }
+                continue;
+            }
             if (skipReason != null) {
                 if (request.getOptions().isParseJoinConditions()
                     && "PURE_QUERY".equals(skipReason)
                     && joinAnalyzer.hasJoinConditionCandidate(normalized)) {
-                    results.add(joinAnalyzer.joinConditionOnlyResult(context));
+                    try {
+                        parseStatement(context, normalized);
+                        results.add(joinAnalyzer.joinConditionOnlyResult(context));
+                    } catch (DatabaseResolutionException ex) {
+                        results.add(failedResult(
+                            context,
+                            "SELECT",
+                            "DATABASE_NOT_RESOLVED",
+                            ex.getMessage()
+                        ));
+                        failed++;
+                    }
                     continue;
                 }
                 ignored++;
@@ -118,7 +151,12 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 }
                 continue;
             }
-            StatementLineageResult result = analyzeStatement(context);
+            StatementLineageResult result;
+            try {
+                result = analyzeStatement(context);
+            } catch (DatabaseResolutionException ex) {
+                result = failedResult(context, "DATABASE_NOT_RESOLVED", ex.getMessage());
+            }
             if (Integer.valueOf(PARSE_STATUS_FAILED).equals(result.getParseStatusCode())) {
                 results.add(result);
                 failed++;
@@ -608,6 +646,15 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         String failureCode,
         String failureMessage
     ) {
+        return failedResult(context, "UNKNOWN", failureCode, failureMessage);
+    }
+
+    private StatementLineageResult failedResult(
+        StatementAnalysisContext context,
+        String statementType,
+        String failureCode,
+        String failureMessage
+    ) {
         LineageAnalyzeRequest request = context.getRequest();
         int index = context.getStatementIndex();
         return new StatementLineageResult(
@@ -616,7 +663,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             request.getTaskVersion(),
             index,
             statementId(request, index),
-            "UNKNOWN",
+            statementType,
             context.getRawStatement(),
             context.getNormalizedStatement(),
             PARSE_STATUS_FAILED,
@@ -631,6 +678,15 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             Collections.emptyList(),
             context.getWarnings()
         );
+    }
+
+    private boolean hasUnresolvedVariable(List<LineageWarning> warnings) {
+        for (LineageWarning warning : warnings) {
+            if (warning.getWarningCode() == WarningCode.UNRESOLVED_VARIABLE) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isPositionalSingleDirectSourceStar(
