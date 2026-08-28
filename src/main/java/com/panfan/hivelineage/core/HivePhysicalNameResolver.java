@@ -60,6 +60,8 @@ final class HivePhysicalNameResolver {
                 throw new IllegalArgumentException("Malformed quoted identifier part: " + part);
             }
             trimmed = trimmed.substring(1, trimmed.length() - 1);
+        } else if (trimmed.contains("`")) {
+            throw new IllegalArgumentException("Malformed quoted identifier part: " + part);
         }
         if (trimmed.chars().anyMatch(Character::isWhitespace)) {
             throw new IllegalArgumentException("Whitespace is not allowed in identifier part: " + part);

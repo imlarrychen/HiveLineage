@@ -66,6 +66,16 @@ public class HivePhysicalNameResolverTest {
         resolver.qualifyTable("table`", "db");
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void databaseWithInternalBacktickFails() {
+        resolver.qualifyTable("t", "d`b");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void tableWithInternalBacktickFails() {
+        resolver.qualifyTable("ta`ble", "db");
+    }
+
     @Test
     public void emptyDatabaseVariantsFailDatabaseResolution() {
         assertDatabaseResolutionFailure("");
