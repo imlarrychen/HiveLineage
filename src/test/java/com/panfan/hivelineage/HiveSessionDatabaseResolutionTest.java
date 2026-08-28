@@ -70,6 +70,19 @@ public class HiveSessionDatabaseResolutionTest {
         assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "d.source_t.id");
     }
 
+    @Test
+    public void quotedKeywordAliasQualifiesSourceColumn() {
+        StatementLineageResult statement = analyze(
+            "d",
+            "insert into out_t(id) select `where`.`ID` from source_t as `where`;",
+            LineageAnalyzeOptions.builder().parseMode(LineageParseMode.TABLE_AND_COLUMN).build(),
+            null
+        ).getStatements().get(0);
+
+        assertEquals(Integer.valueOf(0), statement.getParseStatusCode());
+        assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "d.source_t.id");
+    }
+
     private LineageAnalyzeResult analyze(
         String defaultDatabase,
         String script,

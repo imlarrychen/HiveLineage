@@ -489,13 +489,15 @@ final class HiveTargetColumnResolver {
         position = HiveSqlTextUtils.skipWhitespace(statement, tableEnd);
         int aliasStart = position;
         int aliasEnd = readPossiblyQuotedIdentifier(statement, aliasStart);
+        boolean quotedAlias = aliasStart < statement.length() && statement.charAt(aliasStart) == '`';
         if (aliasEnd > aliasStart && "as".equalsIgnoreCase(statement.substring(aliasStart, aliasEnd))) {
             aliasStart = HiveSqlTextUtils.skipWhitespace(statement, aliasEnd);
             aliasEnd = readPossiblyQuotedIdentifier(statement, aliasStart);
+            quotedAlias = aliasStart < statement.length() && statement.charAt(aliasStart) == '`';
         }
         if (aliasEnd > aliasStart) {
             String alias = normalizePossiblyQuotedIdentifier(statement.substring(aliasStart, aliasEnd));
-            if (!HiveSqlTextUtils.isAliasKeyword(alias)) {
+            if (quotedAlias || !HiveSqlTextUtils.isAliasKeyword(alias)) {
                 aliases.put(alias, tableName);
                 if (explicitAliases != null) {
                     explicitAliases.put(alias, tableName);
