@@ -84,9 +84,7 @@ public class HiveNestedSelectPseudoColumnRegressionTest {
     private Set<String> resolvedJoinPairs(StatementLineageResult statement) {
         Set<String> pairs = new HashSet<>();
         for (JoinCondition condition : statement.getJoinConditions()) {
-            if (condition.getJoinColumns().size() != 2) {
-                continue;
-            }
+            TestSupport.assertEquals(2, condition.getJoinColumns().size(), "resolved join column count");
             List<String> columns = new ArrayList<>();
             columns.add(condition.getJoinColumns().get(0).getQualifiedName());
             columns.add(condition.getJoinColumns().get(1).getQualifiedName());
