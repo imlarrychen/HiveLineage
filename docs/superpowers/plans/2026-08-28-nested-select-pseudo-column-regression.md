@@ -21,7 +21,7 @@
 **Files:**
 - Create: `src/test/java/com/panfan/hivelineage/HiveNestedSelectPseudoColumnRegressionTest.java`
 
-- [ ] **Step 1: Create the regression test class**
+- [x] **Step 1: Create the regression test class**
 
 Create the file with this complete content:
 
@@ -147,7 +147,7 @@ public class HiveNestedSelectPseudoColumnRegressionTest {
 }
 ```
 
-- [ ] **Step 2: Run the characterization test**
+- [x] **Step 2: Run the characterization test**
 
 Run:
 
@@ -158,7 +158,7 @@ Run:
 
 Expected: 1 test, 0 failures, 0 errors. Immediate success is required because issue 3 already corrected the production path; a failure means the current-state diagnosis or test assumptions are wrong and must be investigated before any production edit.
 
-- [ ] **Step 3: Check scope and commit the test**
+- [x] **Step 3: Check scope and commit the test**
 
 Run:
 
@@ -176,12 +176,14 @@ git add src/test/java/com/panfan/hivelineage/HiveNestedSelectPseudoColumnRegress
 git commit -m "test: lock nested select lineage regression"
 ```
 
+已完成提交 `52d9efb`；随后以质量修复提交 `de7dfdd` 补强未解析嵌套 Join 条件断言。
+
 ### Task 2: Record and verify issue 4
 
 **Files:**
 - Create: `docs/bugfixes/2026-08-28-nested-select-pseudo-column-regression.md`
 
-- [ ] **Step 1: Run related regressions**
+- [x] **Step 1: Run related regressions**
 
 Run:
 
@@ -192,7 +194,7 @@ Run:
 
 Expected: 53 tests, 0 failures, 0 errors.
 
-- [ ] **Step 2: Run the full suite**
+- [x] **Step 2: Run the full suite**
 
 Run:
 
@@ -202,7 +204,7 @@ Run:
 
 Expected: 141 tests, 0 failures, 0 errors, 5 skipped, `BUILD SUCCESS`.
 
-- [ ] **Step 3: Create the bugfix record**
+- [x] **Step 3: Create the bugfix record**
 
 Create `docs/bugfixes/2026-08-28-nested-select-pseudo-column-regression.md` with this content:
 
@@ -248,7 +250,7 @@ Create `docs/bugfixes/2026-08-28-nested-select-pseudo-column-regression.md` with
 本记录只覆盖问题 4。问题 1 的默认库补全仍暂缓，等待用户补充场景后单独处理。
 ```
 
-- [ ] **Step 4: Check and commit the record**
+- [x] **Step 4: Check and commit the record**
 
 Run:
 
@@ -266,7 +268,7 @@ git add docs/bugfixes/2026-08-28-nested-select-pseudo-column-regression.md
 git commit -m "docs: record nested select lineage regression"
 ```
 
-- [ ] **Step 5: Verify final branch scope**
+- [x] **Step 5: Verify final branch scope**
 
 Run:
 
