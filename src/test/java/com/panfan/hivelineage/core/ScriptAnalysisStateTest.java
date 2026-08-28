@@ -23,6 +23,20 @@ public class ScriptAnalysisStateTest {
     @Test
     public void blankDefaultDatabaseMeansNoCurrentDatabase() {
         assertNull(new ScriptAnalysisState("   ", nameResolver).getCurrentDatabase());
+        assertNull(new ScriptAnalysisState("\u2003", nameResolver).getCurrentDatabase());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void constructorRejectsNullNameResolver() {
+        new ScriptAnalysisState("db1", null);
+    }
+
+    @Test
+    public void switchingToNullOrBlankDatabaseIsRejectedWithoutChangingState() {
+        ScriptAnalysisState state = new ScriptAnalysisState("db1", nameResolver);
+
+        assertRejectedDatabaseSwitch(state, null);
+        assertRejectedDatabaseSwitch(state, "   ");
     }
 
     @Test
@@ -42,5 +56,15 @@ public class ScriptAnalysisStateTest {
 
         assertEquals("db1", context.getStatementDatabase());
         assertEquals("db3", state.getCurrentDatabase());
+    }
+
+    private void assertRejectedDatabaseSwitch(ScriptAnalysisState state, String database) {
+        try {
+            state.useDatabase(database);
+        } catch (IllegalArgumentException expected) {
+            assertEquals("db1", state.getCurrentDatabase());
+            return;
+        }
+        throw new AssertionError("Expected invalid database switch to be rejected");
     }
 }

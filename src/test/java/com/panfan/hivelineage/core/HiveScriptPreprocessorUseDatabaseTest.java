@@ -5,6 +5,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class HiveScriptPreprocessorUseDatabaseTest {
@@ -46,6 +47,7 @@ public class HiveScriptPreprocessorUseDatabaseTest {
         assertInvalid(preprocessor.resolveUseDatabase("use db1.other", false));
         assertInvalid(preprocessor.resolveUseDatabase("use ``", false));
         assertInvalid(preprocessor.resolveUseDatabase("use `db one`", false));
+        assertInvalid(preprocessor.resolveUseDatabase("use `db\u2003name`", false));
         assertInvalid(preprocessor.resolveUseDatabase("use `db`name`", false));
         assertInvalid(preprocessor.resolveUseDatabase("use `db", false));
     }
@@ -54,12 +56,39 @@ public class HiveScriptPreprocessorUseDatabaseTest {
     public void identifiesUseCandidatesWithoutMatchingSimilarWords() {
         assertTrue(preprocessor.isUseDatabaseCandidate("use"));
         assertTrue(preprocessor.isUseDatabaseCandidate("  USE\tdb1  "));
+        assertTrue(preprocessor.isUseDatabaseCandidate("use\u2003db"));
+        assertTrue(preprocessor.isUseDatabaseCandidate("use.db"));
+        assertInvalid(preprocessor.resolveUseDatabase("use\u2003db", false));
+        assertInvalid(preprocessor.resolveUseDatabase("use.db", false));
         assertFalse(preprocessor.isUseDatabaseCandidate("user_table"));
+        assertFalse(preprocessor.isUseDatabaseCandidate("useful"));
+        assertFalse(preprocessor.isUseDatabaseCandidate("use_db"));
         assertFalse(preprocessor.isUseDatabaseCandidate(null));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void validResolutionRejectsNullDatabase() {
+        UseDatabaseResolution.valid(null);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void validResolutionRejectsBlankDatabase() {
+        UseDatabaseResolution.valid("\u2003");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void invalidResolutionRejectsNullFailureMessage() {
+        UseDatabaseResolution.invalid(null);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void invalidResolutionRejectsBlankFailureMessage() {
+        UseDatabaseResolution.invalid("\u2003");
     }
 
     private void assertInvalid(UseDatabaseResolution resolution) {
         assertFalse(resolution.isValid());
+        assertNull(resolution.getDatabase());
         assertNotNull(resolution.getFailureMessage());
     }
 }

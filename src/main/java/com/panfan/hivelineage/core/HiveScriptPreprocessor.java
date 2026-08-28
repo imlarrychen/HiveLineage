@@ -11,7 +11,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 final class HiveScriptPreprocessor {
-    private static final Pattern USE_DATABASE_CANDIDATE = Pattern.compile("(?is)^use(?:\\s|$)");
+    private static final Pattern USE_DATABASE_CANDIDATE = Pattern.compile(
+        "(?is)^use(?:$|[^\\p{L}\\p{N}_])"
+    );
     private static final Pattern USE_DATABASE = Pattern.compile(
         "(?is)^use\\s+(`[^`\\s.]+`|[a-zA-Z_][\\w]*)\\s*$"
     );
@@ -34,7 +36,11 @@ final class HiveScriptPreprocessor {
         if (!matcher.matches()) {
             return UseDatabaseResolution.invalid("Invalid USE database statement");
         }
-        return UseDatabaseResolution.valid(nameResolver.normalizeDatabase(matcher.group(1)));
+        try {
+            return UseDatabaseResolution.valid(nameResolver.normalizeDatabase(matcher.group(1)));
+        } catch (IllegalArgumentException ex) {
+            return UseDatabaseResolution.invalid("Invalid USE database identifier: " + ex.getMessage());
+        }
     }
 
     void applySetStatement(String statement, Map<String, String> sessionVariables) {

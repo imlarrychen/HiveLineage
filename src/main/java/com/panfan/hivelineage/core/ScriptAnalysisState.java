@@ -13,8 +13,11 @@ final class ScriptAnalysisState {
     private String currentDatabase;
 
     ScriptAnalysisState(String defaultDatabase, HivePhysicalNameResolver nameResolver) {
+        if (nameResolver == null) {
+            throw new IllegalArgumentException("nameResolver must not be null");
+        }
         this.nameResolver = nameResolver;
-        this.currentDatabase = nameResolver.normalizeDatabase(defaultDatabase);
+        this.currentDatabase = isBlank(defaultDatabase) ? null : nameResolver.normalizeDatabase(defaultDatabase);
     }
 
     String getCurrentDatabase() {
@@ -22,7 +25,26 @@ final class ScriptAnalysisState {
     }
 
     void useDatabase(String database) {
-        currentDatabase = nameResolver.normalizeDatabase(database);
+        if (isBlank(database)) {
+            throw new IllegalArgumentException("database must not be blank");
+        }
+        String normalizedDatabase = nameResolver.normalizeDatabase(database);
+        if (normalizedDatabase == null) {
+            throw new IllegalArgumentException("database must not be blank");
+        }
+        currentDatabase = normalizedDatabase;
+    }
+
+    private boolean isBlank(String value) {
+        if (value == null || value.isEmpty()) {
+            return true;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            if (!Character.isWhitespace(value.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     Map<String, List<DataObjectRef>> getTemporaryTableSources() {

@@ -12,11 +12,31 @@ final class UseDatabaseResolution {
     }
 
     static UseDatabaseResolution valid(String database) {
+        requireNonBlank(database, "database");
         return new UseDatabaseResolution(true, database, null);
     }
 
     static UseDatabaseResolution invalid(String failureMessage) {
+        requireNonBlank(failureMessage, "failureMessage");
         return new UseDatabaseResolution(false, null, failureMessage);
+    }
+
+    private static void requireNonBlank(String value, String fieldName) {
+        if (isBlank(value)) {
+            throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+    }
+
+    private static boolean isBlank(String value) {
+        if (value == null || value.isEmpty()) {
+            return true;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            if (!Character.isWhitespace(value.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     boolean isValid() {
