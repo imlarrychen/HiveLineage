@@ -63,7 +63,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             this.parserAdapter,
             targetColumnResolver,
             projectionResolver,
-            nameResolver
+            nameResolver,
+            databaseBinder
         );
         this.joinAnalyzer = new HiveJoinConditionAnalyzer(
             this.parserAdapter,

@@ -410,4 +410,32 @@ public class HiveViewAndTemporaryLineageTest {
         assertContainsSource(statement, "dim.v_broken_user");
         assertContainsWarning(statement.getWarnings(), WarningCode.VIEW_EXPANSION_FAILED);
     }
+
+    @Test
+    public void unqualifiedTableInViewUsesViewDatabase() {
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addView("view_db.v_user", "select id from base_t", "id")
+            .addTable("view_db.base_t", "id")
+            .addTable("session_db.target_t", "id");
+
+        StatementLineageResult statement = new HiveScriptLineageAnalyzer().analyzeScript(
+            LineageAnalyzeRequest.builder()
+                .workflowId("wf_view_db")
+                .taskId("task_view_db")
+                .taskVersion("V1")
+                .defaultDatabase("session_db")
+                .rawScript("insert into target_t(id) select id from view_db.v_user")
+                .metadataProvider(metadataProvider)
+                .metadataCache(new HiveMetadataCache())
+                .options(LineageAnalyzeOptions.builder()
+                    .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                    .expandViewLineage(true)
+                    .build())
+                .build()
+        ).getStatements().get(0);
+
+        assertContainsSource(statement, "view_db.base_t");
+        assertNotContainsSource(statement, "session_db.base_t");
+        assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "view_db.base_t.id");
+    }
 }

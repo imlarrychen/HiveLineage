@@ -24,17 +24,20 @@ final class HiveLineageExpansionService {
     private final HiveTargetColumnResolver targetColumnResolver;
     private final HiveProjectionLineageResolver projectionResolver;
     private final HivePhysicalNameResolver nameResolver;
+    private final HiveStatementDatabaseBinder databaseBinder;
 
     HiveLineageExpansionService(
         HiveAstParserAdapter parserAdapter,
         HiveTargetColumnResolver targetColumnResolver,
         HiveProjectionLineageResolver projectionResolver,
-        HivePhysicalNameResolver nameResolver
+        HivePhysicalNameResolver nameResolver,
+        HiveStatementDatabaseBinder databaseBinder
     ) {
         this.parserAdapter = parserAdapter;
         this.targetColumnResolver = targetColumnResolver;
         this.projectionResolver = projectionResolver;
         this.nameResolver = nameResolver;
+        this.databaseBinder = databaseBinder;
     }
 
     void registerTemporaryTable(
@@ -179,7 +182,7 @@ final class HiveLineageExpansionService {
             }
             List<DataObjectRef> viewSources;
             try {
-                viewSources = parserAdapter.parse(metadata.getViewOriginalSql()).getInputObjects();
+                viewSources = parseBoundView(context, metadata).getInputObjects();
             } catch (RuntimeException ex) {
                 targetColumnResolver.addWarning(
                     warnings,
@@ -314,7 +317,7 @@ final class HiveLineageExpansionService {
 
         ParsedHiveStatement parsedView;
         try {
-            parsedView = parserAdapter.parse(viewMetadata.getViewOriginalSql());
+            parsedView = parseBoundView(context, viewMetadata);
         } catch (RuntimeException ex) {
             targetColumnResolver.addWarning(
                 warnings,
@@ -384,6 +387,19 @@ final class HiveLineageExpansionService {
         }
         viewColumnLineageCache.put(viewName, mapping);
         return mapping;
+    }
+    private ParsedHiveStatement parseBoundView(
+        StatementAnalysisContext context,
+        HiveTableMetadata viewMetadata
+    ) {
+        ParsedHiveStatement parsed = parserAdapter.parse(viewMetadata.getViewOriginalSql());
+        String viewDatabase = viewMetadata.getTableIdentifier().getDatabaseName();
+        return databaseBinder.bind(
+            parsed,
+            viewDatabase,
+            context.getTemporaryTableSources().keySet(),
+            false
+        );
     }
     void warnForBoundaryViews(
         LineageAnalyzeRequest request,
