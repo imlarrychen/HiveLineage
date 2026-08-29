@@ -1234,13 +1234,13 @@ git commit -m "fix: preserve view and temporary database scope"
 - Create: `docs/bugfixes/2026-08-28-session-database-resolution.md`
 - Modify: `docs/superpowers/plans/2026-08-28-session-database-resolution.md`
 
-- [ ] **Step 1: 运行完整测试定位所有受新唯一标识契约影响的既有断言**
+- [x] **Step 1: 运行完整测试定位所有受新唯一标识契约影响的既有断言**
 
 Run: `mvn clean test`
 
 Expected: 生产逻辑不再出现功能失败；如有失败，只能是旧测试仍断言裸物理表或两段物理字段名。
 
-- [ ] **Step 2: 逐条分类失败，只更新已被设计改变的期望**
+- [x] **Step 2: 逐条分类失败，只更新已被设计改变的期望**
 
 使用：
 
@@ -1256,7 +1256,7 @@ rg -n '"[A-Za-z_][A-Za-z0-9_]*"|"[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*"
   `directJoinColumns` 不做机械替换。
 - 任何无法归因于新契约的失败都视为生产回归，返回相应任务修复，不改期望值掩盖。
 
-- [ ] **Step 3: 实现缺陷文档**
+- [x] **Step 3: 实现缺陷文档**
 
 `docs/bugfixes/2026-08-28-session-database-resolution.md` 必须包含以下完整章节：
 
@@ -1278,7 +1278,7 @@ rg -n '"[A-Za-z_][A-Za-z0-9_]*"|"[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*"
 `HivePhysicalNameResolverTest`、`HiveJoinLineageTest`、`HiveViewAndTemporaryLineageTest` 的实际测试方法名；
 “验证结果”只记录本次新运行的 Maven 命令和实际通过数。
 
-- [ ] **Step 4: 运行问题 1 的全部定向测试**
+- [x] **Step 4: 运行问题 1 的全部定向测试**
 
 Run:
 
@@ -1288,7 +1288,7 @@ mvn -q -Dtest=HivePhysicalNameResolverTest,HiveSessionDatabaseResolutionTest,Hiv
 
 Expected: 所选测试 0 failures, 0 errors。
 
-- [ ] **Step 5: 运行完整验证并回填真实结果**
+- [x] **Step 5: 运行完整验证并回填真实结果**
 
 Run: `mvn clean test`
 
@@ -1297,7 +1297,7 @@ Expected: 全部测试 0 failures, 0 errors；已有的 5 个环境跳过测试�
 将 Maven 输出中的实际 `Tests run`、`Failures`、`Errors`、`Skipped` 回填到缺陷文档，
 不复用历史次数。
 
-- [ ] **Step 6: 检查文档和代码差异**
+- [x] **Step 6: 检查文档和代码差异**
 
 Run:
 
@@ -1308,7 +1308,7 @@ rg -n '[T]BD|[T]ODO|[F]IXME|[待]定|[暂]定' docs/bugfixes/2026-08-28-session-
 
 Expected: 两条命令均无输出。
 
-- [ ] **Step 7: 提交回归期望与缺陷文档**
+- [x] **Step 7: 提交回归期望与缺陷文档**
 
 ```bash
 git add src/test/java docs/bugfixes/2026-08-28-session-database-resolution.md docs/superpowers/plans/2026-08-28-session-database-resolution.md
