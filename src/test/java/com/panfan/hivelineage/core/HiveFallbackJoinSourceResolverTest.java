@@ -126,6 +126,17 @@ public class HiveFallbackJoinSourceResolverTest {
     }
 
     @Test
+    public void parsesTopLevelCommaSourceAfterJoinPredicate() {
+        List<FallbackJoinSource> sources = resolver.resolve(
+            "select ??? from db1.a a join db2.b b "
+                + "on coalesce(a.id,b.id)=b.id, db3.c c",
+            Collections.<String>emptySet()
+        );
+
+        assertNames(sources, "db1.a", "db2.b", "db3.c");
+    }
+
+    @Test
     public void retainsPhysicalSourcesAcrossMultipleNestedQueryBlocks() {
         List<FallbackJoinSource> sources = resolver.resolve(
             "select ??? from (select id from "
@@ -248,6 +259,46 @@ public class HiveFallbackJoinSourceResolverTest {
         resolver.resolve(
             "select ??? from (select id from db1.inner_t) "
                 + "join db2.outer_t o on 1=1",
+            Collections.<String>emptySet()
+        );
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void clauseBoundaryCannotReplaceExpectedRelation() {
+        resolver.resolve(
+            "select ??? from where x=1",
+            Collections.<String>emptySet()
+        );
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void joinCannotReplaceExpectedFromRelation() {
+        resolver.resolve(
+            "select ??? from join db1.t on 1=1",
+            Collections.<String>emptySet()
+        );
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void unmatchedTopLevelClosingParenthesisIsRejected() {
+        resolver.resolve(
+            "select ??? from db1.a)",
+            Collections.<String>emptySet()
+        );
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void fromWithoutRelationAtEndOfInputIsRejected() {
+        resolver.resolve(
+            "select ??? from",
+            Collections.<String>emptySet()
+        );
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void joinWithoutRelationAtEndOfInputIsRejected() {
+        resolver.resolve(
+            "select ??? from db1.a join",
             Collections.<String>emptySet()
         );
     }

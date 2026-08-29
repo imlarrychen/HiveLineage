@@ -65,7 +65,6 @@ final class HiveFallbackJoinSourceResolver {
         boolean seenSelect = false;
         boolean inFromClause = false;
         boolean expectRelation = false;
-        boolean inJoinPredicate = false;
 
         for (int index = bodyStart; index < end; index++) {
             Token token = tokens.get(index);
@@ -77,7 +76,6 @@ final class HiveFallbackJoinSourceResolver {
                     output.add(relation.source);
                     index = relation.lastTokenIndex;
                     expectRelation = false;
-                    inJoinPredicate = false;
                     continue;
                 }
                 if (containsQuery(tokens, index + 1, close)) {
@@ -87,6 +85,12 @@ final class HiveFallbackJoinSourceResolver {
                 index = close;
                 continue;
             }
+            if (token.type == TokenType.RPAREN) {
+                throw new IllegalArgumentException("unmatched closing parenthesis in query");
+            }
+            if (expectRelation && !isRelationIdentifier(token)) {
+                throw new IllegalArgumentException("relation identifier is required");
+            }
             if (isKeyword(token, "select")) {
                 seenSelect = true;
                 continue;
@@ -94,14 +98,12 @@ final class HiveFallbackJoinSourceResolver {
             if (seenSelect && !inFromClause && isKeyword(token, "from")) {
                 inFromClause = true;
                 expectRelation = true;
-                inJoinPredicate = false;
                 continue;
             }
             if (inFromClause && isClauseBoundary(token)) {
                 boolean union = isKeyword(token, "union");
                 inFromClause = false;
                 expectRelation = false;
-                inJoinPredicate = false;
                 if (union) {
                     seenSelect = false;
                 }
@@ -109,15 +111,13 @@ final class HiveFallbackJoinSourceResolver {
             }
             if (inFromClause && isKeyword(token, "join")) {
                 expectRelation = true;
-                inJoinPredicate = false;
                 continue;
             }
             if (inFromClause && (isKeyword(token, "on") || isKeyword(token, "using"))) {
                 expectRelation = false;
-                inJoinPredicate = true;
                 continue;
             }
-            if (inFromClause && !inJoinPredicate && token.type == TokenType.COMMA) {
+            if (inFromClause && token.type == TokenType.COMMA) {
                 expectRelation = true;
                 continue;
             }
@@ -127,7 +127,6 @@ final class HiveFallbackJoinSourceResolver {
                 output.add(relation.source);
                 index = relation.lastTokenIndex;
                 expectRelation = false;
-                inJoinPredicate = false;
             }
         }
         if (expectRelation) {
@@ -198,14 +197,14 @@ final class HiveFallbackJoinSourceResolver {
             if (aliasIndex < end && isKeyword(tokens.get(aliasIndex), "as")) {
                 aliasIndex++;
             }
-            if (aliasIndex >= end || !isSubqueryAlias(tokens.get(aliasIndex))) {
+            if (aliasIndex >= end || !isRelationIdentifier(tokens.get(aliasIndex))) {
                 throw new IllegalArgumentException("subquery relation alias is required");
             }
             Token alias = tokens.get(aliasIndex);
             return new RelationParse(new FallbackJoinSource(alias.text, path, alias.offset,
                 FallbackJoinSource.Kind.SUBQUERY), aliasIndex);
         }
-        if (!isIdentifier(first)) {
+        if (!isRelationIdentifier(first)) {
             throw new IllegalArgumentException("relation identifier is required");
         }
 
@@ -315,7 +314,7 @@ final class HiveFallbackJoinSourceResolver {
         return token.type == TokenType.WORD || token.type == TokenType.QUOTED_IDENTIFIER;
     }
 
-    private boolean isSubqueryAlias(Token token) {
+    private boolean isRelationIdentifier(Token token) {
         if (token.type == TokenType.QUOTED_IDENTIFIER) {
             return true;
         }
