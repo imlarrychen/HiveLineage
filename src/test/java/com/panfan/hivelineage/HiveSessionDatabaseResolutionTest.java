@@ -285,6 +285,102 @@ public class HiveSessionDatabaseResolutionTest {
     }
 
     @Test
+    public void fallbackJoinWithQuotedQualifiedTablesDoesNotRequireDatabase() {
+        LineageAnalyzeResult result = analyze(
+            null,
+            "select ??? from `db1`.`left_t` a join `db2`.`right_t` b on 1=1;",
+            LineageAnalyzeOptions.builder().parseJoinConditions(true).build(),
+            null
+        );
+
+        assertEquals(0, result.getFailedStatementCount());
+        assertEquals(1, result.getStatements().size());
+        assertEquals(Integer.valueOf(0), result.getStatements().get(0).getParseStatusCode());
+    }
+
+    @Test
+    public void fallbackJoinIgnoresSourceKeywordsInsideStringLiterals() {
+        assertFallbackQualifiedJoinSucceeds(
+            "select ??? from db1.left_t a join db2.right_t b on 1=1 "
+                + "where a.note='from phantom_table join another_phantom'"
+        );
+    }
+
+    @Test
+    public void fallbackJoinIgnoresSourceKeywordsInsideComments() {
+        assertFallbackQualifiedJoinSucceeds(
+            "select ??? /* from block_phantom */ from db1.left_t a "
+                + "join db2.right_t b on 1=1 -- join line_phantom\n"
+        );
+    }
+
+    @Test
+    public void fallbackJoinValidatesBarePhysicalTableInsideCte() {
+        assertFallbackJoinDatabaseFailure(
+            "with c as (select id from bare_base) "
+                + "select ??? from c a join db2.right_t b on a.id=b.id;"
+        );
+    }
+
+    @Test
+    public void fallbackJoinDoesNotTreatCteAsPhysicalTable() {
+        LineageAnalyzeResult result = analyze(
+            null,
+            "with c as (select id from db1.base_t) "
+                + "select ??? from c a join db2.right_t b on a.id=b.id;",
+            LineageAnalyzeOptions.builder().parseJoinConditions(true).build(),
+            null
+        );
+
+        assertEquals(0, result.getFailedStatementCount());
+        assertEquals(Integer.valueOf(0), result.getStatements().get(0).getParseStatusCode());
+    }
+
+    @Test
+    public void fallbackJoinValidatesBarePhysicalTableInsideSubquery() {
+        assertFallbackJoinDatabaseFailure(
+            "select ??? from (select id from bare_base) a "
+                + "join db2.right_t b on a.id=b.id;"
+        );
+    }
+
+    @Test
+    public void fallbackJoinDoesNotTreatTemporaryTableAsPhysicalTable() {
+        LineageAnalyzeResult result = analyze(
+            null,
+            "create temporary table tmp_t as select id from db1.base_t;"
+                + "select ??? from tmp_t a join db2.right_t b on 1=1;",
+            LineageAnalyzeOptions.builder().parseJoinConditions(true).build(),
+            null
+        );
+
+        assertEquals(0, result.getFailedStatementCount());
+        assertEquals(1, result.getStatements().size());
+        assertEquals(Integer.valueOf(0), result.getStatements().get(0).getParseStatusCode());
+    }
+
+    @Test
+    public void fallbackJoinValidatesUnreferencedRightTable() {
+        assertFallbackJoinDatabaseFailure(
+            "select ??? from db1.left_t a join right_t b on a.id=1;"
+        );
+    }
+
+    @Test
+    public void fallbackJoinValidatesUnreferencedLeftTable() {
+        assertFallbackJoinDatabaseFailure(
+            "select ??? from left_t a join db2.right_t b on 1=1;"
+        );
+    }
+
+    @Test
+    public void fallbackJoinValidatesAllTablesForConstantCondition() {
+        assertFallbackJoinDatabaseFailure(
+            "select ??? from left_t a join right_t b on 1=1;"
+        );
+    }
+
+    @Test
     public void pureSelectWithoutDatabaseRemainsIgnoredWhenJoinParsingIsOff() {
         LineageAnalyzeResult result = analyze(
             null,
@@ -306,6 +402,31 @@ public class HiveSessionDatabaseResolutionTest {
         HiveMetadataProvider metadataProvider
     ) {
         return new HiveScriptLineageAnalyzer().analyzeScript(request(defaultDatabase, script, options, metadataProvider));
+    }
+
+    private void assertFallbackJoinDatabaseFailure(String sql) {
+        LineageAnalyzeResult result = analyze(
+            null,
+            sql,
+            LineageAnalyzeOptions.builder().parseJoinConditions(true).build(),
+            null
+        );
+        assertEquals(1, result.getFailedStatementCount());
+        assertEquals(1, result.getStatements().size());
+        assertEquals("SELECT", result.getStatements().get(0).getStatementType());
+        assertEquals("DATABASE_NOT_RESOLVED", result.getStatements().get(0).getFailureCode());
+    }
+
+    private void assertFallbackQualifiedJoinSucceeds(String sql) {
+        LineageAnalyzeResult result = analyze(
+            null,
+            sql,
+            LineageAnalyzeOptions.builder().parseJoinConditions(true).build(),
+            null
+        );
+        assertEquals(0, result.getFailedStatementCount());
+        assertEquals(1, result.getStatements().size());
+        assertEquals(Integer.valueOf(0), result.getStatements().get(0).getParseStatusCode());
     }
 
     private LineageAnalyzeRequest request(

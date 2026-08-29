@@ -399,7 +399,13 @@ final class HiveTargetColumnResolver {
 
     Map<String, String> extractTopLevelSourceAliases(String normalizedStatement) {
         Map<String, String> aliases = new HashMap<>();
-        scanTopLevelSourceAliases(normalizedStatement, aliases, null);
+        scanSourceAliases(normalizedStatement, aliases, null, true);
+        return aliases;
+    }
+
+    Map<String, String> extractAllSourceAliases(String normalizedStatement) {
+        Map<String, String> aliases = new HashMap<>();
+        scanSourceAliases(normalizedStatement, aliases, null, false);
         return aliases;
     }
 
@@ -408,23 +414,55 @@ final class HiveTargetColumnResolver {
         Map<String, String> aliases,
         Map<String, String> explicitAliases
     ) {
-        int start = HiveSqlTextUtils.lastTopLevelKeywordIndex(normalizedStatement, "insert");
-        if (start < 0) {
+        scanSourceAliases(normalizedStatement, aliases, explicitAliases, true);
+    }
+
+    private void scanSourceAliases(
+        String normalizedStatement,
+        Map<String, String> aliases,
+        Map<String, String> explicitAliases,
+        boolean topLevelOnly
+    ) {
+        int start = topLevelOnly ? HiveSqlTextUtils.lastTopLevelKeywordIndex(normalizedStatement, "insert") : 0;
+        if (topLevelOnly && start < 0) {
             start = HiveSqlTextUtils.lastTopLevelKeywordIndex(normalizedStatement, "select");
         }
-        if (start < 0) {
-            start = 0;
-        }
+        start = Math.max(0, start);
         int depth = 0;
         char quote = 0;
         int position = start;
         while (position < normalizedStatement.length()) {
             char ch = normalizedStatement.charAt(position);
             if (quote != 0) {
+                if (ch == '\\' && quote != '`' && position + 1 < normalizedStatement.length()) {
+                    position += 2;
+                    continue;
+                }
                 if (ch == quote) {
+                    if (position + 1 < normalizedStatement.length()
+                        && normalizedStatement.charAt(position + 1) == quote) {
+                        position += 2;
+                        continue;
+                    }
                     quote = 0;
                 }
                 position++;
+                continue;
+            }
+            if (ch == '-' && position + 1 < normalizedStatement.length()
+                && normalizedStatement.charAt(position + 1) == '-') {
+                position += 2;
+                while (position < normalizedStatement.length()
+                    && normalizedStatement.charAt(position) != '\n'
+                    && normalizedStatement.charAt(position) != '\r') {
+                    position++;
+                }
+                continue;
+            }
+            if (ch == '/' && position + 1 < normalizedStatement.length()
+                && normalizedStatement.charAt(position + 1) == '*') {
+                int commentEnd = normalizedStatement.indexOf("*/", position + 2);
+                position = commentEnd < 0 ? normalizedStatement.length() : commentEnd + 2;
                 continue;
             }
             if (ch == '\'' || ch == '"' || ch == '`') {
@@ -442,7 +480,7 @@ final class HiveTargetColumnResolver {
                 position++;
                 continue;
             }
-            if (depth == 0 && isSourceKeywordAt(normalizedStatement, position)) {
+            if ((!topLevelOnly || depth == 0) && isSourceKeywordAt(normalizedStatement, position)) {
                 position = captureTopLevelSourceAlias(
                     normalizedStatement,
                     position,

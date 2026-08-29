@@ -134,7 +134,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                     try {
                         parseStatement(context, normalized);
                         StatementLineageResult joinResult = joinAnalyzer.joinConditionOnlyResult(context);
-                        validateJoinPhysicalObjects(context, joinResult);
+                        validateJoinPhysicalObjects(context);
                         results.add(joinResult);
                     } catch (DatabaseResolutionException ex) {
                         results.add(failedResult(
@@ -691,19 +691,19 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         return false;
     }
 
-    private void validateJoinPhysicalObjects(
-        StatementAnalysisContext context,
-        StatementLineageResult joinResult
-    ) {
+    private void validateJoinPhysicalObjects(StatementAnalysisContext context) {
         Set<String> logicalObjects = new LinkedHashSet<>();
         logicalObjects.addAll(projectionResolver
             .extractStatementProjectionTables(context.getNormalizedStatement())
             .keySet());
         logicalObjects.addAll(context.getTemporaryTableSources().keySet());
-        for (DataObjectRef inputObject : joinResult.getInputObjects()) {
-            String qualifiedName = inputObject.getQualifiedName();
-            if (!logicalObjects.contains(qualifiedName.toLowerCase(Locale.ROOT))) {
-                nameResolver.qualifyTable(qualifiedName, context.getStatementDatabase());
+
+        Set<String> sourceObjects = new LinkedHashSet<>(targetColumnResolver
+            .extractAllSourceAliases(context.getNormalizedStatement())
+            .values());
+        for (String sourceObject : sourceObjects) {
+            if (!logicalObjects.contains(sourceObject.toLowerCase(Locale.ROOT))) {
+                nameResolver.qualifyTable(sourceObject, context.getStatementDatabase());
             }
         }
     }
