@@ -438,4 +438,30 @@ public class HiveViewAndTemporaryLineageTest {
         assertNotContainsSource(statement, "session_db.base_t");
         assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "view_db.base_t.id");
     }
+
+    @Test
+    public void temporaryTableIsExpandedBeforePermanentTableQualification() {
+        LineageAnalyzeResult result = new HiveScriptLineageAnalyzer().analyzeScript(
+            LineageAnalyzeRequest.builder()
+                .workflowId("wf_temp_use")
+                .taskId("task_temp_use")
+                .taskVersion("V1")
+                .defaultDatabase("db1")
+                .rawScript(
+                    "create temporary table tmp_t as select id from source_t; "
+                        + "use db2; "
+                        + "insert into target_t(id) select id from tmp_t;"
+                )
+                .options(LineageAnalyzeOptions.builder()
+                    .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                    .build())
+                .build()
+        );
+        StatementLineageResult statement = result.getStatements().get(0);
+
+        TestSupport.assertEquals("db2.target_t", statement.getOutputObject().getQualifiedName(), "post-use target");
+        assertContainsSource(statement, "db1.source_t");
+        assertNotContainsSource(statement, "db2.tmp_t");
+        assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "db1.source_t.id");
+    }
 }
