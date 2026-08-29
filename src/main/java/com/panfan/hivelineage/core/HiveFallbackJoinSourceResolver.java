@@ -169,6 +169,9 @@ final class HiveFallbackJoinSourceResolver {
             }
             String cteName = tokens.get(index).text;
             index++;
+            if (index < end && tokens.get(index).type == TokenType.LPAREN) {
+                index = consumeCteColumnAliases(tokens, index, end);
+            }
             if (index >= end || !isKeyword(tokens.get(index), "as")) {
                 throw new IllegalArgumentException("AS is required after CTE name");
             }
@@ -189,6 +192,32 @@ final class HiveFallbackJoinSourceResolver {
                 return index;
             }
             index++;
+        }
+    }
+
+    private int consumeCteColumnAliases(List<Token> tokens, int open, int end) {
+        int index = open + 1;
+        if (index >= end || !isIdentifier(tokens.get(index))) {
+            throw new IllegalArgumentException("CTE column alias is required");
+        }
+        while (true) {
+            index++;
+            if (index >= end) {
+                throw new IllegalArgumentException("CTE column alias list is not closed");
+            }
+            Token token = tokens.get(index);
+            if (token.type == TokenType.RPAREN) {
+                return index + 1;
+            }
+            if (token.type != TokenType.COMMA) {
+                throw new IllegalArgumentException(
+                    "comma or closing parenthesis is required in CTE column alias list"
+                );
+            }
+            index++;
+            if (index >= end || !isIdentifier(tokens.get(index))) {
+                throw new IllegalArgumentException("CTE column alias is required after comma");
+            }
         }
     }
 

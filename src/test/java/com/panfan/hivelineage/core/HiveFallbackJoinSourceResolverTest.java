@@ -103,6 +103,63 @@ public class HiveFallbackJoinSourceResolverTest {
     }
 
     @Test
+    public void consumesCteColumnAliasListBeforeAs() {
+        List<FallbackJoinSource> sources = resolver.resolve(
+            "with c(id) as (select id from db1.a) "
+                + "select c.id from c join db2.b b on c.id=b.id",
+            Collections.<String>emptySet()
+        );
+
+        assertSources(
+            sources,
+            source("db1.a", FallbackJoinSource.Kind.PHYSICAL),
+            source("c", FallbackJoinSource.Kind.CTE),
+            source("db2.b", FallbackJoinSource.Kind.PHYSICAL)
+        );
+    }
+
+    @Test
+    public void consumesMultipleAndQuotedCteColumnAliases() {
+        List<FallbackJoinSource> sources = resolver.resolve(
+            "with c(`ID`, name) as (select id, name from db1.a) "
+                + "select c.id from c join db2.b b on c.id=b.id",
+            Collections.<String>emptySet()
+        );
+
+        assertSources(
+            sources,
+            source("db1.a", FallbackJoinSource.Kind.PHYSICAL),
+            source("c", FallbackJoinSource.Kind.CTE),
+            source("db2.b", FallbackJoinSource.Kind.PHYSICAL)
+        );
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void emptyCteColumnAliasListIsRejected() {
+        resolver.resolve(
+            "with c() as (select id from db1.a) select id from c",
+            Collections.<String>emptySet()
+        );
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void trailingCommaInCteColumnAliasListIsRejected() {
+        resolver.resolve(
+            "with c(id,) as (select id from db1.a) select id from c",
+            Collections.<String>emptySet()
+        );
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void unclosedCteColumnAliasListIsRejected() {
+        resolver.resolve(
+            "with c(id as (select id from db1.a) "
+                + "select id from c join db2.b b on c.id=b.id",
+            Collections.<String>emptySet()
+        );
+    }
+
+    @Test
     public void parsesCommaSourcesWithoutTreatingExpressionCommasAsRelations() {
         List<FallbackJoinSource> sources = resolver.resolve(
             "select ??? from db1.a a, bare_b b join db2.c c "

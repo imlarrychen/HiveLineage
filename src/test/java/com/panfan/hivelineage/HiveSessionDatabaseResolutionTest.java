@@ -315,6 +315,29 @@ public class HiveSessionDatabaseResolutionTest {
     }
 
     @Test
+    public void selectJoinAcceptsCteColumnAliasList() {
+        LineageAnalyzeResult result = analyze(
+            "whc",
+            "with c(id) as (select id from db1.a) "
+                + "select c.id from c join db2.b b on c.id=b.id;",
+            LineageAnalyzeOptions.builder().parseJoinConditions(true).build(),
+            null
+        );
+
+        assertEquals(0, result.getFailedStatementCount());
+        assertEquals(1, result.getStatements().size());
+        assertEquals(Integer.valueOf(0), result.getStatements().get(0).getParseStatusCode());
+    }
+
+    @Test
+    public void fallbackJoinAcceptsCteColumnAliasListWithQualifiedPhysicalSources() {
+        assertFallbackQualifiedJoinSucceeds(
+            "with c(`ID`, name) as (select id, name from db1.a) "
+                + "select ??? from c join db2.b b on c.id=b.id;"
+        );
+    }
+
+    @Test
     public void fallbackJoinIgnoresSourceKeywordsInsideStringLiterals() {
         assertFallbackQualifiedJoinSucceeds(
             "select ??? from db1.left_t a join db2.right_t b on 1=1 "
