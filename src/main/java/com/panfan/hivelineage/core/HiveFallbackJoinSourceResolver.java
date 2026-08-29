@@ -2,19 +2,14 @@ package com.panfan.hivelineage.core;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
 final class HiveFallbackJoinSourceResolver {
-    private enum TokenType {
-        WORD,
-        QUOTED_IDENTIFIER,
-        DOT,
-        COMMA,
-        LPAREN,
-        RPAREN
-    }
+    private enum TokenType { WORD, QUOTED_IDENTIFIER, DOT, COMMA, LPAREN, RPAREN }
 
     private static final class Token {
         private final TokenType type;
@@ -28,40 +23,288 @@ final class HiveFallbackJoinSourceResolver {
         }
     }
 
+    private static final class RelationParse {
+        private final FallbackJoinSource source;
+        private final int lastTokenIndex;
+
+        private RelationParse(FallbackJoinSource source, int lastTokenIndex) {
+            this.source = source;
+            this.lastTokenIndex = lastTokenIndex;
+        }
+    }
+
     List<FallbackJoinSource> resolve(String sql, Set<String> temporaryTables) {
         if (sql == null) {
             throw new IllegalArgumentException("sql must not be null");
         }
         List<Token> tokens = tokenize(sql);
         List<FallbackJoinSource> sources = new ArrayList<>();
-        parseQueryBlock(tokens, sources);
+        parseQueryBlock(tokens, 0, tokens.size(), "q0", Collections.<String>emptySet(),
+            normalizeTemporaryNames(temporaryTables), sources);
+        Collections.sort(sources, new Comparator<FallbackJoinSource>() {
+            @Override
+            public int compare(FallbackJoinSource left, FallbackJoinSource right) {
+                return Integer.compare(left.getStartOffset(), right.getStartOffset());
+            }
+        });
         return Collections.unmodifiableList(sources);
     }
 
-    private void parseQueryBlock(List<Token> tokens, List<FallbackJoinSource> sources) {
-        for (int index = 0; index < tokens.size(); index++) {
+    private void parseQueryBlock(
+        List<Token> tokens,
+        int start,
+        int end,
+        String path,
+        Set<String> inheritedCtes,
+        Set<String> temporaryTables,
+        List<FallbackJoinSource> output
+    ) {
+        Set<String> visibleCtes = new LinkedHashSet<>(inheritedCtes);
+        int bodyStart = parseCteDeclarations(tokens, start, end, path, visibleCtes,
+            temporaryTables, output);
+        boolean seenSelect = false;
+        boolean inFromClause = false;
+        boolean expectRelation = false;
+        boolean inJoinPredicate = false;
+
+        for (int index = bodyStart; index < end; index++) {
             Token token = tokens.get(index);
-            if (!isKeyword(token, "from") && !isKeyword(token, "join")) {
+            if (token.type == TokenType.LPAREN) {
+                int close = matchingParen(tokens, index, end);
+                if (expectRelation) {
+                    RelationParse relation = parseRelation(tokens, index, end, path,
+                        visibleCtes, temporaryTables, output);
+                    output.add(relation.source);
+                    index = relation.lastTokenIndex;
+                    expectRelation = false;
+                    inJoinPredicate = false;
+                    continue;
+                }
+                if (containsQuery(tokens, index + 1, close)) {
+                    parseQueryBlock(tokens, index + 1, close, childPath(path, index),
+                        visibleCtes, temporaryTables, output);
+                }
+                index = close;
                 continue;
             }
-            int relationIndex = index + 1;
-            if (relationIndex >= tokens.size() || !isIdentifier(tokens.get(relationIndex))) {
+            if (isKeyword(token, "select")) {
+                seenSelect = true;
                 continue;
             }
-            Token first = tokens.get(relationIndex);
-            String name = first.text;
-            if (relationIndex + 2 < tokens.size()
-                && tokens.get(relationIndex + 1).type == TokenType.DOT
-                && isIdentifier(tokens.get(relationIndex + 2))) {
-                name = name + "." + tokens.get(relationIndex + 2).text;
+            if (seenSelect && !inFromClause && isKeyword(token, "from")) {
+                inFromClause = true;
+                expectRelation = true;
+                inJoinPredicate = false;
+                continue;
             }
-            sources.add(new FallbackJoinSource(
-                name,
-                "q0",
-                first.offset,
-                FallbackJoinSource.Kind.PHYSICAL
-            ));
+            if (inFromClause && isClauseBoundary(token)) {
+                boolean union = isKeyword(token, "union");
+                inFromClause = false;
+                expectRelation = false;
+                inJoinPredicate = false;
+                if (union) {
+                    seenSelect = false;
+                }
+                continue;
+            }
+            if (inFromClause && isKeyword(token, "join")) {
+                expectRelation = true;
+                inJoinPredicate = false;
+                continue;
+            }
+            if (inFromClause && (isKeyword(token, "on") || isKeyword(token, "using"))) {
+                expectRelation = false;
+                inJoinPredicate = true;
+                continue;
+            }
+            if (inFromClause && !inJoinPredicate && token.type == TokenType.COMMA) {
+                expectRelation = true;
+                continue;
+            }
+            if (expectRelation) {
+                RelationParse relation = parseRelation(tokens, index, end, path,
+                    visibleCtes, temporaryTables, output);
+                output.add(relation.source);
+                index = relation.lastTokenIndex;
+                expectRelation = false;
+                inJoinPredicate = false;
+            }
         }
+        if (expectRelation) {
+            throw new IllegalArgumentException("missing relation in FROM or JOIN clause");
+        }
+    }
+
+    private int parseCteDeclarations(
+        List<Token> tokens,
+        int start,
+        int end,
+        String path,
+        Set<String> visibleCtes,
+        Set<String> temporaryTables,
+        List<FallbackJoinSource> output
+    ) {
+        if (start >= end || !isKeyword(tokens.get(start), "with")) {
+            return start;
+        }
+        int index = start + 1;
+        while (true) {
+            if (index >= end || !isIdentifier(tokens.get(index))) {
+                throw new IllegalArgumentException("CTE name is required after WITH");
+            }
+            String cteName = tokens.get(index).text;
+            index++;
+            if (index >= end || !isKeyword(tokens.get(index), "as")) {
+                throw new IllegalArgumentException("AS is required after CTE name");
+            }
+            index++;
+            if (index >= end || tokens.get(index).type != TokenType.LPAREN) {
+                throw new IllegalArgumentException("CTE query must be parenthesized");
+            }
+            int open = index;
+            int close = matchingParen(tokens, open, end);
+            if (!containsQuery(tokens, open + 1, close)) {
+                throw new IllegalArgumentException("CTE body must contain a query");
+            }
+            parseQueryBlock(tokens, open + 1, close, childPath(path, open), visibleCtes,
+                temporaryTables, output);
+            visibleCtes.add(cteName);
+            index = close + 1;
+            if (index >= end || tokens.get(index).type != TokenType.COMMA) {
+                return index;
+            }
+            index++;
+        }
+    }
+
+    private RelationParse parseRelation(
+        List<Token> tokens,
+        int index,
+        int end,
+        String path,
+        Set<String> visibleCtes,
+        Set<String> temporaryTables,
+        List<FallbackJoinSource> output
+    ) {
+        Token first = tokens.get(index);
+        if (first.type == TokenType.LPAREN) {
+            int close = matchingParen(tokens, index, end);
+            if (!containsQuery(tokens, index + 1, close)) {
+                throw new IllegalArgumentException("parenthesized relation must contain a query");
+            }
+            parseQueryBlock(tokens, index + 1, close, childPath(path, index), visibleCtes,
+                temporaryTables, output);
+            int aliasIndex = close + 1;
+            if (aliasIndex < end && isKeyword(tokens.get(aliasIndex), "as")) {
+                aliasIndex++;
+            }
+            if (aliasIndex >= end || !isSubqueryAlias(tokens.get(aliasIndex))) {
+                throw new IllegalArgumentException("subquery relation alias is required");
+            }
+            Token alias = tokens.get(aliasIndex);
+            return new RelationParse(new FallbackJoinSource(alias.text, path, alias.offset,
+                FallbackJoinSource.Kind.SUBQUERY), aliasIndex);
+        }
+        if (!isIdentifier(first)) {
+            throw new IllegalArgumentException("relation identifier is required");
+        }
+
+        String name = first.text;
+        int lastIndex = index;
+        boolean qualified = false;
+        if (index + 1 < end && tokens.get(index + 1).type == TokenType.DOT) {
+            if (index + 2 >= end || !isIdentifier(tokens.get(index + 2))) {
+                throw new IllegalArgumentException("qualified relation is incomplete");
+            }
+            name = name + "." + tokens.get(index + 2).text;
+            lastIndex = index + 2;
+            qualified = true;
+            if (lastIndex + 1 < end && tokens.get(lastIndex + 1).type == TokenType.DOT) {
+                throw new IllegalArgumentException("relation must have one or two parts");
+            }
+        }
+
+        FallbackJoinSource.Kind kind = classifyRelation(name, qualified, visibleCtes,
+            temporaryTables);
+        return new RelationParse(new FallbackJoinSource(name, path, first.offset, kind),
+            lastIndex);
+    }
+
+    private FallbackJoinSource.Kind classifyRelation(
+        String name,
+        boolean qualified,
+        Set<String> visibleCtes,
+        Set<String> temporaryTables
+    ) {
+        if (qualified) {
+            return FallbackJoinSource.Kind.PHYSICAL;
+        }
+        if (visibleCtes.contains(name)) {
+            return FallbackJoinSource.Kind.CTE;
+        }
+        if (temporaryTables.contains(name)) {
+            return FallbackJoinSource.Kind.TEMPORARY;
+        }
+        return FallbackJoinSource.Kind.PHYSICAL;
+    }
+
+    private Set<String> normalizeTemporaryNames(Set<String> temporaryTables) {
+        if (temporaryTables == null || temporaryTables.isEmpty()) {
+            return Collections.emptySet();
+        }
+        Set<String> normalized = new LinkedHashSet<>();
+        for (String name : temporaryTables) {
+            if (name == null) {
+                continue;
+            }
+            String value = name.trim();
+            if (value.length() >= 2 && value.charAt(0) == '`'
+                && value.charAt(value.length() - 1) == '`') {
+                value = value.substring(1, value.length() - 1).replace("``", "`");
+            }
+            if (!value.isEmpty()) {
+                normalized.add(value.toLowerCase(Locale.ROOT));
+            }
+        }
+        return normalized;
+    }
+
+    private int matchingParen(List<Token> tokens, int open, int end) {
+        int depth = 0;
+        for (int index = open; index < end; index++) {
+            TokenType type = tokens.get(index).type;
+            if (type == TokenType.LPAREN) {
+                depth++;
+            } else if (type == TokenType.RPAREN) {
+                depth--;
+                if (depth == 0) {
+                    return index;
+                }
+            }
+        }
+        throw new IllegalArgumentException("unclosed parenthesis in query");
+    }
+
+    private boolean containsQuery(List<Token> tokens, int start, int end) {
+        for (int index = start; index < end; index++) {
+            if (isKeyword(tokens.get(index), "select") || isKeyword(tokens.get(index), "with")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String childPath(String path, int tokenIndex) {
+        return path + ".q" + tokenIndex;
+    }
+
+    private boolean isClauseBoundary(Token token) {
+        return isKeyword(token, "where") || isKeyword(token, "group")
+            || isKeyword(token, "having") || isKeyword(token, "order")
+            || isKeyword(token, "cluster") || isKeyword(token, "distribute")
+            || isKeyword(token, "sort") || isKeyword(token, "limit")
+            || isKeyword(token, "union") || isKeyword(token, "qualify")
+            || isKeyword(token, "window");
     }
 
     private boolean isKeyword(Token token, String keyword) {
@@ -70,6 +313,20 @@ final class HiveFallbackJoinSourceResolver {
 
     private boolean isIdentifier(Token token) {
         return token.type == TokenType.WORD || token.type == TokenType.QUOTED_IDENTIFIER;
+    }
+
+    private boolean isSubqueryAlias(Token token) {
+        if (token.type == TokenType.QUOTED_IDENTIFIER) {
+            return true;
+        }
+        return token.type == TokenType.WORD
+            && !isKeyword(token, "select")
+            && !isKeyword(token, "from")
+            && !isKeyword(token, "join")
+            && !isKeyword(token, "on")
+            && !isKeyword(token, "using")
+            && !isKeyword(token, "as")
+            && !isClauseBoundary(token);
     }
 
     private List<Token> tokenize(String sql) {
@@ -116,7 +373,7 @@ final class HiveFallbackJoinSourceResolver {
             }
             index++;
         }
-        return sql.length();
+        throw new IllegalArgumentException("unclosed block comment");
     }
 
     private int skipString(String sql, int start, char quote) {
@@ -136,7 +393,7 @@ final class HiveFallbackJoinSourceResolver {
             }
             index++;
         }
-        return sql.length();
+        throw new IllegalArgumentException("unclosed string literal");
     }
 
     private int readQuotedIdentifier(String sql, int start, List<Token> tokens) {
@@ -150,17 +407,17 @@ final class HiveFallbackJoinSourceResolver {
                     index += 2;
                     continue;
                 }
-                tokens.add(new Token(
-                    TokenType.QUOTED_IDENTIFIER,
-                    text.toString().toLowerCase(Locale.ROOT),
-                    start
-                ));
+                if (text.length() == 0) {
+                    throw new IllegalArgumentException("quoted identifier must not be empty");
+                }
+                tokens.add(new Token(TokenType.QUOTED_IDENTIFIER,
+                    text.toString().toLowerCase(Locale.ROOT), start));
                 return index + 1;
             }
             text.append(current);
             index++;
         }
-        return sql.length();
+        throw new IllegalArgumentException("unclosed quoted identifier");
     }
 
     private int readWord(String sql, int start, List<Token> tokens) {
@@ -168,11 +425,8 @@ final class HiveFallbackJoinSourceResolver {
         while (index < sql.length() && isWordCharacter(sql.charAt(index))) {
             index++;
         }
-        tokens.add(new Token(
-            TokenType.WORD,
-            sql.substring(start, index).toLowerCase(Locale.ROOT),
-            start
-        ));
+        tokens.add(new Token(TokenType.WORD,
+            sql.substring(start, index).toLowerCase(Locale.ROOT), start));
         return index;
     }
 
@@ -182,16 +436,11 @@ final class HiveFallbackJoinSourceResolver {
 
     private TokenType punctuationType(char value) {
         switch (value) {
-            case '.':
-                return TokenType.DOT;
-            case ',':
-                return TokenType.COMMA;
-            case '(':
-                return TokenType.LPAREN;
-            case ')':
-                return TokenType.RPAREN;
-            default:
-                return null;
+            case '.': return TokenType.DOT;
+            case ',': return TokenType.COMMA;
+            case '(': return TokenType.LPAREN;
+            case ')': return TokenType.RPAREN;
+            default: return null;
         }
     }
 }
