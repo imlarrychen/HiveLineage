@@ -299,6 +299,22 @@ public class HiveSessionDatabaseResolutionTest {
     }
 
     @Test
+    public void fallbackJoinDistinguishesScopedAliasFromSameNamedPhysicalTable() {
+        assertFallbackJoinDatabaseFailure(
+            "select ??? from (select id from db1.inner_t) shadow "
+                + "join shadow physical_shadow on 1=1;"
+        );
+    }
+
+    @Test
+    public void fallbackJoinDoesNotTreatExtractFromAsPhysicalSource() {
+        assertFallbackQualifiedJoinSucceeds(
+            "select ??? from db1.a a join db2.b b "
+                + "on extract(day from event_ts)=b.day;"
+        );
+    }
+
+    @Test
     public void fallbackJoinIgnoresSourceKeywordsInsideStringLiterals() {
         assertFallbackQualifiedJoinSucceeds(
             "select ??? from db1.left_t a join db2.right_t b on 1=1 "

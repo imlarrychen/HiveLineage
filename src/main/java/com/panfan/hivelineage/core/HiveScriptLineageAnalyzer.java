@@ -43,6 +43,8 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     private final HiveStatementDatabaseBinder databaseBinder;
     private final HiveScriptPreprocessor scriptPreprocessor = new HiveScriptPreprocessor();
     private final HiveTargetColumnResolver targetColumnResolver = new HiveTargetColumnResolver();
+    private final HiveFallbackJoinSourceResolver fallbackJoinSourceResolver =
+        new HiveFallbackJoinSourceResolver();
     private final HiveProjectionLineageResolver projectionResolver;
     private final HiveLineageExpansionService expansionService;
     private final HiveJoinConditionAnalyzer joinAnalyzer;
@@ -692,20 +694,16 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     }
 
     private void validateJoinPhysicalObjects(StatementAnalysisContext context) {
-        Set<String> logicalObjects = new LinkedHashSet<>();
-        for (String logicalObject : projectionResolver
-            .extractStatementProjectionTables(context.getNormalizedStatement())
-            .keySet()) {
-            logicalObjects.add(logicalObject.toLowerCase(Locale.ROOT));
-        }
-        for (String temporaryTable : context.getTemporaryTableSources().keySet()) {
-            logicalObjects.add(temporaryTable.toLowerCase(Locale.ROOT));
-        }
-
-        for (String sourceObject : targetColumnResolver
-            .extractAllSourceObjects(context.getNormalizedStatement())) {
-            if (!logicalObjects.contains(sourceObject.toLowerCase(Locale.ROOT))) {
-                nameResolver.qualifyTable(sourceObject, context.getStatementDatabase());
+        List<FallbackJoinSource> sources = fallbackJoinSourceResolver.resolve(
+            context.getNormalizedStatement(),
+            context.getTemporaryTableSources().keySet()
+        );
+        for (FallbackJoinSource source : sources) {
+            if (source.isPhysical()) {
+                nameResolver.qualifyTable(
+                    source.getQualifiedName(),
+                    context.getStatementDatabase()
+                );
             }
         }
     }
