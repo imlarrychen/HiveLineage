@@ -25,6 +25,11 @@ final class HiveTargetColumnResolver {
     private static final Pattern SOURCE_OBJECT = Pattern.compile(
         "(?is)\\b(?:from|join)\\s+([a-zA-Z_][\\w.]*)"
     );
+    private final HivePhysicalNameResolver nameResolver;
+
+    HiveTargetColumnResolver(HivePhysicalNameResolver nameResolver) {
+        this.nameResolver = nameResolver;
+    }
 
     List<String> parseTargetColumns(String rawColumns) {
         if (rawColumns == null || rawColumns.trim().isEmpty()) {
@@ -314,7 +319,7 @@ final class HiveTargetColumnResolver {
         if (request.getMetadataProvider() == null) {
             return null;
         }
-        TableIdentifier tableIdentifier = TableIdentifier.parse(tableName, request.getClusterName(), request.getDefaultDatabase());
+        TableIdentifier tableIdentifier = nameResolver.toTableIdentifier(tableName, request.getClusterName());
         return request.getMetadataCache().getTableMetadata(tableIdentifier, request.getMetadataProvider());
     }
 
@@ -331,7 +336,7 @@ final class HiveTargetColumnResolver {
         if (request.getMetadataProvider() == null) {
             return null;
         }
-        TableIdentifier tableIdentifier = TableIdentifier.parse(tableName, request.getClusterName(), request.getDefaultDatabase());
+        TableIdentifier tableIdentifier = nameResolver.toTableIdentifier(tableName, request.getClusterName());
         HiveTableMetadata metadata = request.getMetadataCache().getTableMetadata(tableIdentifier, request.getMetadataProvider());
         if (metadata == null) {
             addWarning(warnings, WarningCode.METADATA_NOT_FOUND, "Metadata not found for " + tableIdentifier.getQualifiedName(), statementIndex);

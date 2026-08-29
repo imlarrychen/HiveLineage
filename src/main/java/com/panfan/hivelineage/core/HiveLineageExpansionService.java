@@ -23,15 +23,18 @@ final class HiveLineageExpansionService {
     private final HiveAstParserAdapter parserAdapter;
     private final HiveTargetColumnResolver targetColumnResolver;
     private final HiveProjectionLineageResolver projectionResolver;
+    private final HivePhysicalNameResolver nameResolver;
 
     HiveLineageExpansionService(
         HiveAstParserAdapter parserAdapter,
         HiveTargetColumnResolver targetColumnResolver,
-        HiveProjectionLineageResolver projectionResolver
+        HiveProjectionLineageResolver projectionResolver,
+        HivePhysicalNameResolver nameResolver
     ) {
         this.parserAdapter = parserAdapter;
         this.targetColumnResolver = targetColumnResolver;
         this.projectionResolver = projectionResolver;
+        this.nameResolver = nameResolver;
     }
 
     void registerTemporaryTable(
@@ -424,7 +427,7 @@ final class HiveLineageExpansionService {
         if (request.getMetadataProvider() == null) {
             return false;
         }
-        TableIdentifier tableIdentifier = TableIdentifier.parse(tableName, request.getClusterName(), request.getDefaultDatabase());
+        TableIdentifier tableIdentifier = nameResolver.toTableIdentifier(tableName, request.getClusterName());
         HiveTableMetadata metadata = request.getMetadataCache().getTableMetadata(tableIdentifier, request.getMetadataProvider());
         return metadata != null && metadata.isView();
     }

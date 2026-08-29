@@ -1,5 +1,6 @@
 package com.panfan.hivelineage.core;
 
+import com.panfan.hivelineage.metadata.TableIdentifier;
 import java.util.Locale;
 
 final class HivePhysicalNameResolver {
@@ -36,6 +37,20 @@ final class HivePhysicalNameResolver {
             throw new DatabaseResolutionException(parts[0]);
         }
         return database + "." + parts[0];
+    }
+
+    TableIdentifier toTableIdentifier(String tableName, String clusterName) {
+        if (tableName == null || tableName.trim().isEmpty()) {
+            throw new DatabaseResolutionException(String.valueOf(tableName));
+        }
+        String[] parts = normalizeParts(tableName);
+        if (parts.length == 1) {
+            throw new DatabaseResolutionException(parts[0]);
+        }
+        if (parts.length != 2 || parts[0].isEmpty() || parts[1].isEmpty()) {
+            throw new IllegalArgumentException("Expected database.table, got " + tableName);
+        }
+        return TableIdentifier.of(clusterName, parts[0], parts[1]);
     }
 
     private String[] normalizeParts(String identifier) {

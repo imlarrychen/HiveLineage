@@ -49,8 +49,8 @@ public class HiveQualifiedJoinColumnTest {
             "select a.field1 from whc.a a left join whc.b b on a.id = b.id"
         ).getJoinConditions().get(0);
 
-        assertContainsColumn(condition.getDirectJoinColumns(), "a.id");
-        assertContainsColumn(condition.getDirectJoinColumns(), "b.id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "whc.a.id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "whc.b.id");
         assertContainsColumn(condition.getJoinColumns(), "whc.a.id");
         assertContainsColumn(condition.getJoinColumns(), "whc.b.id");
     }
@@ -64,7 +64,7 @@ public class HiveQualifiedJoinColumnTest {
         JoinCondition condition = statement.getJoinConditions().get(0);
 
         assertContainsColumn(condition.getDirectJoinColumns(), "missing.a.id");
-        assertContainsColumn(condition.getDirectJoinColumns(), "b.id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "whc.b.id");
         TestSupport.assertTrue(
             !containsColumn(condition.getJoinColumns(), "missing.a.id"),
             "unknown qualified join owner should not become physical column"

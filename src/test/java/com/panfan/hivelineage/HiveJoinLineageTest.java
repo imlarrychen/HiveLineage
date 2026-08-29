@@ -70,8 +70,8 @@ public class HiveJoinLineageTest {
         TestSupport.assertEquals("a.id = b.id", condition.getJoinExpression(), "join expression");
         assertContainsSource(condition.getDirectJoinObjects(), "ods.t1");
         assertContainsSource(condition.getDirectJoinObjects(), "ods.t2");
-        assertContainsColumn(condition.getDirectJoinColumns(), "a.id");
-        assertContainsColumn(condition.getDirectJoinColumns(), "b.id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "ods.t1.id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "ods.t2.id");
         assertContainsSource(condition.getJoinTables(), "ods.t1");
         assertContainsSource(condition.getJoinTables(), "ods.t2");
         assertContainsColumn(condition.getJoinColumns(), "ods.t1.id");
@@ -108,12 +108,14 @@ public class HiveJoinLineageTest {
             condition.getJoinExpression(),
             "expression join condition"
         );
-        assertContainsSource(condition.getDirectJoinObjects(), "ods_op_logs");
-        assertContainsSource(condition.getDirectJoinObjects(), "dim_meta_info");
-        assertContainsColumn(condition.getDirectJoinColumns(), "a.biz_trace_id");
-        assertContainsColumn(condition.getDirectJoinColumns(), "b.meta_id");
-        assertContainsColumn(condition.getJoinColumns(), "ods_op_logs.biz_trace_id");
-        assertContainsColumn(condition.getJoinColumns(), "dim_meta_info.meta_id");
+        assertContainsSource(condition.getDirectJoinObjects(), "default.ods_op_logs");
+        assertContainsSource(condition.getDirectJoinObjects(), "default.dim_meta_info");
+        assertContainsColumn(condition.getDirectJoinColumns(), "default.ods_op_logs.biz_trace_id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "default.dim_meta_info.meta_id");
+        assertContainsSource(condition.getJoinTables(), "default.ods_op_logs");
+        assertContainsSource(condition.getJoinTables(), "default.dim_meta_info");
+        assertContainsColumn(condition.getJoinColumns(), "default.ods_op_logs.biz_trace_id");
+        assertContainsColumn(condition.getJoinColumns(), "default.dim_meta_info.meta_id");
         TestSupport.assertTrue(!containsColumn(condition.getDirectJoinColumns(), "a.dt"), "where column should not be direct join column");
         TestSupport.assertTrue(!containsColumn(condition.getDirectJoinColumns(), "b.dt"), "where column should not be direct join column");
     }
@@ -217,9 +219,9 @@ public class HiveJoinLineageTest {
         TestSupport.assertEquals(2, second.getJoinIndex(), "second join index");
         TestSupport.assertEquals("LEFT_JOIN", second.getJoinTypeName(), "second join type");
         TestSupport.assertEquals("b.cid = c.id and c.dt = '20260710'", second.getJoinExpression(), "second join expression");
-        assertContainsColumn(second.getDirectJoinColumns(), "b.cid");
-        assertContainsColumn(second.getDirectJoinColumns(), "c.id");
-        assertContainsColumn(second.getDirectJoinColumns(), "c.dt");
+        assertContainsColumn(second.getDirectJoinColumns(), "ods.b.cid");
+        assertContainsColumn(second.getDirectJoinColumns(), "ods.c.id");
+        assertContainsColumn(second.getDirectJoinColumns(), "ods.c.dt");
         assertContainsColumn(second.getJoinColumns(), "ods.b.cid");
         assertContainsColumn(second.getJoinColumns(), "ods.c.id");
         assertContainsColumn(second.getJoinColumns(), "ods.c.dt");
@@ -253,8 +255,8 @@ public class HiveJoinLineageTest {
         TestSupport.assertEquals("a.id = b.id", condition.getJoinExpression(), "implicit where join expression");
         assertContainsSource(condition.getDirectJoinObjects(), "ods.a");
         assertContainsSource(condition.getDirectJoinObjects(), "ods.b");
-        assertContainsColumn(condition.getDirectJoinColumns(), "a.id");
-        assertContainsColumn(condition.getDirectJoinColumns(), "b.id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "ods.a.id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "ods.b.id");
         assertContainsSource(condition.getJoinTables(), "ods.a");
         assertContainsSource(condition.getJoinTables(), "ods.b");
         assertContainsColumn(condition.getJoinColumns(), "ods.a.id");
@@ -424,7 +426,7 @@ public class HiveJoinLineageTest {
         assertContainsSource(condition.getDirectJoinObjects(), "tmp_user");
         assertContainsSource(condition.getDirectJoinObjects(), "dim.dept");
         assertContainsColumn(condition.getDirectJoinColumns(), "t.dept_id");
-        assertContainsColumn(condition.getDirectJoinColumns(), "d.dept_id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "dim.dept.dept_id");
         assertContainsSource(condition.getJoinTables(), "ods.user_base");
         assertContainsSource(condition.getJoinTables(), "dim.dept");
         assertContainsColumn(condition.getJoinColumns(), "ods.user_base.dept_id");

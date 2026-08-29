@@ -1,5 +1,6 @@
 package com.panfan.hivelineage.core;
 
+import com.panfan.hivelineage.metadata.TableIdentifier;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
@@ -106,6 +107,25 @@ public class HivePhysicalNameResolverTest {
     @Test(expected = DatabaseResolutionException.class)
     public void emptyTableNameFailsDatabaseResolution() {
         resolver.qualifyTable("", "db");
+    }
+
+    @Test
+    public void qualifiedTableCreatesStrictMetadataIdentifier() {
+        TableIdentifier identifier = resolver.toTableIdentifier("`DB1`.`T1`", "Cluster_A");
+
+        assertEquals("cluster_a", identifier.getClusterName());
+        assertEquals("db1", identifier.getDatabaseName());
+        assertEquals("t1", identifier.getTableName());
+    }
+
+    @Test(expected = DatabaseResolutionException.class)
+    public void bareTableCannotCreateMetadataIdentifier() {
+        resolver.toTableIdentifier("t1", "cluster_a");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void malformedTableCannotCreateMetadataIdentifier() {
+        resolver.toTableIdentifier("db1.t1.extra", "cluster_a");
     }
 
     private void assertDatabaseResolutionFailure(String database) {

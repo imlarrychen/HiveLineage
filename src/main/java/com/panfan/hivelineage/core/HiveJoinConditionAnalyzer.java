@@ -31,17 +31,20 @@ final class HiveJoinConditionAnalyzer {
     private final HiveTargetColumnResolver targetColumnResolver;
     private final HiveProjectionLineageResolver projectionResolver;
     private final HiveLineageExpansionService expansionService;
+    private final HiveStatementDatabaseBinder databaseBinder;
 
     HiveJoinConditionAnalyzer(
         HiveAstParserAdapter parserAdapter,
         HiveTargetColumnResolver targetColumnResolver,
         HiveProjectionLineageResolver projectionResolver,
-        HiveLineageExpansionService expansionService
+        HiveLineageExpansionService expansionService,
+        HiveStatementDatabaseBinder databaseBinder
     ) {
         this.parserAdapter = parserAdapter;
         this.targetColumnResolver = targetColumnResolver;
         this.projectionResolver = projectionResolver;
         this.expansionService = expansionService;
+        this.databaseBinder = databaseBinder;
     }
 
     List<JoinCondition> buildJoinConditions(
@@ -57,12 +60,30 @@ final class HiveJoinConditionAnalyzer {
 
         List<JoinCondition> conditions = new ArrayList<>();
         for (ParsedJoinCondition parsedJoinCondition : parsedStatement.getJoinConditions()) {
-            List<ColumnRef> directColumns = toColumnRefs(parsedJoinCondition.getDirectJoinColumns());
-            List<DataObjectRef> directObjects = toDataObjectRefs(parsedJoinCondition.getDirectJoinObjects());
-            Map<String, String> sourceAliases = sourceAliasesFromDirectJoin(
-                parsedJoinCondition.getDirectJoinColumns(),
-                parsedJoinCondition.getDirectJoinObjects()
+            List<ColumnRef> expressionColumns = extractDirectJoinColumns(parsedJoinCondition.getJoinExpression());
+            List<ColumnRef> directColumns = bindDirectJoinColumns(
+                context,
+                expressionColumns,
+                parsedStatement.getSourceAliases(),
+                projectionTables
             );
+            for (String parsedColumn : parsedJoinCondition.getDirectJoinColumns()) {
+                if (HiveSqlTextUtils.tableNameOfColumn(parsedColumn) == null) {
+                    addDirectColumnIfAbsent(directColumns, parsedColumn);
+                }
+            }
+            List<DataObjectRef> directObjects = directJoinObjects(
+                expressionColumns,
+                parsedStatement.getSourceAliases()
+            );
+            if (directObjects.isEmpty()) {
+                directObjects = toDataObjectRefs(parsedJoinCondition.getDirectJoinObjects());
+            }
+            Map<String, String> sourceAliases = new HashMap<>(parsedStatement.getSourceAliases());
+            sourceAliases.putAll(sourceAliasesFromDirectJoin(
+                qualifiedNames(directColumns),
+                qualifiedObjectNames(directObjects)
+            ));
             List<ColumnRef> joinColumns = resolveJoinColumns(
                 context,
                 directColumns,
@@ -86,6 +107,56 @@ final class HiveJoinConditionAnalyzer {
             ));
         }
         return conditions;
+    }
+    private List<ColumnRef> bindDirectJoinColumns(
+        StatementAnalysisContext context,
+        List<ColumnRef> expressionColumns,
+        Map<String, String> sourceAliases,
+        Map<String, Map<String, ColumnLineageProjection>> projectionTables
+    ) {
+        List<ColumnRef> columns = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (ColumnRef column : expressionColumns) {
+            String qualifiedName = column.getQualifiedName();
+            String owner = HiveSqlTextUtils.tableNameOfColumn(qualifiedName);
+            String columnName = HiveSqlTextUtils.columnNameOf(qualifiedName);
+            String sourceObject = owner == null ? null : sourceAliases.get(owner.toLowerCase(Locale.ROOT));
+            boolean logical = owner != null && (
+                containsProjectionTable(owner, projectionTables)
+                    || containsProjectionTable(owner, context.getTemporaryTableColumns())
+                    || sourceObject != null && (
+                        containsProjectionTable(sourceObject, projectionTables)
+                            || containsProjectionTable(sourceObject, context.getTemporaryTableColumns())
+                    )
+            );
+            String resolved = sourceObject != null && sourceObject.contains(".") && !logical
+                ? sourceObject + "." + columnName
+                : qualifiedName;
+            expansionService.addColumn(columns, seen, new ColumnRef(resolved));
+        }
+        return columns;
+    }
+    private void addDirectColumnIfAbsent(List<ColumnRef> columns, String qualifiedName) {
+        for (ColumnRef column : columns) {
+            if (column.getQualifiedName().equalsIgnoreCase(qualifiedName)) {
+                return;
+            }
+        }
+        columns.add(new ColumnRef(qualifiedName));
+    }
+    private List<String> qualifiedNames(List<ColumnRef> columns) {
+        List<String> names = new ArrayList<>();
+        for (ColumnRef column : columns) {
+            names.add(column.getQualifiedName());
+        }
+        return names;
+    }
+    private List<String> qualifiedObjectNames(List<DataObjectRef> objects) {
+        List<String> names = new ArrayList<>();
+        for (DataObjectRef object : objects) {
+            names.add(object.getQualifiedName());
+        }
+        return names;
     }
     List<ColumnRef> toColumnRefs(List<String> qualifiedNames) {
         List<ColumnRef> columns = new ArrayList<>();
@@ -128,7 +199,7 @@ final class HiveJoinConditionAnalyzer {
         String rawStatement = context.getRawStatement();
         String normalizedStatement = context.getNormalizedStatement();
         int index = context.getStatementIndex();
-        ParsedHiveStatement parsedStatement = parseStatement(normalizedStatement);
+        ParsedHiveStatement parsedStatement = parseAndBind(context, normalizedStatement);
         List<JoinCondition> joinConditions = buildJoinConditions(context, parsedStatement);
         return new StatementLineageResult(
             request.getWorkflowId(),
@@ -214,11 +285,21 @@ final class HiveJoinConditionAnalyzer {
         Map<String, Map<String, ColumnLineageProjection>> projectionTables,
         List<JoinCondition> conditions
     ) {
-        Map<String, String> sourceAliases = targetColumnResolver.extractTopLevelSourceAliases(queryBlockSql);
+        Map<String, String> sourceAliases = bindQueryBlockSourceAliases(
+            context,
+            targetColumnResolver.extractTopLevelSourceAliases(queryBlockSql),
+            projectionTables
+        );
         List<JoinClause> clauses = collectTopLevelJoinClauses(queryBlockSql);
         for (JoinClause clause : clauses) {
-            List<ColumnRef> directColumns = extractDirectJoinColumns(clause.getExpression());
-            List<DataObjectRef> directObjects = directJoinObjects(directColumns, sourceAliases);
+            List<ColumnRef> expressionColumns = extractDirectJoinColumns(clause.getExpression());
+            List<ColumnRef> directColumns = bindDirectJoinColumns(
+                context,
+                expressionColumns,
+                sourceAliases,
+                projectionTables
+            );
+            List<DataObjectRef> directObjects = directJoinObjects(expressionColumns, sourceAliases);
             List<ColumnRef> joinColumns = resolveJoinColumns(
                 context,
                 directColumns,
@@ -240,6 +321,41 @@ final class HiveJoinConditionAnalyzer {
                 clause.getExpression()
             ));
         }
+    }
+    private Map<String, String> bindQueryBlockSourceAliases(
+        StatementAnalysisContext context,
+        Map<String, String> sourceAliases,
+        Map<String, Map<String, ColumnLineageProjection>> projectionTables
+    ) {
+        List<DataObjectRef> rawInputs = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (String sourceObject : sourceAliases.values()) {
+            if (seen.add(sourceObject.toLowerCase(Locale.ROOT))) {
+                rawInputs.add(new DataObjectRef(sourceObject));
+            }
+        }
+        if (rawInputs.isEmpty()) {
+            return sourceAliases;
+        }
+        Set<String> logicalNames = new LinkedHashSet<>(context.getTemporaryTableSources().keySet());
+        for (String sourceObject : sourceAliases.values()) {
+            if (containsProjectionTable(sourceObject, projectionTables)) {
+                logicalNames.add(sourceObject);
+            }
+        }
+        ParsedHiveStatement synthetic = new ParsedHiveStatement(
+            StatementType.UNSUPPORTED,
+            null,
+            rawInputs,
+            context.getNormalizedStatement()
+        );
+        ParsedHiveStatement bound = databaseBinder.bind(
+            synthetic,
+            context.getStatementDatabase(),
+            logicalNames,
+            false
+        );
+        return databaseBinder.bindExtractedAliasTargets(sourceAliases, bound.getInputObjects());
     }
     List<JoinClause> collectTopLevelJoinClauses(String sql) {
         List<JoinClause> clauses = new ArrayList<>();
@@ -679,6 +795,14 @@ final class HiveJoinConditionAnalyzer {
         } catch (RuntimeException ex) {
             return new ParsedHiveStatement(StatementType.UNSUPPORTED, null, Collections.<DataObjectRef>emptyList(), normalizedStatement);
         }
+    }
+    private ParsedHiveStatement parseAndBind(StatementAnalysisContext context, String normalizedStatement) {
+        return databaseBinder.bind(
+            parseStatement(normalizedStatement),
+            context.getStatementDatabase(),
+            context.getTemporaryTableSources().keySet(),
+            false
+        );
     }
     private String statementId(LineageAnalyzeRequest request, int index) {
         return request.getWorkflowId() + "_" + request.getTaskId() + "_" + request.getTaskVersion() + "_" + index;

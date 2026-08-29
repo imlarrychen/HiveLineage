@@ -3,6 +3,8 @@ package com.panfan.hivelineage;
 import com.panfan.hivelineage.core.HiveScriptLineageAnalyzer;
 import com.panfan.hivelineage.metadata.HiveMetadataCache;
 import com.panfan.hivelineage.metadata.HiveMetadataProvider;
+import com.panfan.hivelineage.metadata.HiveTableMetadata;
+import com.panfan.hivelineage.metadata.TableIdentifier;
 import com.panfan.hivelineage.request.LineageAnalyzeOptions;
 import com.panfan.hivelineage.request.LineageAnalyzeRequest;
 import com.panfan.hivelineage.request.LineageParseMode;
@@ -10,6 +12,12 @@ import com.panfan.hivelineage.result.LineageAnalyzeResult;
 import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.result.WarningCode;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsColumn;
 import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsSource;
@@ -476,6 +484,38 @@ public class HiveSessionDatabaseResolutionTest {
         assertTrue(result.getStatements().isEmpty());
     }
 
+    @Test
+    public void joinAndMetadataFollowDefaultAndUseDatabaseInOneSession() {
+        RecordingMetadataProvider metadataProvider = new RecordingMetadataProvider()
+            .addTable("db1.t1", "id")
+            .addTable("db2.t2", "id")
+            .addTable("db3.t4", "id");
+        LineageAnalyzeResult result = analyze(
+            "db1",
+            "select * from t1 left join db2.t2 on t1.id=db2.t2.id;"
+                + "use db3;"
+                + "insert into t4 select * from db1.t1;",
+            LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .parseJoinConditions(true)
+                .build(),
+            metadataProvider
+        );
+
+        assertEquals(2, result.getStatements().size());
+        StatementLineageResult select = result.getStatements().get(0);
+        assertContainsSource(select.getJoinConditions().get(0).getJoinTables(), "db1.t1");
+        assertContainsSource(select.getJoinConditions().get(0).getJoinTables(), "db2.t2");
+        assertContainsColumn(select.getJoinConditions().get(0).getJoinColumns(), "db1.t1.id");
+        assertContainsColumn(select.getJoinConditions().get(0).getJoinColumns(), "db2.t2.id");
+
+        StatementLineageResult insert = result.getStatements().get(1);
+        assertEquals("db3.t4", insert.getOutputObject().getQualifiedName());
+        assertContainsSource(insert, "db1.t1");
+        assertTrue(metadataProvider.requested("cluster_a", "db1", "t1"));
+        assertTrue(metadataProvider.requested("cluster_a", "db3", "t4"));
+    }
+
     private LineageAnalyzeResult analyze(
         String defaultDatabase,
         String script,
@@ -521,10 +561,33 @@ public class HiveSessionDatabaseResolutionTest {
             .taskId("task_database")
             .taskVersion("V1")
             .defaultDatabase(defaultDatabase)
+            .clusterName("cluster_a")
             .rawScript(script)
             .metadataProvider(metadataProvider)
             .metadataCache(new HiveMetadataCache())
             .options(options)
             .build();
+    }
+
+    private static final class RecordingMetadataProvider implements HiveMetadataProvider {
+        private final Map<String, HiveTableMetadata> tables = new HashMap<>();
+        private final List<TableIdentifier> requests = new ArrayList<>();
+
+        RecordingMetadataProvider addTable(String qualifiedName, String... columns) {
+            String[] parts = qualifiedName.split("\\.");
+            TableIdentifier identifier = TableIdentifier.of("cluster_a", parts[0], parts[1]);
+            tables.put(identifier.getQualifiedName(), HiveTableMetadata.table(identifier, Arrays.asList(columns)));
+            return this;
+        }
+
+        boolean requested(String cluster, String database, String table) {
+            return requests.contains(TableIdentifier.of(cluster, database, table));
+        }
+
+        @Override
+        public HiveTableMetadata getTableMetadata(TableIdentifier tableIdentifier) {
+            requests.add(tableIdentifier);
+            return tables.get(tableIdentifier.getQualifiedName());
+        }
     }
 }

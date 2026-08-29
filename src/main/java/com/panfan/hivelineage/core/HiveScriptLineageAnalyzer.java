@@ -42,7 +42,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     private final HivePhysicalNameResolver nameResolver;
     private final HiveStatementDatabaseBinder databaseBinder;
     private final HiveScriptPreprocessor scriptPreprocessor = new HiveScriptPreprocessor();
-    private final HiveTargetColumnResolver targetColumnResolver = new HiveTargetColumnResolver();
+    private final HiveTargetColumnResolver targetColumnResolver;
     private final HiveFallbackJoinSourceResolver fallbackJoinSourceResolver =
         new HiveFallbackJoinSourceResolver();
     private final HiveProjectionLineageResolver projectionResolver;
@@ -57,9 +57,21 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         this.parserAdapter = parserAdapter == null ? new HeuristicHiveAstParserAdapter() : parserAdapter;
         this.nameResolver = new HivePhysicalNameResolver();
         this.databaseBinder = new HiveStatementDatabaseBinder(nameResolver);
+        this.targetColumnResolver = new HiveTargetColumnResolver(nameResolver);
         this.projectionResolver = new HiveProjectionLineageResolver(this.parserAdapter, targetColumnResolver);
-        this.expansionService = new HiveLineageExpansionService(this.parserAdapter, targetColumnResolver, projectionResolver);
-        this.joinAnalyzer = new HiveJoinConditionAnalyzer(this.parserAdapter, targetColumnResolver, projectionResolver, expansionService);
+        this.expansionService = new HiveLineageExpansionService(
+            this.parserAdapter,
+            targetColumnResolver,
+            projectionResolver,
+            nameResolver
+        );
+        this.joinAnalyzer = new HiveJoinConditionAnalyzer(
+            this.parserAdapter,
+            targetColumnResolver,
+            projectionResolver,
+            expansionService,
+            databaseBinder
+        );
     }
 
     @Override
@@ -134,7 +146,6 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                     && "PURE_QUERY".equals(skipReason)
                     && joinAnalyzer.hasJoinConditionCandidate(normalized)) {
                     try {
-                        parseStatement(context, normalized);
                         StatementLineageResult joinResult = joinAnalyzer.joinConditionOnlyResult(context);
                         validateJoinPhysicalObjects(context);
                         results.add(joinResult);
