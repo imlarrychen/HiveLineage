@@ -28,6 +28,7 @@ final class HiveJoinQueryBlockScopeResolver {
     ) {
         int subqueryIndex = 0;
         int position = 0;
+        int whereIndex = HiveSqlTextUtils.topLevelKeywordIndex(sql, "where", 0);
         while (position < sql.length()) {
             if (sql.charAt(position) != '(') {
                 position++;
@@ -40,7 +41,10 @@ final class HiveJoinQueryBlockScopeResolver {
             }
             String body = sql.substring(position + 1, close).trim();
             if (isQueryBody(body)) {
-                String path = parentPath + ".subquery[" + (++subqueryIndex) + "]";
+                String path = parentPath
+                    + (whereIndex >= 0 && position > whereIndex ? ".where.exists[" : ".subquery[")
+                    + (++subqueryIndex)
+                    + "]";
                 sqlByPath.put(path, body);
                 String alias = readAliasAfter(sql, close + 1);
                 if (alias != null) {

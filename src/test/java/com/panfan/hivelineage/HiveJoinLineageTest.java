@@ -556,6 +556,60 @@ public class HiveJoinLineageTest {
         assertContainsColumn(condition.getJoinColumns(), "db2.t.id");
     }
 
+    @Test
+    public void repeatedAliasesInSiblingExistsSubqueriesStayInTheirAstScopes() {
+        StatementLineageResult statement = analyzeJoinWithDatabase(
+            "default",
+            "select * from db1.a a join db1.b b on a.id = b.id "
+                + "where exists (select 1 from db2.c i join db2.d j on i.id = j.id) "
+                + "and exists (select 1 from db3.e i join db3.f j on i.id = j.id)"
+        );
+
+        assertPhysicalJoin(findJoinByPath(statement, "root"), "db1.a", "db1.b");
+        assertPhysicalJoin(
+            findJoinByPath(statement, "root.where.exists[1]"),
+            "db2.c",
+            "db2.d"
+        );
+        assertPhysicalJoin(
+            findJoinByPath(statement, "root.where.exists[2]"),
+            "db3.e",
+            "db3.f"
+        );
+    }
+
+    @Test
+    public void nestedExistsSubqueryUsesNestedAstScopePath() {
+        StatementLineageResult statement = analyzeJoinWithDatabase(
+            "default",
+            "select * from db1.a a join db1.b b on a.id = b.id "
+                + "where exists (select 1 from db2.c i join db2.d j on i.id = j.id "
+                + "where exists (select 1 from db3.e i join db3.f j on i.id = j.id))"
+        );
+
+        assertPhysicalJoin(
+            findJoinByPath(statement, "root.where.exists[1]"),
+            "db2.c",
+            "db2.d"
+        );
+        assertPhysicalJoin(
+            findJoinByPath(statement, "root.where.exists[1].where.exists[1]"),
+            "db3.e",
+            "db3.f"
+        );
+    }
+
+    private void assertPhysicalJoin(JoinCondition condition, String leftTable, String rightTable) {
+        assertContainsSource(condition.getDirectJoinObjects(), leftTable);
+        assertContainsSource(condition.getDirectJoinObjects(), rightTable);
+        assertContainsColumn(condition.getDirectJoinColumns(), leftTable + ".id");
+        assertContainsColumn(condition.getDirectJoinColumns(), rightTable + ".id");
+        assertContainsSource(condition.getJoinTables(), leftTable);
+        assertContainsSource(condition.getJoinTables(), rightTable);
+        assertContainsColumn(condition.getJoinColumns(), leftTable + ".id");
+        assertContainsColumn(condition.getJoinColumns(), rightTable + ".id");
+    }
+
     private StatementLineageResult analyzeJoinWithDatabase(String database, String sql) {
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
             .workflowId("wf_join")

@@ -102,7 +102,10 @@ final class HiveJoinConditionAnalyzer {
         List<JoinCondition> conditions = new ArrayList<>();
         for (ParsedJoinCondition parsedJoinCondition : parsedStatement.getJoinConditions()) {
             Map<String, String> scopedAliases = aliasesByQueryBlock.get(parsedJoinCondition.getQueryBlockPath());
-            Map<String, String> conditionSourceAliases = new HashMap<>(parsedStatement.getSourceAliases());
+            boolean rootQueryBlock = "root".equals(parsedJoinCondition.getQueryBlockPath());
+            Map<String, String> conditionSourceAliases = rootQueryBlock
+                ? new HashMap<>(parsedStatement.getSourceAliases())
+                : new HashMap<String, String>();
             Set<String> ambiguousAliases = ambiguousAliasesByQueryBlock.get(
                 parsedJoinCondition.getQueryBlockPath()
             );
