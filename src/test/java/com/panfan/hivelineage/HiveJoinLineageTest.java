@@ -432,4 +432,39 @@ public class HiveJoinLineageTest {
         assertContainsColumn(condition.getJoinColumns(), "ods.user_base.dept_id");
         assertContainsColumn(condition.getJoinColumns(), "dim.dept.dept_id");
     }
+
+    @Test
+    public void sessionDatabaseBindsPhysicalSourcesBehindCteJoinAlias() {
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_join")
+            .taskId("task_join_session_cte")
+            .taskVersion("V1")
+            .defaultDatabase("db1")
+            .rawScript(
+                "with c as (select a.id from base a) "
+                    + "select * from c x join db2.t2 y on x.id = y.id;"
+            )
+            .options(LineageAnalyzeOptions.builder().parseJoinConditions(true).build())
+            .build();
+
+        StatementLineageResult statement = new HiveScriptLineageAnalyzer()
+            .analyzeScript(request)
+            .getStatements()
+            .get(0);
+        JoinCondition condition = findJoinCondition(statement, "x.id = y.id");
+
+        assertContainsSource(condition.getDirectJoinObjects(), "x");
+        assertContainsColumn(condition.getDirectJoinColumns(), "x.id");
+        assertContainsSource(condition.getJoinTables(), "db1.base");
+        assertContainsSource(condition.getJoinTables(), "db2.t2");
+        assertContainsColumn(condition.getJoinColumns(), "db1.base.id");
+        assertContainsColumn(condition.getJoinColumns(), "db2.t2.id");
+        TestSupport.assertTrue(
+            statement.getWarnings().stream().noneMatch(
+                warning -> warning.getWarningCode() == WarningCode.UNKNOWN_COLUMN_LINEAGE
+                    && warning.getMessage().contains(" x")
+            ),
+            "bound CTE join alias should not emit an unknown x warning"
+        );
+    }
 }
