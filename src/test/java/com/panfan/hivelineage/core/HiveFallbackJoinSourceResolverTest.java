@@ -359,6 +359,43 @@ public class HiveFallbackJoinSourceResolverTest {
         assertTrue(sources.get(1).getStartOffset() < sources.get(2).getStartOffset());
     }
 
+    @Test
+    public void startsNewUnionBranchAfterWhereClause() {
+        List<FallbackJoinSource> sources = resolver.resolve(
+            "select ??? from db1.a where a.id>0 "
+                + "union all select ??? from db2.b",
+            Collections.<String>emptySet()
+        );
+
+        assertNames(sources, "db1.a", "db2.b");
+        assertEquals("q0", sources.get(0).getQueryBlockPath());
+        assertEquals("q0.u1", sources.get(1).getQueryBlockPath());
+    }
+
+    @Test
+    public void startsNewUnionBranchWhenFirstBranchHasNoFromClause() {
+        List<FallbackJoinSource> sources = resolver.resolve(
+            "select 1 union all select ??? from db2.b",
+            Collections.<String>emptySet()
+        );
+
+        assertNames(sources, "db2.b");
+        assertEquals("q0.u1", sources.get(0).getQueryBlockPath());
+    }
+
+    @Test
+    public void startsNewUnionBranchAfterOrderClause() {
+        List<FallbackJoinSource> sources = resolver.resolve(
+            "select ??? from db1.a order by a.id "
+                + "union distinct select ??? from db2.b",
+            Collections.<String>emptySet()
+        );
+
+        assertNames(sources, "db1.a", "db2.b");
+        assertEquals("q0", sources.get(0).getQueryBlockPath());
+        assertEquals("q0.u1", sources.get(1).getQueryBlockPath());
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void unclosedStringLiteralIsRejected() {
         resolver.resolve(

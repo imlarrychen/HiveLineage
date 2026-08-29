@@ -99,6 +99,13 @@ final class HiveFallbackJoinSourceResolver {
             if (expectRelation && !isRelationIdentifier(token)) {
                 throw new IllegalArgumentException("relation identifier is required");
             }
+            if (isKeyword(token, "union")) {
+                seenSelect = false;
+                inFromClause = false;
+                expectRelation = false;
+                nextQueryStartsUnionBranch = true;
+                continue;
+            }
             if (isKeyword(token, "select")) {
                 if (nextQueryStartsUnionBranch) {
                     unionBranchIndex++;
@@ -114,13 +121,8 @@ final class HiveFallbackJoinSourceResolver {
                 continue;
             }
             if (inFromClause && isClauseBoundary(token)) {
-                boolean union = isKeyword(token, "union");
                 inFromClause = false;
                 expectRelation = false;
-                if (union) {
-                    seenSelect = false;
-                    nextQueryStartsUnionBranch = true;
-                }
                 continue;
             }
             if (inFromClause && isKeyword(token, "join")) {
