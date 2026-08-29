@@ -693,15 +693,17 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
 
     private void validateJoinPhysicalObjects(StatementAnalysisContext context) {
         Set<String> logicalObjects = new LinkedHashSet<>();
-        logicalObjects.addAll(projectionResolver
+        for (String logicalObject : projectionResolver
             .extractStatementProjectionTables(context.getNormalizedStatement())
-            .keySet());
-        logicalObjects.addAll(context.getTemporaryTableSources().keySet());
+            .keySet()) {
+            logicalObjects.add(logicalObject.toLowerCase(Locale.ROOT));
+        }
+        for (String temporaryTable : context.getTemporaryTableSources().keySet()) {
+            logicalObjects.add(temporaryTable.toLowerCase(Locale.ROOT));
+        }
 
-        Set<String> sourceObjects = new LinkedHashSet<>(targetColumnResolver
-            .extractAllSourceAliases(context.getNormalizedStatement())
-            .values());
-        for (String sourceObject : sourceObjects) {
+        for (String sourceObject : targetColumnResolver
+            .extractAllSourceObjects(context.getNormalizedStatement())) {
             if (!logicalObjects.contains(sourceObject.toLowerCase(Locale.ROOT))) {
                 nameResolver.qualifyTable(sourceObject, context.getStatementDatabase());
             }

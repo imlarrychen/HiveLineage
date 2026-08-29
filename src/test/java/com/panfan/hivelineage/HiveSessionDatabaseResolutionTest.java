@@ -381,6 +381,48 @@ public class HiveSessionDatabaseResolutionTest {
     }
 
     @Test
+    public void fallbackJoinValidatesBareTableInCommaSourceList() {
+        assertFallbackJoinDatabaseFailure(
+            "select ??? from db1.left_t a, bare_mid b join db2.right_t c on 1=1;"
+        );
+    }
+
+    @Test
+    public void fallbackJoinPreservesBareAndQualifiedOccurrencesWithSameSimpleName() {
+        assertFallbackJoinDatabaseFailure(
+            "select ??? from t join db1.t on 1=1;"
+        );
+    }
+
+    @Test
+    public void fallbackJoinAllowsBlockCommentBeforeBareFromSource() {
+        assertFallbackJoinDatabaseFailure(
+            "select ??? from /* source */ bare_t a join db2.r b on 1=1;"
+        );
+    }
+
+    @Test
+    public void fallbackJoinAllowsBlockCommentBeforeBareJoinSource() {
+        assertFallbackJoinDatabaseFailure(
+            "select ??? from db1.l a join /* source */ bare_t b on 1=1;"
+        );
+    }
+
+    @Test
+    public void fallbackJoinAllowsLineCommentBeforeBareSource() {
+        assertFallbackJoinDatabaseFailure(
+            "select ??? from -- source\n bare_t a join db2.r b on 1=1;"
+        );
+    }
+
+    @Test
+    public void fallbackJoinWithQualifiedCommaSourcesDoesNotRequireDatabase() {
+        assertFallbackQualifiedJoinSucceeds(
+            "select ??? from db1.left_t a, db2.middle_t b join db3.right_t c on 1=1;"
+        );
+    }
+
+    @Test
     public void pureSelectWithoutDatabaseRemainsIgnoredWhenJoinParsingIsOff() {
         LineageAnalyzeResult result = analyze(
             null,
