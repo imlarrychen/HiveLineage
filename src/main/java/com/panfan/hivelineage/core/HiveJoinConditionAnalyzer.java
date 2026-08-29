@@ -32,6 +32,8 @@ final class HiveJoinConditionAnalyzer {
     private final HiveProjectionLineageResolver projectionResolver;
     private final HiveLineageExpansionService expansionService;
     private final HiveStatementDatabaseBinder databaseBinder;
+    private final HiveJoinQueryBlockScopeResolver queryBlockScopeResolver =
+        new HiveJoinQueryBlockScopeResolver();
 
     HiveJoinConditionAnalyzer(
         HiveAstParserAdapter parserAdapter,
@@ -55,25 +57,68 @@ final class HiveJoinConditionAnalyzer {
             return extractJoinConditions(context);
         }
         String normalizedStatement = context.getNormalizedStatement();
+        Map<String, Map<String, ColumnLineageProjection>> rawProjectionTables =
+            projectionResolver.extractStatementProjectionTables(normalizedStatement);
+        HiveJoinQueryBlockScopeResolver.QueryBlockScopes queryBlockScopes =
+            queryBlockScopeResolver.resolve(normalizedStatement);
+        Map<String, Map<String, String>> aliasesByQueryBlock = new HashMap<>();
+        Map<String, Set<String>> ambiguousAliasesByQueryBlock = new HashMap<>();
+        for (Map.Entry<String, String> queryBlock : queryBlockScopes.getSqlByPath().entrySet()) {
+            HiveTargetColumnResolver.SourceAliasScope aliasScope =
+                targetColumnResolver.extractTopLevelSourceAliasScope(queryBlock.getValue());
+            aliasesByQueryBlock.put(
+                queryBlock.getKey(),
+                bindQueryBlockSourceAliases(
+                    context,
+                    aliasScope.getAliases(),
+                    rawProjectionTables
+                )
+            );
+            ambiguousAliasesByQueryBlock.put(
+                queryBlock.getKey(),
+                aliasScope.getAmbiguousSimpleNames()
+            );
+        }
         Map<String, String> projectionSourceAliases = databaseBinder.bindExtractedAliasTargets(
             targetColumnResolver.extractSourceAliases(normalizedStatement),
             parsedStatement.getInputObjects()
         );
         projectionSourceAliases.putAll(parsedStatement.getSourceAliases());
+        Map<String, Map<String, String>> aliasesByProjection = new HashMap<>();
+        for (Map.Entry<String, String> definition : queryBlockScopes.getProjectionDefinitionPaths().entrySet()) {
+            Map<String, String> aliases = aliasesByQueryBlock.get(definition.getValue());
+            if (aliases != null) {
+                aliasesByProjection.put(definition.getKey(), aliases);
+            }
+        }
         Map<String, Map<String, ColumnLineageProjection>> projectionTables =
-            projectionResolver.bindPhysicalProjectionSources(
-                projectionResolver.extractStatementProjectionTables(normalizedStatement),
+            projectionResolver.bindScopedPhysicalProjectionSources(
+                rawProjectionTables,
+                aliasesByProjection,
                 projectionSourceAliases,
                 databaseBinder
             );
 
         List<JoinCondition> conditions = new ArrayList<>();
         for (ParsedJoinCondition parsedJoinCondition : parsedStatement.getJoinConditions()) {
+            Map<String, String> scopedAliases = aliasesByQueryBlock.get(parsedJoinCondition.getQueryBlockPath());
+            Map<String, String> conditionSourceAliases = new HashMap<>(parsedStatement.getSourceAliases());
+            Set<String> ambiguousAliases = ambiguousAliasesByQueryBlock.get(
+                parsedJoinCondition.getQueryBlockPath()
+            );
+            if (ambiguousAliases != null) {
+                for (String ambiguousAlias : ambiguousAliases) {
+                    conditionSourceAliases.remove(ambiguousAlias);
+                }
+            }
+            if (scopedAliases != null) {
+                conditionSourceAliases.putAll(scopedAliases);
+            }
             List<ColumnRef> expressionColumns = extractDirectJoinColumns(parsedJoinCondition.getJoinExpression());
             List<ColumnRef> directColumns = bindDirectJoinColumns(
                 context,
                 expressionColumns,
-                projectionSourceAliases,
+                conditionSourceAliases,
                 projectionTables
             );
             for (String parsedColumn : parsedJoinCondition.getDirectJoinColumns()) {
@@ -82,8 +127,10 @@ final class HiveJoinConditionAnalyzer {
                 }
             }
             List<DataObjectRef> directObjects = directJoinObjects(
+                context,
                 expressionColumns,
-                parsedStatement.getSourceAliases()
+                conditionSourceAliases,
+                projectionTables
             );
             if (directObjects.isEmpty()) {
                 directObjects = toDataObjectRefs(parsedJoinCondition.getDirectJoinObjects());
@@ -92,7 +139,7 @@ final class HiveJoinConditionAnalyzer {
                 qualifiedNames(directColumns),
                 qualifiedObjectNames(directObjects)
             );
-            sourceAliases.putAll(projectionSourceAliases);
+            sourceAliases.putAll(conditionSourceAliases);
             List<ColumnRef> joinColumns = resolveJoinColumns(
                 context,
                 directColumns,
@@ -197,7 +244,10 @@ final class HiveJoinConditionAnalyzer {
             aliases.put(owner.toLowerCase(Locale.ROOT), object);
             aliases.put(object.toLowerCase(Locale.ROOT), object);
             String simpleName = object.contains(".") ? object.substring(object.lastIndexOf('.') + 1) : object;
-            aliases.put(simpleName.toLowerCase(Locale.ROOT), object);
+            String normalizedSimpleName = simpleName.toLowerCase(Locale.ROOT);
+            if (!aliases.containsKey(normalizedSimpleName)) {
+                aliases.put(normalizedSimpleName, object);
+            }
         }
         return aliases;
     }
@@ -308,7 +358,12 @@ final class HiveJoinConditionAnalyzer {
                 sourceAliases,
                 projectionTables
             );
-            List<DataObjectRef> directObjects = directJoinObjects(expressionColumns, sourceAliases);
+            List<DataObjectRef> directObjects = directJoinObjects(
+                context,
+                expressionColumns,
+                sourceAliases,
+                projectionTables
+            );
             List<ColumnRef> joinColumns = resolveJoinColumns(
                 context,
                 directColumns,
@@ -472,7 +527,12 @@ final class HiveJoinConditionAnalyzer {
         }
         return columns;
     }
-    List<DataObjectRef> directJoinObjects(List<ColumnRef> directColumns, Map<String, String> sourceAliases) {
+    List<DataObjectRef> directJoinObjects(
+        StatementAnalysisContext context,
+        List<ColumnRef> directColumns,
+        Map<String, String> sourceAliases,
+        Map<String, Map<String, ColumnLineageProjection>> projectionTables
+    ) {
         List<DataObjectRef> objects = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         for (ColumnRef directColumn : directColumns) {
@@ -482,6 +542,8 @@ final class HiveJoinConditionAnalyzer {
             }
             String resolved = sourceAliases.get(tableName.toLowerCase(Locale.ROOT));
             if (resolved == null) {
+                resolved = tableName;
+            } else if (containsProjectionTable(resolved, projectionTables)) {
                 resolved = tableName;
             }
             expansionService.addInputObject(objects, seen, new DataObjectRef(resolved));
@@ -713,11 +775,7 @@ final class HiveJoinConditionAnalyzer {
         String tableName,
         Map<String, Map<String, ColumnLineageProjection>> projectionsByTable
     ) {
-        if (projectionsByTable.containsKey(tableName)) {
-            return true;
-        }
-        return tableName.contains(".")
-            && projectionsByTable.containsKey(tableName.substring(tableName.lastIndexOf('.') + 1));
+        return tableName != null && projectionsByTable.containsKey(tableName);
     }
     List<DataObjectRef> joinTables(List<ColumnRef> joinColumns, List<DataObjectRef> directObjects) {
         List<DataObjectRef> tables = new ArrayList<>();

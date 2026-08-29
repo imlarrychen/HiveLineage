@@ -403,9 +403,13 @@ final class HiveTargetColumnResolver {
     }
 
     Map<String, String> extractTopLevelSourceAliases(String normalizedStatement) {
+        return extractTopLevelSourceAliasScope(normalizedStatement).getAliases();
+    }
+
+    SourceAliasScope extractTopLevelSourceAliasScope(String normalizedStatement) {
         Map<String, String> aliases = new HashMap<>();
-        scanSourceAliases(normalizedStatement, aliases, null, true);
-        return aliases;
+        Set<String> ambiguousSimpleNames = scanSourceAliases(normalizedStatement, aliases, null, true);
+        return new SourceAliasScope(aliases, ambiguousSimpleNames);
     }
 
     private void scanTopLevelSourceAliases(
@@ -416,12 +420,15 @@ final class HiveTargetColumnResolver {
         scanSourceAliases(normalizedStatement, aliases, explicitAliases, true);
     }
 
-    private void scanSourceAliases(
+    private Set<String> scanSourceAliases(
         String normalizedStatement,
         Map<String, String> aliases,
         Map<String, String> explicitAliases,
         boolean topLevelOnly
     ) {
+        Set<String> ambiguousSimpleNames = new LinkedHashSet<>();
+        Set<String> explicitAliasNames = new LinkedHashSet<>();
+        Set<String> exactSimpleSourceNames = new LinkedHashSet<>();
         int start = topLevelOnly ? HiveSqlTextUtils.lastTopLevelKeywordIndex(normalizedStatement, "insert") : 0;
         if (topLevelOnly && start < 0) {
             start = HiveSqlTextUtils.lastTopLevelKeywordIndex(normalizedStatement, "select");
@@ -484,11 +491,33 @@ final class HiveTargetColumnResolver {
                     normalizedStatement,
                     position,
                     aliases,
-                    explicitAliases
+                    explicitAliases,
+                    ambiguousSimpleNames,
+                    explicitAliasNames,
+                    exactSimpleSourceNames
                 ) + 1;
                 continue;
             }
             position++;
+        }
+        return ambiguousSimpleNames;
+    }
+
+    static final class SourceAliasScope {
+        private final Map<String, String> aliases;
+        private final Set<String> ambiguousSimpleNames;
+
+        private SourceAliasScope(Map<String, String> aliases, Set<String> ambiguousSimpleNames) {
+            this.aliases = aliases;
+            this.ambiguousSimpleNames = ambiguousSimpleNames;
+        }
+
+        Map<String, String> getAliases() {
+            return aliases;
+        }
+
+        Set<String> getAmbiguousSimpleNames() {
+            return ambiguousSimpleNames;
         }
     }
 
@@ -498,14 +527,25 @@ final class HiveTargetColumnResolver {
     }
 
     int captureTopLevelSourceAlias(String statement, int keywordIndex, Map<String, String> aliases) {
-        return captureTopLevelSourceAlias(statement, keywordIndex, aliases, null);
+        return captureTopLevelSourceAlias(
+            statement,
+            keywordIndex,
+            aliases,
+            null,
+            new LinkedHashSet<String>(),
+            new LinkedHashSet<String>(),
+            new LinkedHashSet<String>()
+        );
     }
 
     private int captureTopLevelSourceAlias(
         String statement,
         int keywordIndex,
         Map<String, String> aliases,
-        Map<String, String> explicitAliases
+        Map<String, String> explicitAliases,
+        Set<String> ambiguousSimpleNames,
+        Set<String> explicitAliasNames,
+        Set<String> exactSimpleSourceNames
     ) {
         int position = HiveSqlTextUtils.skipWhitespace(statement, keywordIndex);
         position = HiveSqlTextUtils.readIdentifier(statement, position);
@@ -521,7 +561,20 @@ final class HiveTargetColumnResolver {
         String tableName = normalizePossiblyQuotedIdentifier(statement.substring(tableStart, tableEnd));
         String simpleTableName = tableName.contains(".") ? tableName.substring(tableName.lastIndexOf('.') + 1) : tableName;
         aliases.put(tableName, tableName);
-        aliases.put(simpleTableName, tableName);
+        if (!tableName.contains(".")) {
+            exactSimpleSourceNames.add(simpleTableName);
+            aliases.put(simpleTableName, tableName);
+        } else if (!explicitAliasNames.contains(simpleTableName)
+            && !exactSimpleSourceNames.contains(simpleTableName)
+            && !ambiguousSimpleNames.contains(simpleTableName)) {
+            String existing = aliases.get(simpleTableName);
+            if (existing == null || existing.equals(tableName)) {
+                aliases.put(simpleTableName, tableName);
+            } else {
+                aliases.remove(simpleTableName);
+                ambiguousSimpleNames.add(simpleTableName);
+            }
+        }
 
         position = HiveSqlTextUtils.skipWhitespace(statement, tableEnd);
         int aliasStart = position;
@@ -536,6 +589,8 @@ final class HiveTargetColumnResolver {
             String alias = normalizePossiblyQuotedIdentifier(statement.substring(aliasStart, aliasEnd));
             if (quotedAlias || !HiveSqlTextUtils.isAliasKeyword(alias)) {
                 aliases.put(alias, tableName);
+                explicitAliasNames.add(alias);
+                ambiguousSimpleNames.remove(alias);
                 if (explicitAliases != null) {
                     explicitAliases.put(alias, tableName);
                 }

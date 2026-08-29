@@ -118,6 +118,32 @@ final class HiveProjectionLineageResolver {
         }
         return bound;
     }
+    Map<String, Map<String, ColumnLineageProjection>> bindScopedPhysicalProjectionSources(
+        Map<String, Map<String, ColumnLineageProjection>> projections,
+        Map<String, Map<String, String>> aliasesByProjection,
+        Map<String, String> fallbackAliases,
+        HiveStatementDatabaseBinder binder
+    ) {
+        Map<String, Map<String, ColumnLineageProjection>> bound = new HashMap<>();
+        for (Map.Entry<String, Map<String, ColumnLineageProjection>> table : projections.entrySet()) {
+            Map<String, String> aliases = aliasesByProjection.get(table.getKey());
+            if (aliases == null) {
+                aliases = fallbackAliases;
+            }
+            Map<String, ColumnLineageProjection> columns = new HashMap<>();
+            for (Map.Entry<String, ColumnLineageProjection> column : table.getValue().entrySet()) {
+                ColumnLineageProjection value = column.getValue();
+                columns.put(column.getKey(), new ColumnLineageProjection(
+                    binder.bindColumns(value.getSourceColumns(), aliases),
+                    value.getExpression(),
+                    value.getLineageType(),
+                    value.isUnresolved()
+                ));
+            }
+            bound.put(table.getKey(), columns);
+        }
+        return bound;
+    }
     Map<String, Map<String, ColumnLineageProjection>> extractInlineProjectionTables(
         String sql,
         Map<String, Map<String, ColumnLineageProjection>> existingProjections
@@ -499,9 +525,6 @@ final class HiveProjectionLineageResolver {
         Map<String, Map<String, ColumnLineageProjection>> projectionsByTable
     ) {
         Map<String, ColumnLineageProjection> projections = projectionsByTable.get(tableName);
-        if (projections == null && tableName.contains(".")) {
-            projections = projectionsByTable.get(tableName.substring(tableName.lastIndexOf('.') + 1));
-        }
         return projections == null ? null : projections.get(columnName.toLowerCase(Locale.ROOT));
     }
     String directColumnAliasExpression(String expression, Map<String, String> columnAliasExpressions) {

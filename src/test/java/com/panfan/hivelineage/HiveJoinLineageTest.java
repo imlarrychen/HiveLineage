@@ -467,4 +467,113 @@ public class HiveJoinLineageTest {
             "bound CTE join alias should not emit an unknown x warning"
         );
     }
+
+    @Test
+    public void aliasesAreResolvedWithinTheirOwnCteAndRootQueryBlocks() {
+        StatementLineageResult statement = analyzeJoinWithDatabase(
+            "db1",
+            "with c as (select i.id from db1.inner1 i join db1.inner2 j on i.id = j.id) "
+                + "select * from c i join db2.outer_t j on i.id = j.id"
+        );
+
+        JoinCondition inner = findJoinByPath(statement, "cte.c");
+        assertContainsColumn(inner.getDirectJoinColumns(), "db1.inner1.id");
+        assertContainsColumn(inner.getDirectJoinColumns(), "db1.inner2.id");
+        assertContainsSource(inner.getJoinTables(), "db1.inner1");
+        assertContainsSource(inner.getJoinTables(), "db1.inner2");
+        assertContainsColumn(inner.getJoinColumns(), "db1.inner1.id");
+        assertContainsColumn(inner.getJoinColumns(), "db1.inner2.id");
+
+        JoinCondition outer = findJoinByPath(statement, "root");
+        assertContainsSource(outer.getDirectJoinObjects(), "i");
+        assertContainsColumn(outer.getDirectJoinColumns(), "i.id");
+        assertContainsColumn(outer.getDirectJoinColumns(), "db2.outer_t.id");
+        assertContainsSource(outer.getJoinTables(), "db1.inner1");
+        assertContainsSource(outer.getJoinTables(), "db2.outer_t");
+        assertContainsColumn(outer.getJoinColumns(), "db1.inner1.id");
+        assertContainsColumn(outer.getJoinColumns(), "db2.outer_t.id");
+    }
+
+    @Test
+    public void qualifiedPhysicalTableDoesNotCollideWithSameNamedCte() {
+        StatementLineageResult statement = analyzeJoinWithDatabase(
+            "db1",
+            "with t as (select id from db2.t) "
+                + "select * from t join db1.t x on t.id = x.id"
+        );
+        JoinCondition condition = findJoinByPath(statement, "root");
+
+        assertContainsSource(condition.getDirectJoinObjects(), "t");
+        assertContainsColumn(condition.getDirectJoinColumns(), "t.id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "db1.t.id");
+        assertContainsSource(condition.getJoinTables(), "db2.t");
+        assertContainsSource(condition.getJoinTables(), "db1.t");
+        assertContainsColumn(condition.getJoinColumns(), "db2.t.id");
+        assertContainsColumn(condition.getJoinColumns(), "db1.t.id");
+    }
+
+    @Test
+    public void uniqueQualifiedSourceStillSupportsItsSimpleName() {
+        JoinCondition condition = findJoinByPath(
+            analyzeJoinWithDatabase(
+                "default",
+                "select * from db1.t join db2.other on t.id = other.id"
+            ),
+            "root"
+        );
+
+        assertContainsColumn(condition.getJoinColumns(), "db1.t.id");
+        assertContainsColumn(condition.getJoinColumns(), "db2.other.id");
+    }
+
+    @Test
+    public void ambiguousSimpleNameAcrossQualifiedSourcesIsNotArbitrarilyBound() {
+        StatementLineageResult statement = analyzeJoinWithDatabase(
+            "default",
+            "select * from db1.t join db2.t on t.id = db2.t.id"
+        );
+        JoinCondition condition = findJoinByPath(statement, "root");
+
+        TestSupport.assertTrue(
+            !containsColumn(condition.getJoinColumns(), "db1.t.id"),
+            "ambiguous t.id must not be assigned to db1.t"
+        );
+        assertContainsColumn(condition.getJoinColumns(), "db2.t.id");
+        assertContainsWarning(statement.getWarnings(), WarningCode.UNKNOWN_COLUMN_LINEAGE);
+    }
+
+    @Test
+    public void explicitAliasWinsOverCollidingQualifiedSimpleName() {
+        JoinCondition condition = findJoinByPath(
+            analyzeJoinWithDatabase(
+                "default",
+                "select * from db1.base t join db2.t on t.id = db2.t.id"
+            ),
+            "root"
+        );
+
+        assertContainsColumn(condition.getJoinColumns(), "db1.base.id");
+        assertContainsColumn(condition.getJoinColumns(), "db2.t.id");
+    }
+
+    private StatementLineageResult analyzeJoinWithDatabase(String database, String sql) {
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_join")
+            .taskId("task_join_scope")
+            .taskVersion("V1")
+            .defaultDatabase(database)
+            .rawScript(sql + ";")
+            .options(LineageAnalyzeOptions.builder().parseJoinConditions(true).build())
+            .build();
+        return new HiveScriptLineageAnalyzer().analyzeScript(request).getStatements().get(0);
+    }
+
+    private JoinCondition findJoinByPath(StatementLineageResult statement, String queryBlockPath) {
+        for (JoinCondition condition : statement.getJoinConditions()) {
+            if (queryBlockPath.equals(condition.getQueryBlockPath())) {
+                return condition;
+            }
+        }
+        throw new AssertionError("Expected join query block " + queryBlockPath);
+    }
 }
