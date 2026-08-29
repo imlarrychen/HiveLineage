@@ -599,6 +599,50 @@ public class HiveJoinLineageTest {
         );
     }
 
+    @Test
+    public void inlineSubqueryAndExistsEachProduceOneScopedJoin() {
+        StatementLineageResult statement = analyzeJoinWithDatabase(
+            "default",
+            "select * from (select i.id from db1.a i join db1.b j on i.id=j.id) s "
+                + "join db1.c c on s.id=c.id "
+                + "where exists (select 1 from db2.d i join db2.e j on i.id=j.id)"
+        );
+
+        TestSupport.assertEquals(3, statement.getJoinConditions().size(), "scoped join count");
+
+        JoinCondition root = findJoinByPath(statement, "root");
+        TestSupport.assertEquals(1, root.getJoinIndex(), "root join index");
+        assertContainsSource(root.getJoinTables(), "db1.a");
+        assertContainsSource(root.getJoinTables(), "db1.c");
+        assertContainsColumn(root.getJoinColumns(), "db1.a.id");
+        assertContainsColumn(root.getJoinColumns(), "db1.c.id");
+
+        JoinCondition inline = findJoinByPath(statement, "root.subquery[1]");
+        TestSupport.assertEquals(2, inline.getJoinIndex(), "inline subquery join index");
+        assertPhysicalJoin(inline, "db1.a", "db1.b");
+
+        JoinCondition exists = findJoinByPath(statement, "root.where.exists[2]");
+        TestSupport.assertEquals(3, exists.getJoinIndex(), "exists subquery join index");
+        assertPhysicalJoin(exists, "db2.d", "db2.e");
+    }
+
+    @Test
+    public void identicalSubqueryTextWithDistinctAstNodesIsPreserved() {
+        StatementLineageResult statement = analyzeJoinWithDatabase(
+            "default",
+            "select * from (select i.id from db1.a i join db1.b j on i.id=j.id) s1 "
+                + "join (select i.id from db1.a i join db1.b j on i.id=j.id) s2 "
+                + "on s1.id=s2.id"
+        );
+
+        TestSupport.assertEquals(3, statement.getJoinConditions().size(), "identical subquery join count");
+        TestSupport.assertEquals(1, countJoinsByPath(statement, "root.subquery[1]"), "first subquery join count");
+        TestSupport.assertEquals(1, countJoinsByPath(statement, "root.subquery[2]"), "second subquery join count");
+        TestSupport.assertEquals(1, countJoinsByPath(statement, "root"), "root join count");
+        assertPhysicalJoin(findJoinByPath(statement, "root.subquery[1]"), "db1.a", "db1.b");
+        assertPhysicalJoin(findJoinByPath(statement, "root.subquery[2]"), "db1.a", "db1.b");
+    }
+
     private void assertPhysicalJoin(JoinCondition condition, String leftTable, String rightTable) {
         assertContainsSource(condition.getDirectJoinObjects(), leftTable);
         assertContainsSource(condition.getDirectJoinObjects(), rightTable);
@@ -629,5 +673,15 @@ public class HiveJoinLineageTest {
             }
         }
         throw new AssertionError("Expected join query block " + queryBlockPath);
+    }
+
+    private int countJoinsByPath(StatementLineageResult statement, String queryBlockPath) {
+        int count = 0;
+        for (JoinCondition condition : statement.getJoinConditions()) {
+            if (queryBlockPath.equals(condition.getQueryBlockPath())) {
+                count++;
+            }
+        }
+        return count;
     }
 }

@@ -1,7 +1,9 @@
 package com.panfan.hivelineage.core;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -22,6 +24,15 @@ final class HiveAstJoinExtractor {
     List<ParsedJoinCondition> extract(ASTNode root, Set<String> cteAliases) {
         List<ParsedJoinCondition> conditions = new ArrayList<>();
         int[] joinIndex = new int[] {1};
+        Set<ASTNode> visitedQueries = Collections.newSetFromMap(new IdentityHashMap<ASTNode, Boolean>());
+        NestedJoinTraversalContext context = new NestedJoinTraversalContext(
+            cteAliases,
+            joinIndex,
+            conditions,
+            new int[] {1},
+            false,
+            visitedQueries
+        );
         ASTNode cteNode = astWalker.first(root, HiveParser.TOK_CTE);
         if (cteNode != null) {
             for (int i = 0; i < cteNode.getChildCount(); i++) {
@@ -31,40 +42,37 @@ final class HiveAstJoinExtractor {
                 }
                 String cteAlias = stripIdentifier(subquery.getChild(subquery.getChildCount() - 1).getText()).toLowerCase(Locale.ROOT);
                 ASTNode queryNode = astWalker.directChild(subquery, HiveParser.TOK_QUERY);
-                collectJoinConditionsFromQuery(queryNode, "cte." + cteAlias, cteAliases, joinIndex, conditions);
-                collectNestedSubqueryJoinConditionsFromChildren(queryNode, "cte." + cteAlias, cteAliases, joinIndex, conditions);
+                collectQueryOnce(queryNode, "cte." + cteAlias, context.forChildScope());
             }
         }
         ASTNode rootQuery = astWalker.first(root, HiveParser.TOK_QUERY);
-        collectJoinConditionsFromQuery(rootQuery, "root", cteAliases, joinIndex, conditions);
-        collectNestedSubqueryJoinConditionsFromChildren(rootQuery, "root", cteAliases, joinIndex, conditions);
+        collectQueryOnce(rootQuery, "root", context.forChildScope());
         return conditions;
     }
 
-    private void collectNestedSubqueryJoinConditionsFromChildren(
+    private boolean collectQueryOnce(
         ASTNode queryNode,
-        String parentPath,
-        Set<String> cteAliases,
-        int[] joinIndex,
-        List<ParsedJoinCondition> conditions
+        String queryBlockPath,
+        NestedJoinTraversalContext context
     ) {
-        if (queryNode == null) {
-            return;
+        if (queryNode == null || !context.markVisited(queryNode)) {
+            return false;
         }
-        NestedJoinTraversalContext context = new NestedJoinTraversalContext(
-            cteAliases,
-            joinIndex,
-            conditions,
-            new int[] {1},
-            false
+        collectJoinConditionsFromQuery(
+            queryNode,
+            queryBlockPath,
+            context.getCteAliases(),
+            context.getJoinIndex(),
+            context.getConditions()
         );
         for (int i = 0; i < queryNode.getChildCount(); i++) {
             collectNestedSubqueryJoinConditions(
                 (ASTNode) queryNode.getChild(i),
-                parentPath,
+                queryBlockPath,
                 context
             );
         }
+        return true;
     }
 
     private void collectNestedSubqueryJoinConditions(
@@ -80,39 +88,13 @@ final class HiveAstJoinExtractor {
         }
         boolean childInWhere = context.isInWhere() || node.getType() == HiveParser.TOK_WHERE;
         if (node.getType() == HiveParser.TOK_QUERY) {
-            String queryBlockPath = childInWhere
-                ? parentPath + ".where.exists[" + context.nextSubqueryIndex() + "]"
-                : parentPath + ".subquery[" + context.nextSubqueryIndex() + "]";
-            collectJoinConditionsFromQuery(
-                node,
-                queryBlockPath,
-                context.getCteAliases(),
-                context.getJoinIndex(),
-                context.getConditions()
-            );
-            for (int i = 0; i < node.getChildCount(); i++) {
-                collectNestedSubqueryJoinConditions(
-                    (ASTNode) node.getChild(i),
-                    queryBlockPath,
-                    context.forChildScope()
-                );
-            }
+            collectNestedQueryOnce(node, parentPath, childInWhere, context);
             return;
         }
         if (node.getType() == HiveParser.TOK_SUBQUERY) {
             ASTNode queryNode = astWalker.directChild(node, HiveParser.TOK_QUERY);
             if (queryNode != null) {
-                String queryBlockPath = childInWhere
-                    ? parentPath + ".where.exists[" + context.nextSubqueryIndex() + "]"
-                    : parentPath + ".subquery[" + context.nextSubqueryIndex() + "]";
-                collectJoinConditionsFromQuery(
-                    queryNode,
-                    queryBlockPath,
-                    context.getCteAliases(),
-                    context.getJoinIndex(),
-                    context.getConditions()
-                );
-                collectNestedSubqueryJoinConditions(queryNode, queryBlockPath, context.forChildScope());
+                collectNestedQueryOnce(queryNode, parentPath, childInWhere, context);
                 return;
             }
         }
@@ -123,6 +105,21 @@ final class HiveAstJoinExtractor {
                 context.withInWhere(childInWhere)
             );
         }
+    }
+
+    private void collectNestedQueryOnce(
+        ASTNode queryNode,
+        String parentPath,
+        boolean inWhere,
+        NestedJoinTraversalContext context
+    ) {
+        if (context.wasVisited(queryNode)) {
+            return;
+        }
+        String queryBlockPath = inWhere
+            ? parentPath + ".where.exists[" + context.nextSubqueryIndex() + "]"
+            : parentPath + ".subquery[" + context.nextSubqueryIndex() + "]";
+        collectQueryOnce(queryNode, queryBlockPath, context.forChildScope());
     }
 
     private void collectJoinConditionsFromQuery(
@@ -278,6 +275,9 @@ final class HiveAstJoinExtractor {
         List<ParsedJoinCondition> conditions
     ) {
         if (node == null) {
+            return;
+        }
+        if (node.getType() == HiveParser.TOK_QUERY || node.getType() == HiveParser.TOK_SUBQUERY) {
             return;
         }
         if (isJoinNode(node)) {
@@ -524,19 +524,22 @@ final class HiveAstJoinExtractor {
         private final List<ParsedJoinCondition> conditions;
         private final int[] subqueryIndex;
         private final boolean inWhere;
+        private final Set<ASTNode> visitedQueries;
 
         private NestedJoinTraversalContext(
             Set<String> cteAliases,
             int[] joinIndex,
             List<ParsedJoinCondition> conditions,
             int[] subqueryIndex,
-            boolean inWhere
+            boolean inWhere,
+            Set<ASTNode> visitedQueries
         ) {
             this.cteAliases = cteAliases;
             this.joinIndex = joinIndex;
             this.conditions = conditions;
             this.subqueryIndex = subqueryIndex;
             this.inWhere = inWhere;
+            this.visitedQueries = visitedQueries;
         }
 
         private Set<String> getCteAliases() {
@@ -559,13 +562,22 @@ final class HiveAstJoinExtractor {
             return inWhere;
         }
 
+        private boolean markVisited(ASTNode queryNode) {
+            return visitedQueries.add(queryNode);
+        }
+
+        private boolean wasVisited(ASTNode queryNode) {
+            return visitedQueries.contains(queryNode);
+        }
+
         private NestedJoinTraversalContext forChildScope() {
             return new NestedJoinTraversalContext(
                 cteAliases,
                 joinIndex,
                 conditions,
                 new int[] {1},
-                false
+                false,
+                visitedQueries
             );
         }
 
@@ -575,7 +587,8 @@ final class HiveAstJoinExtractor {
                 joinIndex,
                 conditions,
                 subqueryIndex,
-                childInWhere
+                childInWhere,
+                visitedQueries
             );
         }
     }
