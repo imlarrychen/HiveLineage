@@ -1315,7 +1315,7 @@ git add src/test/java docs/bugfixes/2026-08-28-session-database-resolution.md do
 git commit -m "docs: record session database resolution fix"
 ```
 
-- [ ] **Step 8: 提交后再做一次最终验证**
+- [x] **Step 8: 提交后再做一次最终验证**
 
 Run:
 
