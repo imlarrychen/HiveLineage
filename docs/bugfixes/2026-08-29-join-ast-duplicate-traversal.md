@@ -4,7 +4,7 @@
 
 - AST 查询块重复遍历已修复。
 - 未解析逻辑对象进入最终物理 `joinTables` 的回退已修复。
-- 定向回归已通过；Task 5 完整回归门禁在后续验证任务中统一执行。
+- Task 5 定向回归和完整 fresh 回归门禁均已通过。
 
 ## 问题现象
 
@@ -87,8 +87,11 @@ GREEN 证据：
 
 - AST 与作用域定向回归：72 个测试，0 failures，0 errors，0 skipped。
 - Join direct/final 定向回归：28 个测试，0 failures，0 errors，0 skipped。
+- Task 5 定向大回归：169 个测试，0 failures，0 errors，0 skipped。
+- `mvn -q clean test`：272 个测试，0 failures，0 errors，5 skipped；跳过项为已知
+  JDBC 环境集成测试。
 
 ## 关联提交
 
 - `181ec35 fix: visit join query blocks once`
-- `fix: keep unresolved join objects out of physical tables`
+- `06f7f28 fix: keep unresolved join objects out of physical tables`
