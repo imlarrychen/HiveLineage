@@ -77,6 +77,43 @@ public class HiveQualifiedJoinColumnTest {
         assertContainsWarning(statement.getWarnings(), WarningCode.UNKNOWN_COLUMN_LINEAGE);
     }
 
+    @Test
+    public void unresolvedLogicalJoinObjectsRemainDirectOnly() {
+        StatementLineageResult statement = analyzeJoin(
+            "select ??? from (select 1) x join db1.t y on x.id=y.id"
+        );
+        JoinCondition condition = statement.getJoinConditions().get(0);
+
+        assertContainsSource(condition.getDirectJoinObjects(), "x");
+        assertContainsColumn(condition.getDirectJoinColumns(), "x.id");
+        TestSupport.assertTrue(
+            !containsSource(condition.getJoinTables(), "x"),
+            "unresolved logical join object should remain outside physical join tables"
+        );
+        assertContainsSource(condition.getJoinTables(), "db1.t");
+        assertContainsColumn(condition.getJoinColumns(), "db1.t.id");
+        assertContainsWarning(statement.getWarnings(), WarningCode.UNKNOWN_COLUMN_LINEAGE);
+    }
+
+    @Test
+    public void logicalDirectObjectIsFilteredWhenAllJoinColumnsAreUnresolved() {
+        StatementLineageResult statement = analyzeJoin(
+            "select * from (select 1) x join db1.t y on x.id=x.other_id"
+        );
+        JoinCondition condition = statement.getJoinConditions().get(0);
+
+        assertContainsSource(condition.getDirectJoinObjects(), "x");
+        assertContainsColumn(condition.getDirectJoinColumns(), "x.id");
+        assertContainsColumn(condition.getDirectJoinColumns(), "x.other_id");
+        TestSupport.assertEquals(0, condition.getJoinColumns().size(), "unresolved join columns");
+        TestSupport.assertTrue(
+            !containsSource(condition.getJoinTables(), "x"),
+            "logical direct object should remain outside physical join tables"
+        );
+        TestSupport.assertEquals(0, condition.getJoinTables().size(), "unresolved physical join tables");
+        assertContainsWarning(statement.getWarnings(), WarningCode.UNKNOWN_COLUMN_LINEAGE);
+    }
+
     private StatementLineageResult analyzeJoin(String sql) {
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
             .workflowId("wf_join")

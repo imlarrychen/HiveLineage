@@ -793,9 +793,18 @@ final class HiveJoinConditionAnalyzer {
             return tables;
         }
         for (DataObjectRef directObject : directObjects) {
-            expansionService.addInputObject(tables, seen, directObject);
+            if (isQualifiedPhysicalObject(directObject)) {
+                expansionService.addInputObject(tables, seen, directObject);
+            }
         }
         return tables;
+    }
+    private boolean isQualifiedPhysicalObject(DataObjectRef object) {
+        if (object == null || object.getQualifiedName() == null) {
+            return false;
+        }
+        String[] parts = object.getQualifiedName().split("\\.", -1);
+        return parts.length == 2 && !parts[0].isEmpty() && !parts[1].isEmpty();
     }
     CteExtraction extractCtes(String sql) {
         String trimmed = sql.trim();

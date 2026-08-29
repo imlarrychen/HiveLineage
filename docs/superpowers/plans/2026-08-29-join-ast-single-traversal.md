@@ -180,7 +180,26 @@ public void unresolvedLogicalJoinObjectsRemainDirectOnly() {
 }
 ```
 
-如该 SQL 被 Hive AST 正常解析且 `select 1` 无 `x.id` 投影，预期 direct 保留逻辑对象，最终物理层仅包含已解析的 `db1.t`。
+该用例在 AST 单次遍历修复后已经通过：`db1.t.id` 能够展开，因此不会进入
+`joinColumns` 全空时的 direct 回退分支。保留该用例用于锁定“部分可解析”行为，
+并增加真正触发回退的“全部不可解析”回归：
+
+```java
+@Test
+public void logicalDirectObjectIsFilteredWhenAllJoinColumnsAreUnresolved() {
+    StatementLineageResult statement = analyzeJoinOnly(
+        "select * from (select 1) x join db1.t y on x.id=x.other_id"
+    );
+    JoinCondition condition = statement.getJoinConditions().get(0);
+
+    assertContainsSource(condition.getDirectJoinObjects(), "x");
+    assertContainsColumn(condition.getDirectJoinColumns(), "x.id");
+    assertContainsColumn(condition.getDirectJoinColumns(), "x.other_id");
+    assertEquals(0, condition.getJoinColumns().size());
+    assertEquals(0, condition.getJoinTables().size());
+    assertContainsWarning(statement.getWarnings(), WarningCode.UNKNOWN_COLUMN_LINEAGE);
+}
+```
 
 - [ ] **Step 2: 运行测试并确认 RED**
 
@@ -190,7 +209,8 @@ Run:
 mvn -q -Dtest=HiveQualifiedJoinColumnTest#unresolvedLogicalJoinObjectsRemainDirectOnly test
 ```
 
-Expected: FAIL，当前 `joinTables` 回退包含裸逻辑对象 `x`。
+Expected: 第一个部分解析用例可已通过；第二个全部不可解析用例 FAIL，当前
+`joinTables` 回退包含裸逻辑对象 `x`。
 
 - [ ] **Step 3: 收紧 `joinTables` 回退规则**
 
