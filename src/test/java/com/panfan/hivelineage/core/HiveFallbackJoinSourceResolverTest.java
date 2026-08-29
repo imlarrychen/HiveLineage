@@ -303,6 +303,101 @@ public class HiveFallbackJoinSourceResolverTest {
         );
     }
 
+    @Test
+    public void assignsDistinctPathsToUnionBranches() {
+        List<FallbackJoinSource> sources = resolver.resolve(
+            "select ??? from db1.a union all select ??? from db2.b",
+            Collections.<String>emptySet()
+        );
+
+        assertNames(sources, "db1.a", "db2.b");
+        assertEquals("q0", sources.get(0).getQueryBlockPath());
+        assertEquals("q0.u1", sources.get(1).getQueryBlockPath());
+    }
+
+    @Test
+    public void keepsCtesVisibleAcrossUnionBranchesWithoutReusingTheirPaths() {
+        List<FallbackJoinSource> sources = resolver.resolve(
+            "with c as (select id from db0.base) "
+                + "select ??? from c union all select ??? from c",
+            Collections.<String>emptySet()
+        );
+
+        assertSources(
+            sources,
+            source("db0.base", FallbackJoinSource.Kind.PHYSICAL),
+            source("c", FallbackJoinSource.Kind.CTE),
+            source("c", FallbackJoinSource.Kind.CTE)
+        );
+        assertTrue(sources.get(0).getQueryBlockPath().startsWith("q0.q"));
+        assertEquals("q0", sources.get(1).getQueryBlockPath());
+        assertEquals("q0.u1", sources.get(2).getQueryBlockPath());
+        assertNotEquals(
+            sources.get(0).getQueryBlockPath(),
+            sources.get(1).getQueryBlockPath()
+        );
+        assertNotEquals(
+            sources.get(0).getQueryBlockPath(),
+            sources.get(2).getQueryBlockPath()
+        );
+    }
+
+    @Test
+    public void assignsStableDistinctPathsToThreeSetOperationBranches() {
+        List<FallbackJoinSource> sources = resolver.resolve(
+            "select ??? from db1.a "
+                + "union select ??? from db2.b "
+                + "union all select ??? from db3.c",
+            Collections.<String>emptySet()
+        );
+
+        assertNames(sources, "db1.a", "db2.b", "db3.c");
+        assertEquals("q0", sources.get(0).getQueryBlockPath());
+        assertEquals("q0.u1", sources.get(1).getQueryBlockPath());
+        assertEquals("q0.u2", sources.get(2).getQueryBlockPath());
+        assertTrue(sources.get(0).getStartOffset() < sources.get(1).getStartOffset());
+        assertTrue(sources.get(1).getStartOffset() < sources.get(2).getStartOffset());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void unclosedStringLiteralIsRejected() {
+        resolver.resolve(
+            "select ??? from db1.a where note='broken",
+            Collections.<String>emptySet()
+        );
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void unclosedBlockCommentIsRejected() {
+        resolver.resolve(
+            "select ??? from db1.a /* broken",
+            Collections.<String>emptySet()
+        );
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void unclosedSubqueryParenthesisIsRejected() {
+        resolver.resolve(
+            "select ??? from (select id from db1.a",
+            Collections.<String>emptySet()
+        );
+    }
+
+    @Test
+    public void ignoresJoinTokensAfterWhereButRecursesIntoExistsSubquery() {
+        List<FallbackJoinSource> sources = resolver.resolve(
+            "select ??? from db1.a where join ghost on 1=1 "
+                + "and exists (select id from db2.b)",
+            Collections.<String>emptySet()
+        );
+
+        assertNames(sources, "db1.a", "db2.b");
+        assertNotEquals(
+            sources.get(0).getQueryBlockPath(),
+            sources.get(1).getQueryBlockPath()
+        );
+    }
+
     @Test(expected = UnsupportedOperationException.class)
     public void returnedSourcesAreUnmodifiable() {
         List<FallbackJoinSource> sources = resolver.resolve(

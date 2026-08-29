@@ -65,13 +65,16 @@ final class HiveFallbackJoinSourceResolver {
         boolean seenSelect = false;
         boolean inFromClause = false;
         boolean expectRelation = false;
+        String currentPath = path;
+        int unionBranchIndex = 0;
+        boolean nextQueryStartsUnionBranch = false;
 
         for (int index = bodyStart; index < end; index++) {
             Token token = tokens.get(index);
             if (token.type == TokenType.LPAREN) {
                 int close = matchingParen(tokens, index, end);
                 if (expectRelation) {
-                    RelationParse relation = parseRelation(tokens, index, end, path,
+                    RelationParse relation = parseRelation(tokens, index, end, currentPath,
                         visibleCtes, temporaryTables, output);
                     output.add(relation.source);
                     index = relation.lastTokenIndex;
@@ -79,7 +82,12 @@ final class HiveFallbackJoinSourceResolver {
                     continue;
                 }
                 if (containsQuery(tokens, index + 1, close)) {
-                    parseQueryBlock(tokens, index + 1, close, childPath(path, index),
+                    if (nextQueryStartsUnionBranch) {
+                        unionBranchIndex++;
+                        currentPath = unionBranchPath(path, unionBranchIndex);
+                        nextQueryStartsUnionBranch = false;
+                    }
+                    parseQueryBlock(tokens, index + 1, close, childPath(currentPath, index),
                         visibleCtes, temporaryTables, output);
                 }
                 index = close;
@@ -92,6 +100,11 @@ final class HiveFallbackJoinSourceResolver {
                 throw new IllegalArgumentException("relation identifier is required");
             }
             if (isKeyword(token, "select")) {
+                if (nextQueryStartsUnionBranch) {
+                    unionBranchIndex++;
+                    currentPath = unionBranchPath(path, unionBranchIndex);
+                    nextQueryStartsUnionBranch = false;
+                }
                 seenSelect = true;
                 continue;
             }
@@ -106,6 +119,7 @@ final class HiveFallbackJoinSourceResolver {
                 expectRelation = false;
                 if (union) {
                     seenSelect = false;
+                    nextQueryStartsUnionBranch = true;
                 }
                 continue;
             }
@@ -122,7 +136,7 @@ final class HiveFallbackJoinSourceResolver {
                 continue;
             }
             if (expectRelation) {
-                RelationParse relation = parseRelation(tokens, index, end, path,
+                RelationParse relation = parseRelation(tokens, index, end, currentPath,
                     visibleCtes, temporaryTables, output);
                 output.add(relation.source);
                 index = relation.lastTokenIndex;
@@ -295,6 +309,10 @@ final class HiveFallbackJoinSourceResolver {
 
     private String childPath(String path, int tokenIndex) {
         return path + ".q" + tokenIndex;
+    }
+
+    private String unionBranchPath(String path, int branchIndex) {
+        return path + ".u" + branchIndex;
     }
 
     private boolean isClauseBoundary(Token token) {
