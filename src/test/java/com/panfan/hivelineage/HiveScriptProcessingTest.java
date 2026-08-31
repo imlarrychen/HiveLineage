@@ -46,8 +46,16 @@ public class HiveScriptProcessingTest {
         StatementLineageResult statement = result.getStatements().get(0);
         TestSupport.assertTrue(statement.getRawSql().contains("${hiveconf:bizdate}"), "raw sql keeps variable");
         TestSupport.assertTrue(statement.getNormalizedSql().contains("20260630"), "normalized sql replaces variable");
-        TestSupport.assertEquals("default.test_a.b1", statement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "target column inferred from select");
-        TestSupport.assertEquals("default.test_b.b1", statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(), "source column");
+        TestSupport.assertEquals(
+            "default.test_a.b1",
+            statement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(),
+            "target column inferred from select"
+        );
+        TestSupport.assertEquals(
+            "default.test_b.b1",
+            statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(),
+            "source column"
+        );
     }
 
     @Test
@@ -243,7 +251,11 @@ public class HiveScriptProcessingTest {
         TestSupport.assertEquals(1, result.getStatements().size(), "sample02 lineage statement count");
 
         StatementLineageResult statement = result.getStatements().get(0);
-        TestSupport.assertEquals("etl_monitor.meta_mid_bdp_user_dashboard_pms_group", statement.getOutputObject().getQualifiedName(), "sample02 target");
+        TestSupport.assertEquals(
+            "etl_monitor.meta_mid_bdp_user_dashboard_pms_group",
+            statement.getOutputObject().getQualifiedName(),
+            "sample02 target"
+        );
         assertContainsSource(statement, "etl_monitor.bdp_meta_mcmeta_online_share_dash");
         assertContainsSource(statement, "etl_monitor.meta_mid_bdp_usr_info");
         assertContainsSource(statement, "etl_monitor.bdp_meta_mcmeta_online_dashboard");
@@ -302,7 +314,11 @@ public class HiveScriptProcessingTest {
 
         TestSupport.assertEquals(0, result.getFailedStatementCount(), "comment splitter failed count");
         TestSupport.assertEquals(2, result.getStatements().size(), "comment splitter statement count");
-        TestSupport.assertEquals("dwd.string_case", result.getStatements().get(0).getOutputObject().getQualifiedName(), "first target after splitter");
+        TestSupport.assertEquals(
+            "dwd.string_case",
+            result.getStatements().get(0).getOutputObject().getQualifiedName(),
+            "first target after splitter"
+        );
         TestSupport.assertEquals("dwd.next_case", result.getStatements().get(1).getOutputObject().getQualifiedName(), "second target after splitter");
     }
 

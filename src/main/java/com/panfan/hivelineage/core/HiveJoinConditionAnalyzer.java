@@ -153,17 +153,17 @@ final class HiveJoinConditionAnalyzer {
             if (directObjects.isEmpty() && hasUnqualifiedColumns(directColumns)) {
                 directObjects = joinTables(joinColumns, directObjects);
             }
-            conditions.add(new JoinCondition(
-                parsedJoinCondition.getJoinIndex(),
-                parsedJoinCondition.getQueryBlockPath(),
-                parsedJoinCondition.getJoinType(),
-                parsedJoinCondition.getJoinTypeName(),
-                directObjects,
-                directColumns,
-                joinTables(joinColumns, directObjects),
-                joinColumns,
-                parsedJoinCondition.getJoinExpression()
-            ));
+            conditions.add(JoinCondition.builder()
+                .joinIndex(parsedJoinCondition.getJoinIndex())
+                .queryBlockPath(parsedJoinCondition.getQueryBlockPath())
+                .joinType(parsedJoinCondition.getJoinType())
+                .joinTypeName(parsedJoinCondition.getJoinTypeName())
+                .directJoinObjects(directObjects)
+                .directJoinColumns(directColumns)
+                .joinTables(joinTables(joinColumns, directObjects))
+                .joinColumns(joinColumns)
+                .joinExpression(parsedJoinCondition.getJoinExpression())
+                .build());
         }
         return conditions;
     }
@@ -263,28 +263,24 @@ final class HiveJoinConditionAnalyzer {
         int index = context.getStatementIndex();
         ParsedHiveStatement parsedStatement = parseAndBind(context, normalizedStatement);
         List<JoinCondition> joinConditions = buildJoinConditions(context, parsedStatement);
-        return new StatementLineageResult(
-            request.getWorkflowId(),
-            request.getTaskId(),
-            request.getTaskVersion(),
-            index,
-            statementId(request, index),
-            "SELECT",
-            rawStatement,
-            normalizedStatement,
-            PARSE_STATUS_SUCCESS,
-            false,
-            null,
-            joinInputObjects(joinConditions),
-            request.getOptions().getParseMode(),
-            null,
-            null,
-            null,
-            Collections.<TableLineage>emptyList(),
-            Collections.<ColumnLineage>emptyList(),
-            joinConditions,
-            context.getWarnings()
-        );
+        return StatementLineageResult.builder()
+            .workflowId(request.getWorkflowId())
+            .taskId(request.getTaskId())
+            .taskVersion(request.getTaskVersion())
+            .statementIndex(index)
+            .statementId(statementId(request, index))
+            .statementType("SELECT")
+            .rawSql(rawStatement)
+            .normalizedSql(normalizedStatement)
+            .parseStatusCode(PARSE_STATUS_SUCCESS)
+            .formalLineageProduced(false)
+            .inputObjects(joinInputObjects(joinConditions))
+            .parseMode(request.getOptions().getParseMode())
+            .tableLineages(Collections.<TableLineage>emptyList())
+            .columnLineages(Collections.<ColumnLineage>emptyList())
+            .joinConditions(joinConditions)
+            .warnings(context.getWarnings())
+            .build();
     }
     boolean hasJoinConditionCandidate(String statement) {
         return Pattern.compile("(?is)\\bjoin\\b.+\\bon\\b").matcher(statement).find()
@@ -376,17 +372,17 @@ final class HiveJoinConditionAnalyzer {
             );
             List<DataObjectRef> joinTables = joinTables(joinColumns, directObjects);
             JoinTypeInfo joinTypeInfo = resolveJoinType(queryBlockSql, clause.getJoinKeywordIndex());
-            conditions.add(new JoinCondition(
-                counter.next(),
-                queryBlockPath,
-                joinTypeInfo.getCode(),
-                joinTypeInfo.getName(),
-                directObjects,
-                directColumns,
-                joinTables,
-                joinColumns,
-                clause.getExpression()
-            ));
+            conditions.add(JoinCondition.builder()
+                .joinIndex(counter.next())
+                .queryBlockPath(queryBlockPath)
+                .joinType(joinTypeInfo.getCode())
+                .joinTypeName(joinTypeInfo.getName())
+                .directJoinObjects(directObjects)
+                .directJoinColumns(directColumns)
+                .joinTables(joinTables)
+                .joinColumns(joinColumns)
+                .joinExpression(clause.getExpression())
+                .build());
         }
     }
     private Map<String, String> bindQueryBlockSourceAliases(

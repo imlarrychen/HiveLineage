@@ -15,26 +15,81 @@ public final class JoinCondition {
     private final List<ColumnRef> joinColumns;
     private final String joinExpression;
 
-    public JoinCondition(
-        int joinIndex,
-        String queryBlockPath,
-        int joinType,
-        String joinTypeName,
-        List<DataObjectRef> directJoinObjects,
-        List<ColumnRef> directJoinColumns,
-        List<DataObjectRef> joinTables,
-        List<ColumnRef> joinColumns,
-        String joinExpression
-    ) {
-        this.joinIndex = joinIndex;
-        this.queryBlockPath = queryBlockPath;
-        this.joinType = joinType;
-        this.joinTypeName = joinTypeName;
-        this.directJoinObjects = Collections.unmodifiableList(new ArrayList<>(directJoinObjects));
-        this.directJoinColumns = Collections.unmodifiableList(new ArrayList<>(directJoinColumns));
-        this.joinTables = Collections.unmodifiableList(new ArrayList<>(joinTables));
-        this.joinColumns = Collections.unmodifiableList(new ArrayList<>(joinColumns));
-        this.joinExpression = joinExpression;
+    private JoinCondition(Builder builder) {
+        this.joinIndex = builder.joinIndex;
+        this.queryBlockPath = builder.queryBlockPath;
+        this.joinType = builder.joinType;
+        this.joinTypeName = builder.joinTypeName;
+        this.directJoinObjects = Collections.unmodifiableList(new ArrayList<>(builder.directJoinObjects));
+        this.directJoinColumns = Collections.unmodifiableList(new ArrayList<>(builder.directJoinColumns));
+        this.joinTables = Collections.unmodifiableList(new ArrayList<>(builder.joinTables));
+        this.joinColumns = Collections.unmodifiableList(new ArrayList<>(builder.joinColumns));
+        this.joinExpression = builder.joinExpression;
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static final class Builder {
+        private int joinIndex;
+        private String queryBlockPath;
+        private int joinType;
+        private String joinTypeName;
+        private List<DataObjectRef> directJoinObjects = Collections.emptyList();
+        private List<ColumnRef> directJoinColumns = Collections.emptyList();
+        private List<DataObjectRef> joinTables = Collections.emptyList();
+        private List<ColumnRef> joinColumns = Collections.emptyList();
+        private String joinExpression;
+
+        public Builder joinIndex(int joinIndex) {
+            this.joinIndex = joinIndex;
+            return this;
+        }
+
+        public Builder queryBlockPath(String queryBlockPath) {
+            this.queryBlockPath = queryBlockPath;
+            return this;
+        }
+
+        public Builder joinType(int joinType) {
+            this.joinType = joinType;
+            return this;
+        }
+
+        public Builder joinTypeName(String joinTypeName) {
+            this.joinTypeName = joinTypeName;
+            return this;
+        }
+
+        public Builder directJoinObjects(List<DataObjectRef> directJoinObjects) {
+            this.directJoinObjects = directJoinObjects;
+            return this;
+        }
+
+        public Builder directJoinColumns(List<ColumnRef> directJoinColumns) {
+            this.directJoinColumns = directJoinColumns;
+            return this;
+        }
+
+        public Builder joinTables(List<DataObjectRef> joinTables) {
+            this.joinTables = joinTables;
+            return this;
+        }
+
+        public Builder joinColumns(List<ColumnRef> joinColumns) {
+            this.joinColumns = joinColumns;
+            return this;
+        }
+
+        public Builder joinExpression(String joinExpression) {
+            this.joinExpression = joinExpression;
+            return this;
+        }
+
+        public JoinCondition build() {
+            return new JoinCondition(this);
+        }
     }
 
     public int getJoinIndex() {

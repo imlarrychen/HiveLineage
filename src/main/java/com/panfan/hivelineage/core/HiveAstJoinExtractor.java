@@ -169,15 +169,15 @@ final class HiveAstJoinExtractor {
         }
         List<String> directColumns = new ArrayList<>(directColumnSet);
         List<String> directObjects = directObjectsForColumns(directColumns, directAliases);
-        conditions.add(new ParsedJoinCondition(
-            joinIndex[0]++,
-            queryBlockPath,
-            7,
-            "IMPLICIT_JOIN",
-            directObjects,
-            directColumns,
-            joinWithAnd(expressions)
-        ));
+        conditions.add(ParsedJoinCondition.builder()
+            .joinIndex(joinIndex[0]++)
+            .queryBlockPath(queryBlockPath)
+            .joinType(7)
+            .joinTypeName("IMPLICIT_JOIN")
+            .directJoinObjects(directObjects)
+            .directJoinColumns(directColumns)
+            .joinExpression(joinWithAnd(expressions))
+            .build());
     }
 
     private boolean containsJoinConditionNode(ASTNode node) {
@@ -292,15 +292,15 @@ final class HiveAstJoinExtractor {
                 String expression = expressionExtractor.unparse(conditionNode);
                 List<String> directColumns = collectDirectColumnReferences(conditionNode);
                 List<String> directObjects = directObjectsForColumns(directColumns, directAliases);
-                conditions.add(new ParsedJoinCondition(
-                    joinIndex[0]++,
-                    queryBlockPath,
-                    joinTypeCode(node),
-                    joinTypeName(node),
-                    directObjects,
-                    directColumns,
-                    expression
-                ));
+                conditions.add(ParsedJoinCondition.builder()
+                    .joinIndex(joinIndex[0]++)
+                    .queryBlockPath(queryBlockPath)
+                    .joinType(joinTypeCode(node))
+                    .joinTypeName(joinTypeName(node))
+                    .directJoinObjects(directObjects)
+                    .directJoinColumns(directColumns)
+                    .joinExpression(expression)
+                    .build());
             }
             for (int i = 0; i < node.getChildCount(); i++) {
                 ASTNode child = (ASTNode) node.getChild(i);

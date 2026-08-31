@@ -200,29 +200,10 @@ final class HiveAstProjectionExtractor {
         if (node.getType() == HiveParser.TOK_QUERY) {
             ASTNode insertNode = astWalker.directChild(node, HiveParser.TOK_INSERT);
             ASTNode selectNode = directSelectChild(insertNode);
-            if (selectNode != null) {
-                Map<String, String> branchAliases = resolveSourceAliases(node, cteAliases);
-                String defaultSource = defaultSourceTable(node, cteAliases);
-                for (int i = 0; i < selectNode.getChildCount(); i++) {
-                    ASTNode selectExpression = (ASTNode) selectNode.getChild(i);
-                    if (selectExpression.getType() != HiveParser.TOK_SELEXPR || selectExpression.getChildCount() == 0) {
-                        continue;
-                    }
-                    String expression = renderSetOperationExpression(
-                        (ASTNode) selectExpression.getChild(0),
-                        branchAliases,
-                        defaultSource
-                    );
-                    if (!expression.isEmpty()) {
-                        LinkedHashSet<String> positionExpressions = collected.get(i);
-                        if (positionExpressions == null) {
-                            positionExpressions = new LinkedHashSet<>();
-                            collected.put(i, positionExpressions);
-                        }
-                        positionExpressions.add(expression);
-                    }
-                }
+            if (selectNode == null) {
+                return;
             }
+            collectQuerySetOperationExpressions(node, selectNode, cteAliases, collected);
             return;
         }
         for (int i = 0; i < node.getChildCount(); i++) {
@@ -241,31 +222,79 @@ final class HiveAstProjectionExtractor {
         if (node.getType() == HiveParser.TOK_QUERY) {
             ASTNode insertNode = astWalker.directChild(node, HiveParser.TOK_INSERT);
             ASTNode selectNode = directSelectChild(insertNode);
-            if (selectNode != null) {
-                Map<String, String> branchAliases = resolveSourceAliases(node, cteAliases);
-                String defaultSource = defaultSourceTable(node, cteAliases);
-                for (int i = 0; i < selectNode.getChildCount(); i++) {
-                    ASTNode selectExpression = (ASTNode) selectNode.getChild(i);
-                    if (selectExpression.getType() != HiveParser.TOK_SELEXPR || selectExpression.getChildCount() == 0) {
-                        continue;
-                    }
-                    LinkedHashSet<String> expressionSources = new LinkedHashSet<>();
-                    collectExpressionSourceColumns((ASTNode) selectExpression.getChild(0), branchAliases, defaultSource, expressionSources);
-                    if (!expressionSources.isEmpty()) {
-                        LinkedHashSet<String> positionSources = collected.get(i);
-                        if (positionSources == null) {
-                            positionSources = new LinkedHashSet<>();
-                            collected.put(i, positionSources);
-                        }
-                        positionSources.addAll(expressionSources);
-                    }
-                }
+            if (selectNode == null) {
+                return;
             }
+            collectQuerySetOperationSourceColumns(node, selectNode, cteAliases, collected);
             return;
         }
         for (int i = 0; i < node.getChildCount(); i++) {
             collectSetOperationSourceColumns((ASTNode) node.getChild(i), cteAliases, collected);
         }
+    }
+
+    private void collectQuerySetOperationExpressions(
+        ASTNode queryNode,
+        ASTNode selectNode,
+        Set<String> cteAliases,
+        Map<Integer, LinkedHashSet<String>> collected
+    ) {
+        Map<String, String> branchAliases = resolveSourceAliases(queryNode, cteAliases);
+        String defaultSource = defaultSourceTable(queryNode, cteAliases);
+        for (int i = 0; i < selectNode.getChildCount(); i++) {
+            ASTNode selectExpression = (ASTNode) selectNode.getChild(i);
+            if (selectExpression.getType() != HiveParser.TOK_SELEXPR || selectExpression.getChildCount() == 0) {
+                continue;
+            }
+            String expression = renderSetOperationExpression(
+                (ASTNode) selectExpression.getChild(0),
+                branchAliases,
+                defaultSource
+            );
+            addCollectedValue(collected, i, expression);
+        }
+    }
+
+    private void collectQuerySetOperationSourceColumns(
+        ASTNode queryNode,
+        ASTNode selectNode,
+        Set<String> cteAliases,
+        Map<Integer, LinkedHashSet<String>> collected
+    ) {
+        Map<String, String> branchAliases = resolveSourceAliases(queryNode, cteAliases);
+        String defaultSource = defaultSourceTable(queryNode, cteAliases);
+        for (int i = 0; i < selectNode.getChildCount(); i++) {
+            ASTNode selectExpression = (ASTNode) selectNode.getChild(i);
+            if (selectExpression.getType() != HiveParser.TOK_SELEXPR || selectExpression.getChildCount() == 0) {
+                continue;
+            }
+            LinkedHashSet<String> expressionSources = new LinkedHashSet<>();
+            collectExpressionSourceColumns((ASTNode) selectExpression.getChild(0), branchAliases, defaultSource, expressionSources);
+            addCollectedValues(collected, i, expressionSources);
+        }
+    }
+
+    private void addCollectedValue(Map<Integer, LinkedHashSet<String>> collected, int position, String value) {
+        if (value.isEmpty()) {
+            return;
+        }
+        collectedValues(collected, position).add(value);
+    }
+
+    private void addCollectedValues(Map<Integer, LinkedHashSet<String>> collected, int position, Set<String> values) {
+        if (values.isEmpty()) {
+            return;
+        }
+        collectedValues(collected, position).addAll(values);
+    }
+
+    private LinkedHashSet<String> collectedValues(Map<Integer, LinkedHashSet<String>> collected, int position) {
+        LinkedHashSet<String> values = collected.get(position);
+        if (values == null) {
+            values = new LinkedHashSet<>();
+            collected.put(position, values);
+        }
+        return values;
     }
 
     private void collectExpressionSourceColumns(

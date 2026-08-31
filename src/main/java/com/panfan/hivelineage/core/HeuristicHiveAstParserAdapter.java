@@ -36,53 +36,41 @@ public final class HeuristicHiveAstParserAdapter implements HiveAstParserAdapter
             DataObjectRef outputObject = matcher.matches()
                 ? new DataObjectRef(normalizeIdentifier(matcher.group(1)))
                 : null;
-            return new ParsedHiveStatement(
-                StatementType.INSERT_SELECT,
-                outputObject,
-                extractInputObjects(normalizedSql),
-                Collections.<String>emptyList(),
-                Collections.<String>emptyList(),
-                Collections.<String, String>emptyMap(),
-                extractColumnAliasSources(normalizedSql),
-                Collections.<String, String>emptyMap(),
-                normalizedSql
-            );
+            return heuristicStatement(StatementType.INSERT_SELECT, outputObject, normalizedSql);
         }
         if (lower.startsWith("create table ") && SELECT_KEYWORD.matcher(lower).find()) {
             Matcher matcher = CREATE_TABLE_TARGET.matcher(normalizedSql);
             DataObjectRef outputObject = matcher.matches()
                 ? new DataObjectRef(normalizeIdentifier(matcher.group(1)))
                 : null;
-            return new ParsedHiveStatement(
-                StatementType.CREATE_TABLE_AS_SELECT,
-                outputObject,
-                extractInputObjects(normalizedSql),
-                Collections.<String>emptyList(),
-                Collections.<String>emptyList(),
-                Collections.<String, String>emptyMap(),
-                extractColumnAliasSources(normalizedSql),
-                Collections.<String, String>emptyMap(),
-                normalizedSql
-            );
+            return heuristicStatement(StatementType.CREATE_TABLE_AS_SELECT, outputObject, normalizedSql);
         }
         if (lower.startsWith("create temporary table ") && SELECT_KEYWORD.matcher(lower).find()) {
             Matcher matcher = CREATE_TEMPORARY_TABLE_TARGET.matcher(normalizedSql);
             DataObjectRef outputObject = matcher.matches()
                 ? new DataObjectRef(normalizeIdentifier(matcher.group(1)))
                 : null;
-            return new ParsedHiveStatement(
-                StatementType.CREATE_TEMPORARY_TABLE_AS_SELECT,
-                outputObject,
-                extractInputObjects(normalizedSql),
-                Collections.<String>emptyList(),
-                Collections.<String>emptyList(),
-                Collections.<String, String>emptyMap(),
-                extractColumnAliasSources(normalizedSql),
-                Collections.<String, String>emptyMap(),
-                normalizedSql
-            );
+            return heuristicStatement(StatementType.CREATE_TEMPORARY_TABLE_AS_SELECT, outputObject, normalizedSql);
         }
         return new ParsedHiveStatement(StatementType.UNSUPPORTED, null, new ArrayList<DataObjectRef>(), normalizedSql);
+    }
+
+    private ParsedHiveStatement heuristicStatement(
+        StatementType statementType,
+        DataObjectRef outputObject,
+        String normalizedSql
+    ) {
+        return ParsedHiveStatement.builder()
+            .statementType(statementType)
+            .outputObject(outputObject)
+            .inputObjects(extractInputObjects(normalizedSql))
+            .targetColumns(Collections.<String>emptyList())
+            .selectExpressions(Collections.<String>emptyList())
+            .sourceAliases(Collections.<String, String>emptyMap())
+            .columnAliasSources(extractColumnAliasSources(normalizedSql))
+            .staticPartitionValues(Collections.<String, String>emptyMap())
+            .normalizedSql(normalizedSql)
+            .build();
     }
 
     private List<DataObjectRef> extractInputObjects(String normalizedSql) {

@@ -457,14 +457,31 @@ final class HiveLineageExpansionService {
             columns.add(column);
         }
     }
+
+    static final class DirectProjectionScope {
+        private final Map<String, String> sourceAliases;
+        private final Map<String, String> topLevelProjectionSourceAliases;
+        private final Map<String, Map<String, ColumnLineageProjection>> statementProjectionTables;
+        private final QualifiedOwnerResolver ownerResolver;
+
+        DirectProjectionScope(
+            Map<String, String> sourceAliases,
+            Map<String, String> topLevelProjectionSourceAliases,
+            Map<String, Map<String, ColumnLineageProjection>> statementProjectionTables,
+            QualifiedOwnerResolver ownerResolver
+        ) {
+            this.sourceAliases = sourceAliases;
+            this.topLevelProjectionSourceAliases = topLevelProjectionSourceAliases;
+            this.statementProjectionTables = statementProjectionTables;
+            this.ownerResolver = ownerResolver;
+        }
+    }
+
     ColumnLineageProjection resolveDirectColumnProjection(
         StatementAnalysisContext context,
         String expression,
         List<DataObjectRef> originalInputObjects,
-        Map<String, String> sourceAliases,
-        Map<String, String> topLevelProjectionSourceAliases,
-        Map<String, Map<String, ColumnLineageProjection>> statementProjectionTables,
-        QualifiedOwnerResolver ownerResolver
+        DirectProjectionScope scope
     ) {
         DirectColumn directColumn = projectionResolver.parseDirectColumn(expression);
         if (directColumn == null) {
@@ -475,23 +492,26 @@ final class HiveLineageExpansionService {
             ColumnLineageProjection ownerProjection = projectionResolver.columnProjection(
                 directColumn.getOwner(),
                 directColumn.getColumn(),
-                statementProjectionTables
+                scope.statementProjectionTables
             );
             if (ownerProjection != null) {
                 return ownerProjection;
             }
-            String aliasedProjectionTable = sourceAliases.get(directColumn.getOwner());
+            String aliasedProjectionTable = scope.sourceAliases.get(directColumn.getOwner());
             ColumnLineageProjection aliasedProjection = projectionResolver.columnProjection(
                 aliasedProjectionTable == null ? "" : aliasedProjectionTable,
                 directColumn.getColumn(),
-                statementProjectionTables
+                scope.statementProjectionTables
             );
             if (aliasedProjection != null) {
                 return aliasedProjection;
             }
-            tableName = ownerResolver.resolve(directColumn.getOwner());
+            tableName = scope.ownerResolver.resolve(directColumn.getOwner());
         } else {
-            tableName = projectionResolver.singleProjectionTable(topLevelProjectionSourceAliases, statementProjectionTables);
+            tableName = projectionResolver.singleProjectionTable(
+                scope.topLevelProjectionSourceAliases,
+                scope.statementProjectionTables
+            );
             if (tableName == null && originalInputObjects.size() == 1) {
                 tableName = originalInputObjects.get(0).getQualifiedName();
             }
@@ -502,7 +522,7 @@ final class HiveLineageExpansionService {
         ColumnLineageProjection statementProjection = projectionResolver.columnProjection(
             tableName,
             directColumn.getColumn(),
-            statementProjectionTables
+            scope.statementProjectionTables
         );
         if (statementProjection != null) {
             return statementProjection;

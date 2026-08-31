@@ -28,132 +28,128 @@ public final class ParsedHiveStatement {
         List<DataObjectRef> inputObjects,
         String normalizedSql
     ) {
-        this(
-            statementType,
-            outputObject,
-            inputObjects,
-            Collections.<String>emptyList(),
-            Collections.<String>emptyList(),
-            Collections.<String, String>emptyMap(),
-            Collections.<String, String>emptyMap(),
-            Collections.<String, String>emptyMap(),
-            normalizedSql
-        );
-    }
-
-    public ParsedHiveStatement(
-        StatementType statementType,
-        DataObjectRef outputObject,
-        List<DataObjectRef> inputObjects,
-        List<String> targetColumns,
-        List<String> selectExpressions,
-        Map<String, String> sourceAliases,
-        Map<String, String> staticPartitionValues,
-        String normalizedSql
-    ) {
-        this(
-            statementType,
-            outputObject,
-            inputObjects,
-            targetColumns,
-            selectExpressions,
-            sourceAliases,
-            Collections.<String, String>emptyMap(),
-            Collections.<String, String>emptyMap(),
-            Collections.<Integer, List<String>>emptyMap(),
-            Collections.<Integer, List<String>>emptyMap(),
-            staticPartitionValues,
-            Collections.<ParsedJoinCondition>emptyList(),
-            normalizedSql
-        );
-    }
-
-    public ParsedHiveStatement(
-        StatementType statementType,
-        DataObjectRef outputObject,
-        List<DataObjectRef> inputObjects,
-        List<String> targetColumns,
-        List<String> selectExpressions,
-        Map<String, String> sourceAliases,
-        Map<String, String> columnAliasSources,
-        Map<String, String> staticPartitionValues,
-        String normalizedSql
-    ) {
-        this(
-            statementType,
-            outputObject,
-            inputObjects,
-            targetColumns,
-            selectExpressions,
-            sourceAliases,
-            columnAliasSources,
-            Collections.<String, String>emptyMap(),
-            Collections.<Integer, List<String>>emptyMap(),
-            Collections.<Integer, List<String>>emptyMap(),
-            staticPartitionValues,
-            normalizedSql
-        );
-    }
-
-    public ParsedHiveStatement(
-        StatementType statementType,
-        DataObjectRef outputObject,
-        List<DataObjectRef> inputObjects,
-        List<String> targetColumns,
-        List<String> selectExpressions,
-        Map<String, String> sourceAliases,
-        Map<String, String> columnAliasSources,
-        Map<String, String> columnAliasExpressions,
-        Map<Integer, List<String>> setOperationSourceColumnsBySelectIndex,
-        Map<Integer, List<String>> setOperationExpressionsBySelectIndex,
-        Map<String, String> staticPartitionValues,
-        String normalizedSql
-    ) {
-        this(
-            statementType,
-            outputObject,
-            inputObjects,
-            targetColumns,
-            selectExpressions,
-            sourceAliases,
-            columnAliasSources,
-            columnAliasExpressions,
-            setOperationSourceColumnsBySelectIndex,
-            setOperationExpressionsBySelectIndex,
-            staticPartitionValues,
-            Collections.<ParsedJoinCondition>emptyList(),
-            normalizedSql
-        );
-    }
-
-    public ParsedHiveStatement(
-        StatementType statementType,
-        DataObjectRef outputObject,
-        List<DataObjectRef> inputObjects,
-        List<String> targetColumns,
-        List<String> selectExpressions,
-        Map<String, String> sourceAliases,
-        Map<String, String> columnAliasSources,
-        Map<String, String> columnAliasExpressions,
-        Map<Integer, List<String>> setOperationSourceColumnsBySelectIndex,
-        Map<Integer, List<String>> setOperationExpressionsBySelectIndex,
-        Map<String, String> staticPartitionValues,
-        List<ParsedJoinCondition> joinConditions,
-        String normalizedSql
-    ) {
         this.statementType = statementType;
         this.outputObject = outputObject;
         this.inputObjects = Collections.unmodifiableList(new ArrayList<>(inputObjects));
-        this.targetColumns = Collections.unmodifiableList(new ArrayList<>(targetColumns));
-        this.selectExpressions = Collections.unmodifiableList(new ArrayList<>(selectExpressions));
-        this.sourceAliases = Collections.unmodifiableMap(new HashMap<>(sourceAliases));
-        this.columnAliasSources = Collections.unmodifiableMap(new HashMap<>(columnAliasSources));
-        this.columnAliasExpressions = Collections.unmodifiableMap(new HashMap<>(columnAliasExpressions));
-        this.setOperationSourceColumnsBySelectIndex = unmodifiableNestedListMap(setOperationSourceColumnsBySelectIndex);
-        this.setOperationExpressionsBySelectIndex = unmodifiableNestedListMap(setOperationExpressionsBySelectIndex);
-        this.staticPartitionValues = Collections.unmodifiableMap(new HashMap<>(staticPartitionValues));
-        this.joinConditions = Collections.unmodifiableList(new ArrayList<>(joinConditions));
+        this.targetColumns = Collections.emptyList();
+        this.selectExpressions = Collections.emptyList();
+        this.sourceAliases = Collections.emptyMap();
+        this.columnAliasSources = Collections.emptyMap();
+        this.columnAliasExpressions = Collections.emptyMap();
+        this.setOperationSourceColumnsBySelectIndex = Collections.emptyMap();
+        this.setOperationExpressionsBySelectIndex = Collections.emptyMap();
+        this.staticPartitionValues = Collections.emptyMap();
+        this.joinConditions = Collections.emptyList();
         this.normalizedSql = normalizedSql;
+    }
+
+    private ParsedHiveStatement(Builder builder) {
+        this.statementType = builder.statementType;
+        this.outputObject = builder.outputObject;
+        this.inputObjects = Collections.unmodifiableList(new ArrayList<>(builder.inputObjects));
+        this.targetColumns = Collections.unmodifiableList(new ArrayList<>(builder.targetColumns));
+        this.selectExpressions = Collections.unmodifiableList(new ArrayList<>(builder.selectExpressions));
+        this.sourceAliases = Collections.unmodifiableMap(new HashMap<>(builder.sourceAliases));
+        this.columnAliasSources = Collections.unmodifiableMap(new HashMap<>(builder.columnAliasSources));
+        this.columnAliasExpressions = Collections.unmodifiableMap(new HashMap<>(builder.columnAliasExpressions));
+        this.setOperationSourceColumnsBySelectIndex = unmodifiableNestedListMap(
+            builder.setOperationSourceColumnsBySelectIndex
+        );
+        this.setOperationExpressionsBySelectIndex = unmodifiableNestedListMap(
+            builder.setOperationExpressionsBySelectIndex
+        );
+        this.staticPartitionValues = Collections.unmodifiableMap(new HashMap<>(builder.staticPartitionValues));
+        this.joinConditions = Collections.unmodifiableList(new ArrayList<>(builder.joinConditions));
+        this.normalizedSql = builder.normalizedSql;
+    }
+
+    static Builder builder() {
+        return new Builder();
+    }
+
+    static final class Builder {
+        private StatementType statementType;
+        private DataObjectRef outputObject;
+        private List<DataObjectRef> inputObjects = Collections.emptyList();
+        private List<String> targetColumns = Collections.emptyList();
+        private List<String> selectExpressions = Collections.emptyList();
+        private Map<String, String> sourceAliases = Collections.emptyMap();
+        private Map<String, String> columnAliasSources = Collections.emptyMap();
+        private Map<String, String> columnAliasExpressions = Collections.emptyMap();
+        private Map<Integer, List<String>> setOperationSourceColumnsBySelectIndex = Collections.emptyMap();
+        private Map<Integer, List<String>> setOperationExpressionsBySelectIndex = Collections.emptyMap();
+        private Map<String, String> staticPartitionValues = Collections.emptyMap();
+        private List<ParsedJoinCondition> joinConditions = Collections.emptyList();
+        private String normalizedSql;
+
+        Builder statementType(StatementType statementType) {
+            this.statementType = statementType;
+            return this;
+        }
+
+        Builder outputObject(DataObjectRef outputObject) {
+            this.outputObject = outputObject;
+            return this;
+        }
+
+        Builder inputObjects(List<DataObjectRef> inputObjects) {
+            this.inputObjects = inputObjects;
+            return this;
+        }
+
+        Builder targetColumns(List<String> targetColumns) {
+            this.targetColumns = targetColumns;
+            return this;
+        }
+
+        Builder selectExpressions(List<String> selectExpressions) {
+            this.selectExpressions = selectExpressions;
+            return this;
+        }
+
+        Builder sourceAliases(Map<String, String> sourceAliases) {
+            this.sourceAliases = sourceAliases;
+            return this;
+        }
+
+        Builder columnAliasSources(Map<String, String> columnAliasSources) {
+            this.columnAliasSources = columnAliasSources;
+            return this;
+        }
+
+        Builder columnAliasExpressions(Map<String, String> columnAliasExpressions) {
+            this.columnAliasExpressions = columnAliasExpressions;
+            return this;
+        }
+
+        Builder setOperationSourceColumnsBySelectIndex(Map<Integer, List<String>> values) {
+            this.setOperationSourceColumnsBySelectIndex = values;
+            return this;
+        }
+
+        Builder setOperationExpressionsBySelectIndex(Map<Integer, List<String>> values) {
+            this.setOperationExpressionsBySelectIndex = values;
+            return this;
+        }
+
+        Builder staticPartitionValues(Map<String, String> staticPartitionValues) {
+            this.staticPartitionValues = staticPartitionValues;
+            return this;
+        }
+
+        Builder joinConditions(List<ParsedJoinCondition> joinConditions) {
+            this.joinConditions = joinConditions;
+            return this;
+        }
+
+        Builder normalizedSql(String normalizedSql) {
+            this.normalizedSql = normalizedSql;
+            return this;
+        }
+
+        ParsedHiveStatement build() {
+            return new ParsedHiveStatement(this);
+        }
     }
 
     public StatementType getStatementType() {

@@ -62,10 +62,26 @@ public class JdbcMetadataColumnV2ProviderIntegrationTest {
             .build());
 
         StatementLineageResult statement = result.getStatements().get(0);
-        TestSupport.assertEquals("dwd_it.user_profile_it.user_id", statement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "jdbc analyzer first target");
-        TestSupport.assertEquals("ods_it.user_base_it.user_id", statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(), "jdbc analyzer first source");
-        TestSupport.assertEquals("dwd_it.user_profile_it.user_name", statement.getColumnLineages().get(1).getTargetColumn().getQualifiedName(), "jdbc analyzer second target");
-        TestSupport.assertEquals("ods_it.user_base_it.user_name", statement.getColumnLineages().get(1).getSourceColumns().get(0).getQualifiedName(), "jdbc analyzer second source");
+        TestSupport.assertEquals(
+            "dwd_it.user_profile_it.user_id",
+            statement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(),
+            "jdbc analyzer first target"
+        );
+        TestSupport.assertEquals(
+            "ods_it.user_base_it.user_id",
+            statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(),
+            "jdbc analyzer first source"
+        );
+        TestSupport.assertEquals(
+            "dwd_it.user_profile_it.user_name",
+            statement.getColumnLineages().get(1).getTargetColumn().getQualifiedName(),
+            "jdbc analyzer second target"
+        );
+        TestSupport.assertEquals(
+            "ods_it.user_base_it.user_name",
+            statement.getColumnLineages().get(1).getSourceColumns().get(0).getQualifiedName(),
+            "jdbc analyzer second source"
+        );
     }
 
     @Test
@@ -114,8 +130,16 @@ public class JdbcMetadataColumnV2ProviderIntegrationTest {
         StatementLineageResult statement = result.getStatements().get(0);
         TestSupport.assertEquals(0, statement.getParseStatusCode(), "jdbc view analyzer parse status");
         TestSupport.assertEquals("ods_it.user_base_it", statement.getInputObjects().get(0).getQualifiedName(), "jdbc view expanded input");
-        TestSupport.assertEquals("ods_it.user_base_it.user_id", statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(), "jdbc view first source");
-        TestSupport.assertEquals("ods_it.user_base_it.user_name", statement.getColumnLineages().get(1).getSourceColumns().get(0).getQualifiedName(), "jdbc view second source");
+        TestSupport.assertEquals(
+            "ods_it.user_base_it.user_id",
+            statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(),
+            "jdbc view first source"
+        );
+        TestSupport.assertEquals(
+            "ods_it.user_base_it.user_name",
+            statement.getColumnLineages().get(1).getSourceColumns().get(0).getQualifiedName(),
+            "jdbc view second source"
+        );
     }
 
     @Test
@@ -157,7 +181,11 @@ public class JdbcMetadataColumnV2ProviderIntegrationTest {
                      + "(id, db_en_name, tb_en_name, column_name, column_type, integer_idx, is_active) "
                      + "values (?, ?, ?, ?, ?, ?, b'1')"
              )) {
-            delete.executeUpdate("delete from metadata_column_v2 where db_en_name in ('ods_it', 'dwd_it', 'dim_it') and tb_en_name in ('user_base_it', 'user_profile_it', 'v_user_it')");
+            delete.executeUpdate(
+                "delete from metadata_column_v2 "
+                    + "where db_en_name in ('ods_it', 'dwd_it', 'dim_it') "
+                    + "and tb_en_name in ('user_base_it', 'user_profile_it', 'v_user_it')"
+            );
             insert.setLong(1, 9000000001L);
             insert.setString(2, "ods_it");
             insert.setString(3, "user_base_it");

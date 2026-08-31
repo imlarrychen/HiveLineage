@@ -132,7 +132,11 @@ public class HiveViewAndTemporaryLineageTest {
         TestSupport.assertEquals("CREATE_VIEW_AS_SELECT", statement.getStatementType(), "view statement type");
         TestSupport.assertEquals("dim.v_user", statement.getOutputObject().getQualifiedName(), "view target");
         assertContainsSource(statement, "ods.user_base");
-        TestSupport.assertEquals("dim.v_user.user_id", statement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "view first target");
+        TestSupport.assertEquals(
+            "dim.v_user.user_id",
+            statement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(),
+            "view first target"
+        );
         TestSupport.assertEquals(LineageType.DERIVED, statement.getColumnLineages().get(1).getLineageType(), "view derived target");
         TestSupport.assertEquals("concat(first_name, last_name)", statement.getColumnLineages().get(1).getExpression(), "view expression");
     }
@@ -252,8 +256,16 @@ public class HiveViewAndTemporaryLineageTest {
         TestSupport.assertEquals("ALTER_VIEW_AS_SELECT", statement.getStatementType(), "alter view statement type");
         TestSupport.assertEquals("dim.v_user", statement.getOutputObject().getQualifiedName(), "alter view target");
         assertContainsSource(statement, "ods.user_base");
-        TestSupport.assertEquals("dim.v_user.user_id", statement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "alter view first target");
-        TestSupport.assertEquals("ods.user_base.user_id", statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(), "alter view direct source");
+        TestSupport.assertEquals(
+            "dim.v_user.user_id",
+            statement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(),
+            "alter view first target"
+        );
+        TestSupport.assertEquals(
+            "ods.user_base.user_id",
+            statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(),
+            "alter view direct source"
+        );
         assertContainsColumn(statement.getColumnLineages().get(1).getSourceColumns(), "ods.user_base.user_name");
     }
 
@@ -290,15 +302,34 @@ public class HiveViewAndTemporaryLineageTest {
         StatementLineageResult temporaryStatement = result.getStatements().get(0);
         StatementLineageResult finalStatement = result.getStatements().get(1);
 
-        TestSupport.assertEquals("tmp_user_profile.user_id", temporaryStatement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "temporary user_id target");
-        TestSupport.assertEquals("tmp_user_profile.dept_name", temporaryStatement.getColumnLineages().get(3).getTargetColumn().getQualifiedName(), "temporary dept_name target");
+        TestSupport.assertEquals(
+            "tmp_user_profile.user_id",
+            temporaryStatement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(),
+            "temporary user_id target"
+        );
+        TestSupport.assertEquals(
+            "tmp_user_profile.dept_name",
+            temporaryStatement.getColumnLineages().get(3).getTargetColumn().getQualifiedName(),
+            "temporary dept_name target"
+        );
         ColumnLineage userStatus = finalStatement.getColumnLineages().get(3);
-        TestSupport.assertEquals("dwd.user_profile_enriched.user_status", userStatus.getTargetColumn().getQualifiedName(), "final user_status target");
+        TestSupport.assertEquals(
+            "dwd.user_profile_enriched.user_status",
+            userStatus.getTargetColumn().getQualifiedName(),
+            "final user_status target"
+        );
         TestSupport.assertEquals("ods.user_base.status", userStatus.getSourceColumns().get(0).getQualifiedName(), "final user_status source");
         TestSupport.assertEquals(LineageType.DERIVED, userStatus.getLineageType(), "final user_status type");
-        TestSupport.assertEquals("case when u.status = 1 then 'ACTIVE' else 'INACTIVE' end", userStatus.getExpression(), "final user_status expression");
+        TestSupport.assertEquals(
+            "case when u.status = 1 then 'ACTIVE' else 'INACTIVE' end",
+            userStatus.getExpression(),
+            "final user_status expression"
+        );
         for (LineageWarning warning : temporaryStatement.getWarnings()) {
-            TestSupport.assertTrue(warning.getMessage().indexOf("tmp_user_profile") < 0, "temporary table should not emit metadata warning");
+            TestSupport.assertTrue(
+                warning.getMessage().indexOf("tmp_user_profile") < 0,
+                "temporary table should not emit metadata warning"
+            );
         }
     }
 
@@ -373,7 +404,11 @@ public class HiveViewAndTemporaryLineageTest {
 
         assertContainsSource(finalStatement, "ods.user_base");
         assertNotContainsSource(finalStatement, "ods.union_source_a");
-        TestSupport.assertEquals("ods.user_base.user_id", finalStatement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(), "shadow first column");
+        TestSupport.assertEquals(
+            "ods.user_base.user_id",
+            finalStatement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(),
+            "shadow first column"
+        );
     }
 
     @Test

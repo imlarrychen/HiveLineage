@@ -88,17 +88,34 @@ public class HiveColumnLineageTest {
             .build();
 
         StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+        List<ColumnLineage> columns = statement.getColumnLineages();
 
         TestSupport.assertEquals(0, statement.getParseStatusCode(), "union parse status");
-        TestSupport.assertEquals(2, statement.getColumnLineages().size(), "union column lineage count");
-        TestSupport.assertEquals("dwd.union_target.id", statement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "union id target");
-        TestSupport.assertEquals("union_all(ods.union_source_a.id, ods.union_source_b.id)", statement.getColumnLineages().get(0).getExpression(), "union id expression");
-        assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "ods.union_source_a.id");
-        assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "ods.union_source_b.id");
-        TestSupport.assertEquals("dwd.union_target.name", statement.getColumnLineages().get(1).getTargetColumn().getQualifiedName(), "union name target");
-        TestSupport.assertEquals("union_all(ods.union_source_a.name, ods.union_source_b.name)", statement.getColumnLineages().get(1).getExpression(), "union name expression");
-        assertContainsColumn(statement.getColumnLineages().get(1).getSourceColumns(), "ods.union_source_a.name");
-        assertContainsColumn(statement.getColumnLineages().get(1).getSourceColumns(), "ods.union_source_b.name");
+        TestSupport.assertEquals(2, columns.size(), "union column lineage count");
+        TestSupport.assertEquals(
+            "dwd.union_target.id",
+            columns.get(0).getTargetColumn().getQualifiedName(),
+            "union id target"
+        );
+        TestSupport.assertEquals(
+            "union_all(ods.union_source_a.id, ods.union_source_b.id)",
+            columns.get(0).getExpression(),
+            "union id expression"
+        );
+        assertContainsColumn(columns.get(0).getSourceColumns(), "ods.union_source_a.id");
+        assertContainsColumn(columns.get(0).getSourceColumns(), "ods.union_source_b.id");
+        TestSupport.assertEquals(
+            "dwd.union_target.name",
+            columns.get(1).getTargetColumn().getQualifiedName(),
+            "union name target"
+        );
+        TestSupport.assertEquals(
+            "union_all(ods.union_source_a.name, ods.union_source_b.name)",
+            columns.get(1).getExpression(),
+            "union name expression"
+        );
+        assertContainsColumn(columns.get(1).getSourceColumns(), "ods.union_source_a.name");
+        assertContainsColumn(columns.get(1).getSourceColumns(), "ods.union_source_b.name");
     }
 
     @Test
@@ -142,10 +159,21 @@ public class HiveColumnLineageTest {
 
         assertContainsColumn(custId.getSourceColumns(), "ods.vrf_t.vrf_clt_nbr");
         assertContainsColumn(custId.getSourceColumns(), "ods.vrf_h.cust_id");
-        TestSupport.assertEquals("union_all(ods.vrf_t.vrf_clt_nbr, ods.vrf_h.cust_id)", custId.getExpression(), "nested union cust_id expression");
+        TestSupport.assertEquals(
+            "union_all(ods.vrf_t.vrf_clt_nbr, ods.vrf_h.cust_id)",
+            custId.getExpression(),
+            "nested union cust_id expression"
+        );
         assertContainsColumn(updateTime.getSourceColumns(), "ods.vrf_h.dw_upd_tm");
-        TestSupport.assertTrue(!containsColumn(updateTime.getSourceColumns(), "ods.vrf_t.dw_upd_tm"), "current_timestamp branch should not invent source column");
-        TestSupport.assertEquals("union_all(current_timestamp(), ods.vrf_h.dw_upd_tm)", updateTime.getExpression(), "nested union dw_upd_tm expression");
+        TestSupport.assertTrue(
+            !containsColumn(updateTime.getSourceColumns(), "ods.vrf_t.dw_upd_tm"),
+            "current_timestamp branch should not invent source column"
+        );
+        TestSupport.assertEquals(
+            "union_all(current_timestamp(), ods.vrf_h.dw_upd_tm)",
+            updateTime.getExpression(),
+            "nested union dw_upd_tm expression"
+        );
     }
 
     @Test
@@ -221,7 +249,11 @@ public class HiveColumnLineageTest {
         TestSupport.assertEquals("u.user_id", statement.getColumnLineages().get(0).getExpression(), "top-level id expression");
         TestSupport.assertEquals(1, statement.getColumnLineages().get(0).getSourceColumns().size(), "target id source count");
         assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "ods.user_base.user_id");
-        TestSupport.assertEquals("dwd.final_target.user_name", statement.getColumnLineages().get(1).getTargetColumn().getQualifiedName(), "target user_name");
+        TestSupport.assertEquals(
+            "dwd.final_target.user_name",
+            statement.getColumnLineages().get(1).getTargetColumn().getQualifiedName(),
+            "target user_name"
+        );
         TestSupport.assertEquals(1, statement.getColumnLineages().get(1).getSourceColumns().size(), "target user_name source count");
         assertContainsColumn(statement.getColumnLineages().get(1).getSourceColumns(), "ods.user_base.user_name");
     }
@@ -365,8 +397,16 @@ public class HiveColumnLineageTest {
 
         List<ColumnLineage> columns = analyzer.analyzeScript(request).getStatements().get(0).getColumnLineages();
 
-        TestSupport.assertEquals("ods.user_base.user_id", columns.get(0).getSourceColumns().get(0).getQualifiedName(), "metadata user_id source column");
-        TestSupport.assertEquals("ods.user_dept.dept_name", columns.get(1).getSourceColumns().get(0).getQualifiedName(), "metadata dept_name source column");
+        TestSupport.assertEquals(
+            "ods.user_base.user_id",
+            columns.get(0).getSourceColumns().get(0).getQualifiedName(),
+            "metadata user_id source column"
+        );
+        TestSupport.assertEquals(
+            "ods.user_dept.dept_name",
+            columns.get(1).getSourceColumns().get(0).getQualifiedName(),
+            "metadata dept_name source column"
+        );
         TestSupport.assertEquals(2, metadataProvider.getLoadCount(), "source metadata load count");
     }
 
@@ -461,9 +501,21 @@ public class HiveColumnLineageTest {
         assertContainsSource(statement, "ods.user_base");
         assertContainsSource(statement, "ods.user_dept");
         assertNotContainsSource(statement, "t");
-        TestSupport.assertEquals("dwd.user_profile.user_id", statement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "cte first target");
-        TestSupport.assertEquals("ods.user_base.user_id", statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(), "cte first source");
-        TestSupport.assertEquals("ods.user_dept.dept_name", statement.getColumnLineages().get(1).getSourceColumns().get(0).getQualifiedName(), "cte second source");
+        TestSupport.assertEquals(
+            "dwd.user_profile.user_id",
+            statement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(),
+            "cte first target"
+        );
+        TestSupport.assertEquals(
+            "ods.user_base.user_id",
+            statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(),
+            "cte first source"
+        );
+        TestSupport.assertEquals(
+            "ods.user_dept.dept_name",
+            statement.getColumnLineages().get(1).getSourceColumns().get(0).getQualifiedName(),
+            "cte second source"
+        );
     }
 
     @Test
@@ -609,9 +661,21 @@ public class HiveColumnLineageTest {
 
         List<ColumnLineage> columns = analyzer.analyzeScript(request).getStatements().get(0).getColumnLineages();
 
-        TestSupport.assertEquals("dwd.union_partition_target.id", columns.get(0).getTargetColumn().getQualifiedName(), "union dynamic partition id target");
-        TestSupport.assertEquals("dwd.union_partition_target.name", columns.get(1).getTargetColumn().getQualifiedName(), "union dynamic partition name target");
-        TestSupport.assertEquals("dwd.union_partition_target.dt", columns.get(2).getTargetColumn().getQualifiedName(), "union dynamic partition target");
+        TestSupport.assertEquals(
+            "dwd.union_partition_target.id",
+            columns.get(0).getTargetColumn().getQualifiedName(),
+            "union dynamic partition id target"
+        );
+        TestSupport.assertEquals(
+            "dwd.union_partition_target.name",
+            columns.get(1).getTargetColumn().getQualifiedName(),
+            "union dynamic partition name target"
+        );
+        TestSupport.assertEquals(
+            "dwd.union_partition_target.dt",
+            columns.get(2).getTargetColumn().getQualifiedName(),
+            "union dynamic partition target"
+        );
         assertContainsColumn(columns.get(2).getSourceColumns(), "ods.union_source_a.dt");
         assertContainsColumn(columns.get(2).getSourceColumns(), "ods.union_source_b.dt");
         TestSupport.assertEquals(LineageType.DERIVED, columns.get(2).getLineageType(), "union dynamic partition type");
@@ -806,7 +870,11 @@ public class HiveColumnLineageTest {
         StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
 
         assertContainsSource(statement, "ods.user_base");
-        TestSupport.assertEquals("ods.user_base.user_id", statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(), "subquery source column");
+        TestSupport.assertEquals(
+            "ods.user_base.user_id",
+            statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(),
+            "subquery source column"
+        );
     }
 
     @Test
@@ -845,113 +913,10 @@ public class HiveColumnLineageTest {
         ColumnLineage vrfResult = statement.getColumnLineages().get(0);
 
         assertContainsColumn(vrfResult.getSourceColumns(), "ods.inner_vrf.vrf_rst_cd");
-        TestSupport.assertTrue(!containsColumn(vrfResult.getSourceColumns(), "ods.outer_conflict.vrf_rst_cd"), "outer alias t2 should not leak into inline subquery");
-    }
-
-    @Test
-    public void subqueryAliasDerivedColumnKeepsProjectionExpression() {
-        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
-        MapMetadataProvider metadataProvider = new MapMetadataProvider()
-            .addTable("ods.order_detail", "user_id", "order_id", "amount")
-            .addTable("dwd.inline_subquery_target", "user_id", "order_cnt");
-
-        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
-            .workflowId("wf_001")
-            .taskId("task_subquery_projection")
-            .taskVersion("V1")
-            .defaultDatabase("default")
-            .metadataProvider(metadataProvider)
-            .metadataCache(new HiveMetadataCache())
-            .rawScript(
-                "insert overwrite table dwd.inline_subquery_target(user_id, order_cnt) "
-                    + "select x.user_id, x.order_cnt "
-                    + "from (select user_id, count(*) as order_cnt from ods.order_detail group by user_id) x;"
-            )
-            .options(LineageAnalyzeOptions.builder()
-                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
-                .build())
-            .build();
-
-        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
-        ColumnLineage orderCount = statement.getColumnLineages().get(1);
-
-        TestSupport.assertEquals("dwd.inline_subquery_target.order_cnt", orderCount.getTargetColumn().getQualifiedName(), "subquery derived target");
-        TestSupport.assertTrue(orderCount.getSourceColumns().isEmpty(), "count star should not invent source column");
-        TestSupport.assertEquals("count(*)", orderCount.getExpression(), "subquery derived expression");
-        TestSupport.assertEquals(LineageType.DERIVED, orderCount.getLineageType(), "subquery derived type");
-    }
-
-    @Test
-    public void createTableAsWithSelectProducesColumnLineage() {
-        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
-        MapMetadataProvider metadataProvider = new MapMetadataProvider()
-            .addTable("ods.order_detail", "user_id", "order_id", "amount", "pay_time", "pay_status", "dt")
-            .addTable("dwd.user_order_summary", "user_id", "total_amount", "order_cnt", "last_pay_time");
-
-        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
-            .workflowId("wf_001")
-            .taskId("task_cte_ctas")
-            .taskVersion("V1")
-            .defaultDatabase("default")
-            .metadataProvider(metadataProvider)
-            .metadataCache(new HiveMetadataCache())
-            .rawScript(
-                "create table if not exists dwd.user_order_summary stored as parquet as "
-                    + "with paid_orders as ("
-                    + "select user_id, order_id, amount, pay_time from ods.order_detail where pay_status = 'PAID'"
-                    + ") "
-                    + "select user_id, sum(amount) as total_amount, count(*) as order_cnt, max(pay_time) as last_pay_time "
-                    + "from paid_orders group by user_id;"
-            )
-            .options(LineageAnalyzeOptions.builder()
-                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
-                .build())
-            .build();
-
-        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
-
-        TestSupport.assertEquals("CREATE_TABLE_AS_SELECT", statement.getStatementType(), "ctas with cte statement type");
-        assertContainsSource(statement, "ods.order_detail");
-        List<ColumnLineage> columns = statement.getColumnLineages();
-        TestSupport.assertEquals("dwd.user_order_summary.user_id", columns.get(0).getTargetColumn().getQualifiedName(), "ctas cte user_id target");
-        TestSupport.assertEquals("ods.order_detail.user_id", columns.get(0).getSourceColumns().get(0).getQualifiedName(), "ctas cte user_id source");
-        TestSupport.assertEquals(LineageType.DIRECT, columns.get(0).getLineageType(), "ctas cte user_id type");
-        TestSupport.assertEquals("ods.order_detail.amount", columns.get(1).getSourceColumns().get(0).getQualifiedName(), "ctas cte total amount source");
-        TestSupport.assertEquals(LineageType.DERIVED, columns.get(1).getLineageType(), "ctas cte total amount type");
-        TestSupport.assertEquals("sum(amount)", columns.get(1).getExpression(), "ctas cte total amount expression");
-        TestSupport.assertEquals(LineageType.DERIVED, columns.get(2).getLineageType(), "ctas cte count type");
-        TestSupport.assertEquals("count(*)", columns.get(2).getExpression(), "ctas cte count expression");
-        TestSupport.assertEquals("ods.order_detail.pay_time", columns.get(3).getSourceColumns().get(0).getQualifiedName(), "ctas cte last pay time source");
-        TestSupport.assertEquals(LineageType.DERIVED, columns.get(3).getLineageType(), "ctas cte last pay time type");
-    }
-
-    @Test
-    public void lateralViewExplodeKeepsTableAndExplodeArgumentColumnLineage() {
-        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
-
-        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
-            .workflowId("wf_001")
-            .taskId("task_029")
-            .taskVersion("V1")
-            .defaultDatabase("default")
-            .rawScript(
-                "insert overwrite table dwd.user_tags(user_id, tag) "
-                    + "select user_id, tag "
-                    + "from ods.user_base lateral view explode(tags) exploded_tags as tag;"
-            )
-            .options(LineageAnalyzeOptions.builder()
-                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
-                .build())
-            .build();
-
-        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
-
-        TestSupport.assertEquals(0, statement.getParseStatusCode(), "lateral view parse status");
-        assertContainsSource(statement, "ods.user_base");
-        TestSupport.assertEquals("ods.user_base.user_id", statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(), "ordinary lateral source");
-        assertContainsColumn(statement.getColumnLineages().get(1).getSourceColumns(), "ods.user_base.tags");
-        TestSupport.assertEquals(LineageType.DERIVED, statement.getColumnLineages().get(1).getLineageType(), "lateral explode tag type");
-        TestSupport.assertEquals("explode(tags)", statement.getColumnLineages().get(1).getExpression(), "lateral explode tag expression");
+        TestSupport.assertTrue(
+            !containsColumn(vrfResult.getSourceColumns(), "ods.outer_conflict.vrf_rst_cd"),
+            "outer alias t2 should not leak into inline subquery"
+        );
     }
 
     private void assertQualifiedStarLineage(String sql, String messagePrefix) {

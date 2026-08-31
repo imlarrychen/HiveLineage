@@ -43,21 +43,23 @@ final class HiveStatementDatabaseBinder {
                 ? normalizeLogicalName(parsed.getOutputObject().getQualifiedName())
                 : nameResolver.qualifyTable(parsed.getOutputObject().getQualifiedName(), statementDatabase));
         Map<String, String> aliases = bindAliasTargets(parsed.getSourceAliases(), physicalNames);
-        return new ParsedHiveStatement(
-            parsed.getStatementType(),
-            output,
-            inputs,
-            parsed.getTargetColumns(),
-            parsed.getSelectExpressions(),
-            aliases,
-            bindColumnMap(parsed.getColumnAliasSources(), aliases, physicalNames),
-            parsed.getColumnAliasExpressions(),
-            bindNestedColumnMap(parsed.getSetOperationSourceColumnsBySelectIndex(), aliases, physicalNames),
-            parsed.getSetOperationExpressionsBySelectIndex(),
-            parsed.getStaticPartitionValues(),
-            bindJoinConditions(parsed.getJoinConditions(), aliases, physicalNames),
-            parsed.getNormalizedSql()
-        );
+        return ParsedHiveStatement.builder()
+            .statementType(parsed.getStatementType())
+            .outputObject(output)
+            .inputObjects(inputs)
+            .targetColumns(parsed.getTargetColumns())
+            .selectExpressions(parsed.getSelectExpressions())
+            .sourceAliases(aliases)
+            .columnAliasSources(bindColumnMap(parsed.getColumnAliasSources(), aliases, physicalNames))
+            .columnAliasExpressions(parsed.getColumnAliasExpressions())
+            .setOperationSourceColumnsBySelectIndex(
+                bindNestedColumnMap(parsed.getSetOperationSourceColumnsBySelectIndex(), aliases, physicalNames)
+            )
+            .setOperationExpressionsBySelectIndex(parsed.getSetOperationExpressionsBySelectIndex())
+            .staticPartitionValues(parsed.getStaticPartitionValues())
+            .joinConditions(bindJoinConditions(parsed.getJoinConditions(), aliases, physicalNames))
+            .normalizedSql(parsed.getNormalizedSql())
+            .build();
     }
 
     Map<String, String> bindExtractedAliasTargets(
@@ -143,15 +145,15 @@ final class HiveStatementDatabaseBinder {
             for (String column : condition.getDirectJoinColumns()) {
                 columns.add(bindColumn(column, aliases, physicalNames));
             }
-            bound.add(new ParsedJoinCondition(
-                condition.getJoinIndex(),
-                condition.getQueryBlockPath(),
-                condition.getJoinType(),
-                condition.getJoinTypeName(),
-                objects,
-                columns,
-                condition.getJoinExpression()
-            ));
+            bound.add(ParsedJoinCondition.builder()
+                .joinIndex(condition.getJoinIndex())
+                .queryBlockPath(condition.getQueryBlockPath())
+                .joinType(condition.getJoinType())
+                .joinTypeName(condition.getJoinTypeName())
+                .directJoinObjects(objects)
+                .directJoinColumns(columns)
+                .joinExpression(condition.getJoinExpression())
+                .build());
         }
         return bound;
     }

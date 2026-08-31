@@ -16,64 +16,64 @@ import org.junit.Test;
 public class LineageMarkdownRendererTest {
     @Test
     public void renderIncludesTableFieldSummaryForMetadataPreparation() {
-        StatementLineageResult statement = new StatementLineageResult(
-            "wf_001",
-            "task_001",
-            "V1",
-            0,
-            "wf_001_task_001_V1_0",
-            "INSERT_OVERWRITE",
-            "insert overwrite table user_profile select user_id, user_name from ods.user_base",
-            "insert overwrite table user_profile select user_id, user_name from ods.user_base",
-            0,
-            true,
-            new DataObjectRef("user_profile"),
-            Collections.singletonList(new DataObjectRef("ods.user_base")),
-            LineageParseMode.TABLE_AND_COLUMN,
-            "",
-            "",
-            "",
-            Collections.singletonList(new TableLineage(
+        StatementLineageResult statement = StatementLineageResult.builder()
+            .workflowId("wf_001")
+            .taskId("task_001")
+            .taskVersion("V1")
+            .statementIndex(0)
+            .statementId("wf_001_task_001_V1_0")
+            .statementType("INSERT_OVERWRITE")
+            .rawSql("insert overwrite table user_profile select user_id, user_name from ods.user_base")
+            .normalizedSql("insert overwrite table user_profile select user_id, user_name from ods.user_base")
+            .parseStatusCode(0)
+            .formalLineageProduced(true)
+            .outputObject(new DataObjectRef("user_profile"))
+            .inputObjects(Collections.singletonList(new DataObjectRef("ods.user_base")))
+            .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+            .skipReason("")
+            .failureCode("")
+            .failureMessage("")
+            .tableLineages(Collections.singletonList(new TableLineage(
                 new DataObjectRef("user_profile"),
                 Collections.singletonList(new DataObjectRef("ods.user_base")),
                 "INSERT_OVERWRITE",
                 0,
                 false
-            )),
-            Arrays.asList(
-                new ColumnLineage(
-                    new ColumnRef("user_profile.user_id"),
-                    Collections.singletonList(new ColumnRef("ods.user_base.user_id")),
-                    Collections.singletonList(new DataObjectRef("ods.user_base")),
-                    "user_id",
-                    true,
-                    LineageType.DIRECT,
-                    Collections.<String>emptyList(),
-                    false,
-                    0
-                ),
-                new ColumnLineage(
-                    new ColumnRef("user_profile.source_system"),
-                    Collections.<ColumnRef>emptyList(),
-                    Collections.singletonList(new DataObjectRef("ods.user_base")),
-                    "constant('profile')",
-                    true,
-                    LineageType.CONSTANT,
-                    Collections.<String>emptyList(),
-                    false,
-                    0
-                )
-            )
-        );
-        LineageAnalyzeResult result = new LineageAnalyzeResult(
-            "wf_001",
-            "task_001",
-            "V1",
-            Collections.singletonList(statement),
-            1,
-            0,
-            0
-        );
+            )))
+            .columnLineages(Arrays.asList(
+                ColumnLineage.builder()
+                    .targetColumn(new ColumnRef("user_profile.user_id"))
+                    .sourceColumns(Collections.singletonList(new ColumnRef("ods.user_base.user_id")))
+                    .sourceObjects(Collections.singletonList(new DataObjectRef("ods.user_base")))
+                    .expression("user_id")
+                    .expressionExtracted(true)
+                    .lineageType(LineageType.DIRECT)
+                    .functionNames(Collections.<String>emptyList())
+                    .complexExpression(false)
+                    .statementIndex(0)
+                    .build(),
+                ColumnLineage.builder()
+                    .targetColumn(new ColumnRef("user_profile.source_system"))
+                    .sourceColumns(Collections.<ColumnRef>emptyList())
+                    .sourceObjects(Collections.singletonList(new DataObjectRef("ods.user_base")))
+                    .expression("constant('profile')")
+                    .expressionExtracted(true)
+                    .lineageType(LineageType.CONSTANT)
+                    .functionNames(Collections.<String>emptyList())
+                    .complexExpression(false)
+                    .statementIndex(0)
+                    .build()
+            ))
+            .build();
+        LineageAnalyzeResult result = LineageAnalyzeResult.builder()
+            .workflowId("wf_001")
+            .taskId("task_001")
+            .taskVersion("V1")
+            .statements(Collections.singletonList(statement))
+            .totalStatementCount(1)
+            .ignoredStatementCount(0)
+            .failedStatementCount(0)
+            .build();
 
         String markdown = LineageMarkdownRenderer.render(result, "Test Report", "dwd");
 

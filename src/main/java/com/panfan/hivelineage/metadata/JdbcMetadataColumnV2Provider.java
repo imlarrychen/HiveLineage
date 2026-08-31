@@ -93,14 +93,17 @@ public final class JdbcMetadataColumnV2Provider implements HiveMetadataProvider 
             statement.setString(2, tableIdentifier.getTableName());
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
-                    String viewSource = resultSet.getString("view_source");
-                    if (viewSource != null && !viewSource.trim().isEmpty()) {
-                        sources.add(viewSource.trim().toLowerCase());
-                    }
+                    addViewSource(sources, resultSet.getString("view_source"));
                 }
             }
         }
         return new ArrayList<>(sources);
+    }
+
+    private void addViewSource(Set<String> sources, String viewSource) {
+        if (viewSource != null && !viewSource.trim().isEmpty()) {
+            sources.add(viewSource.trim().toLowerCase());
+        }
     }
 
     private String buildViewOriginalSql(List<String> columns, List<String> viewSources) {

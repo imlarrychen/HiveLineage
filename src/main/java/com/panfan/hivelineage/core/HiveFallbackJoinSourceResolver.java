@@ -33,14 +33,26 @@ final class HiveFallbackJoinSourceResolver {
         }
     }
 
+    private static final class ParseContext {
+        private final List<Token> tokens;
+        private final Set<String> temporaryTables;
+        private final List<FallbackJoinSource> output;
+
+        private ParseContext(List<Token> tokens, Set<String> temporaryTables, List<FallbackJoinSource> output) {
+            this.tokens = tokens;
+            this.temporaryTables = temporaryTables;
+            this.output = output;
+        }
+    }
+
     List<FallbackJoinSource> resolve(String sql, Set<String> temporaryTables) {
         if (sql == null) {
             throw new IllegalArgumentException("sql must not be null");
         }
         List<Token> tokens = tokenize(sql);
         List<FallbackJoinSource> sources = new ArrayList<>();
-        parseQueryBlock(tokens, 0, tokens.size(), "q0", Collections.<String>emptySet(),
-            normalizeTemporaryNames(temporaryTables), sources);
+        ParseContext context = new ParseContext(tokens, normalizeTemporaryNames(temporaryTables), sources);
+        parseQueryBlock(context, 0, tokens.size(), "q0", Collections.<String>emptySet());
         Collections.sort(sources, new Comparator<FallbackJoinSource>() {
             @Override
             public int compare(FallbackJoinSource left, FallbackJoinSource right) {
@@ -51,17 +63,15 @@ final class HiveFallbackJoinSourceResolver {
     }
 
     private void parseQueryBlock(
-        List<Token> tokens,
+        ParseContext context,
         int start,
         int end,
         String path,
-        Set<String> inheritedCtes,
-        Set<String> temporaryTables,
-        List<FallbackJoinSource> output
+        Set<String> inheritedCtes
     ) {
+        List<Token> tokens = context.tokens;
         Set<String> visibleCtes = new LinkedHashSet<>(inheritedCtes);
-        int bodyStart = parseCteDeclarations(tokens, start, end, path, visibleCtes,
-            temporaryTables, output);
+        int bodyStart = parseCteDeclarations(context, start, end, path, visibleCtes);
         boolean seenSelect = false;
         boolean inFromClause = false;
         boolean expectRelation = false;
@@ -74,9 +84,8 @@ final class HiveFallbackJoinSourceResolver {
             if (token.type == TokenType.LPAREN) {
                 int close = matchingParen(tokens, index, end);
                 if (expectRelation) {
-                    RelationParse relation = parseRelation(tokens, index, end, currentPath,
-                        visibleCtes, temporaryTables, output);
-                    output.add(relation.source);
+                    RelationParse relation = parseRelation(context, index, end, currentPath, visibleCtes);
+                    context.output.add(relation.source);
                     index = relation.lastTokenIndex;
                     expectRelation = false;
                     continue;
@@ -87,8 +96,7 @@ final class HiveFallbackJoinSourceResolver {
                         currentPath = unionBranchPath(path, unionBranchIndex);
                         nextQueryStartsUnionBranch = false;
                     }
-                    parseQueryBlock(tokens, index + 1, close, childPath(currentPath, index),
-                        visibleCtes, temporaryTables, output);
+                    parseQueryBlock(context, index + 1, close, childPath(currentPath, index), visibleCtes);
                 }
                 index = close;
                 continue;
@@ -138,9 +146,8 @@ final class HiveFallbackJoinSourceResolver {
                 continue;
             }
             if (expectRelation) {
-                RelationParse relation = parseRelation(tokens, index, end, currentPath,
-                    visibleCtes, temporaryTables, output);
-                output.add(relation.source);
+                RelationParse relation = parseRelation(context, index, end, currentPath, visibleCtes);
+                context.output.add(relation.source);
                 index = relation.lastTokenIndex;
                 expectRelation = false;
             }
@@ -151,14 +158,13 @@ final class HiveFallbackJoinSourceResolver {
     }
 
     private int parseCteDeclarations(
-        List<Token> tokens,
+        ParseContext context,
         int start,
         int end,
         String path,
-        Set<String> visibleCtes,
-        Set<String> temporaryTables,
-        List<FallbackJoinSource> output
+        Set<String> visibleCtes
     ) {
+        List<Token> tokens = context.tokens;
         if (start >= end || !isKeyword(tokens.get(start), "with")) {
             return start;
         }
@@ -184,8 +190,7 @@ final class HiveFallbackJoinSourceResolver {
             if (!containsQuery(tokens, open + 1, close)) {
                 throw new IllegalArgumentException("CTE body must contain a query");
             }
-            parseQueryBlock(tokens, open + 1, close, childPath(path, open), visibleCtes,
-                temporaryTables, output);
+            parseQueryBlock(context, open + 1, close, childPath(path, open), visibleCtes);
             visibleCtes.add(cteName);
             index = close + 1;
             if (index >= end || tokens.get(index).type != TokenType.COMMA) {
@@ -222,22 +227,20 @@ final class HiveFallbackJoinSourceResolver {
     }
 
     private RelationParse parseRelation(
-        List<Token> tokens,
+        ParseContext context,
         int index,
         int end,
         String path,
-        Set<String> visibleCtes,
-        Set<String> temporaryTables,
-        List<FallbackJoinSource> output
+        Set<String> visibleCtes
     ) {
+        List<Token> tokens = context.tokens;
         Token first = tokens.get(index);
         if (first.type == TokenType.LPAREN) {
             int close = matchingParen(tokens, index, end);
             if (!containsQuery(tokens, index + 1, close)) {
                 throw new IllegalArgumentException("parenthesized relation must contain a query");
             }
-            parseQueryBlock(tokens, index + 1, close, childPath(path, index), visibleCtes,
-                temporaryTables, output);
+            parseQueryBlock(context, index + 1, close, childPath(path, index), visibleCtes);
             int aliasIndex = close + 1;
             if (aliasIndex < end && isKeyword(tokens.get(aliasIndex), "as")) {
                 aliasIndex++;
@@ -268,8 +271,7 @@ final class HiveFallbackJoinSourceResolver {
             }
         }
 
-        FallbackJoinSource.Kind kind = classifyRelation(name, qualified, visibleCtes,
-            temporaryTables);
+        FallbackJoinSource.Kind kind = classifyRelation(name, qualified, visibleCtes, context.temporaryTables);
         return new RelationParse(new FallbackJoinSource(name, path, first.offset, kind),
             lastIndex);
     }

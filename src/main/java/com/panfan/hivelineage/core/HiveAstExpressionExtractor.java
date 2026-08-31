@@ -42,18 +42,9 @@ final class HiveAstExpressionExtractor {
         }
         String text = expression.getText();
         if (expression.getType() == HiveParser.TOK_ALLCOLREF) {
-            if (expression.getChildCount() == 1) {
-                ASTNode owner = (ASTNode) expression.getChild(0);
-                if (owner.getType() == HiveParser.TOK_TABNAME && owner.getChildCount() > 0) {
-                    StringBuilder qualifiedOwner = new StringBuilder();
-                    for (int i = 0; i < owner.getChildCount(); i++) {
-                        if (qualifiedOwner.length() > 0) {
-                            qualifiedOwner.append('.');
-                        }
-                        qualifiedOwner.append(stripIdentifier(((ASTNode) owner.getChild(i)).getText()));
-                    }
-                    return qualifiedOwner.append(".*").toString();
-                }
+            String qualifiedStar = qualifiedStarText(expression);
+            if (qualifiedStar != null) {
+                return qualifiedStar;
             }
             return "*";
         }
@@ -107,6 +98,32 @@ final class HiveAstExpressionExtractor {
             parts.add(unparse((ASTNode) expression.getChild(i)));
         }
         return text + "(" + joinWithComma(parts) + ")";
+    }
+
+    private String qualifiedStarText(ASTNode expression) {
+        if (expression.getChildCount() != 1) {
+            return null;
+        }
+        ASTNode owner = (ASTNode) expression.getChild(0);
+        if (owner.getType() != HiveParser.TOK_TABNAME || owner.getChildCount() == 0) {
+            return null;
+        }
+        return tableNameText(owner) + ".*";
+    }
+
+    private String tableNameText(ASTNode tableNameNode) {
+        StringBuilder qualifiedOwner = new StringBuilder();
+        for (int i = 0; i < tableNameNode.getChildCount(); i++) {
+            appendQualifiedPart(qualifiedOwner, ((ASTNode) tableNameNode.getChild(i)).getText());
+        }
+        return qualifiedOwner.toString();
+    }
+
+    private void appendQualifiedPart(StringBuilder builder, String text) {
+        if (builder.length() > 0) {
+            builder.append('.');
+        }
+        builder.append(stripIdentifier(text));
     }
 
     String stripIdentifier(String text) {

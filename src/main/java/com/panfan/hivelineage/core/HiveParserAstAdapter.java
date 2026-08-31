@@ -38,21 +38,25 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
             if (targetColumns.isEmpty() && statementType == StatementType.INSERT_SELECT) {
                 targetColumns = resolveInsertTargetColumns(normalizedSql);
             }
-            return new ParsedHiveStatement(
-                statementType,
-                resolveOutputObject(root, mainInsert, statementType),
-                projectionExtractor.resolveInputObjects(root, cteAliases),
-                targetColumns,
-                selectExpressions,
-                projectionExtractor.resolveSourceAliases(root, cteAliases),
-                projectionExtractor.resolveColumnAliasSources(root, cteAliases),
-                projectionExtractor.resolveColumnAliasExpressions(root, cteAliases),
-                projectionExtractor.resolveSetOperationSourceColumns(mainSetOperation, cteAliases),
-                projectionExtractor.resolveSetOperationExpressions(mainSetOperation, cteAliases),
-                projectionExtractor.resolveStaticPartitionValues(mainInsert),
-                joinExtractor.extract(root, cteAliases),
-                normalizedSql
-            );
+            return ParsedHiveStatement.builder()
+                .statementType(statementType)
+                .outputObject(resolveOutputObject(root, mainInsert, statementType))
+                .inputObjects(projectionExtractor.resolveInputObjects(root, cteAliases))
+                .targetColumns(targetColumns)
+                .selectExpressions(selectExpressions)
+                .sourceAliases(projectionExtractor.resolveSourceAliases(root, cteAliases))
+                .columnAliasSources(projectionExtractor.resolveColumnAliasSources(root, cteAliases))
+                .columnAliasExpressions(projectionExtractor.resolveColumnAliasExpressions(root, cteAliases))
+                .setOperationSourceColumnsBySelectIndex(
+                    projectionExtractor.resolveSetOperationSourceColumns(mainSetOperation, cteAliases)
+                )
+                .setOperationExpressionsBySelectIndex(
+                    projectionExtractor.resolveSetOperationExpressions(mainSetOperation, cteAliases)
+                )
+                .staticPartitionValues(projectionExtractor.resolveStaticPartitionValues(mainInsert))
+                .joinConditions(joinExtractor.extract(root, cteAliases))
+                .normalizedSql(normalizedSql)
+                .build();
         } catch (ParseException ex) {
             throw new IllegalArgumentException("Hive SQL parse failed", ex);
         }

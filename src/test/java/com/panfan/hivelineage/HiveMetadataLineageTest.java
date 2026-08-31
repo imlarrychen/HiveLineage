@@ -45,8 +45,16 @@ public class HiveMetadataLineageTest {
 
         TestSupport.assertEquals(2, result.getStatements().size(), "statement count");
         TestSupport.assertEquals(1, metadataProvider.getLoadCount(), "metadata load count");
-        TestSupport.assertEquals("default.test_a.a1", result.getStatements().get(0).getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "first target");
-        TestSupport.assertEquals("default.test_a.a1", result.getStatements().get(1).getColumnLineages().get(0).getTargetColumn().getQualifiedName(), "second target");
+        TestSupport.assertEquals(
+            "default.test_a.a1",
+            result.getStatements().get(0).getColumnLineages().get(0).getTargetColumn().getQualifiedName(),
+            "first target"
+        );
+        TestSupport.assertEquals(
+            "default.test_a.a1",
+            result.getStatements().get(1).getColumnLineages().get(0).getTargetColumn().getQualifiedName(),
+            "second target"
+        );
     }
 
     @Test
@@ -97,9 +105,17 @@ public class HiveMetadataLineageTest {
         );
         HiveMetadataCache positiveTtlCache = new HiveMetadataCache(1L);
 
-        TestSupport.assertEquals("old_col", positiveTtlCache.getTableMetadata(tableIdentifier, changedProvider).getColumns().get(0), "initial positive metadata");
+        TestSupport.assertEquals(
+            "old_col",
+            positiveTtlCache.getTableMetadata(tableIdentifier, changedProvider).getColumns().get(0),
+            "initial positive metadata"
+        );
         Thread.sleep(5L);
-        TestSupport.assertEquals("new_col", positiveTtlCache.getTableMetadata(tableIdentifier, changedProvider).getColumns().get(0), "positive ttl reloaded metadata");
+        TestSupport.assertEquals(
+            "new_col",
+            positiveTtlCache.getTableMetadata(tableIdentifier, changedProvider).getColumns().get(0),
+            "positive ttl reloaded metadata"
+        );
         TestSupport.assertEquals(2, changedProvider.getLoadCount(), "positive ttl reload count");
     }
 
@@ -172,7 +188,11 @@ public class HiveMetadataLineageTest {
 
         TestSupport.assertEquals(0, statement.getParseStatusCode(), "missing metadata parse status");
         TestSupport.assertEquals(1, statement.getTableLineages().size(), "missing metadata table lineage count");
-        TestSupport.assertEquals("dwd.metadata_missing_target", statement.getTableLineages().get(0).getTargetObject().getQualifiedName(), "missing metadata target");
+        TestSupport.assertEquals(
+            "dwd.metadata_missing_target",
+            statement.getTableLineages().get(0).getTargetObject().getQualifiedName(),
+            "missing metadata target"
+        );
         assertContainsSource(statement, "ods.user_base");
         assertContainsWarning(statement.getWarnings(), WarningCode.METADATA_NOT_FOUND);
         assertContainsWarning(result.getWarnings(), WarningCode.METADATA_NOT_FOUND);
