@@ -167,23 +167,10 @@ final class HiveProjectionLineageResolver {
                 continue;
             }
             if (ch == '(') {
-                if (depth == 0) {
-                    int closeIndex = HiveSqlTextUtils.findMatchingParen(sql, position);
-                    if (closeIndex > position) {
-                        String body = sql.substring(position + 1, closeIndex).trim();
-                        if (isQueryBody(body)) {
-                            Map<String, Map<String, ColumnLineageProjection>> combined = combinedProjectionTables(existingProjections, projections);
-                            Map<String, Map<String, ColumnLineageProjection>> nested = extractInlineProjectionTables(body, combined);
-                            projections.putAll(nested);
-                            combined = combinedProjectionTables(existingProjections, projections);
-                            String alias = readAliasAfter(sql, closeIndex + 1);
-                            if (alias != null) {
-                                projections.put(alias, extractProjectionTable(body, combined));
-                            }
-                        }
-                        position = closeIndex + 1;
-                        continue;
-                    }
+                int nextPosition = consumeInlineProjectionTable(sql, position, depth, existingProjections, projections);
+                if (nextPosition > position) {
+                    position = nextPosition;
+                    continue;
                 }
                 depth++;
                 position++;
@@ -195,6 +182,42 @@ final class HiveProjectionLineageResolver {
             position++;
         }
         return projections;
+    }
+    private int consumeInlineProjectionTable(
+        String sql,
+        int openIndex,
+        int depth,
+        Map<String, Map<String, ColumnLineageProjection>> existingProjections,
+        Map<String, Map<String, ColumnLineageProjection>> projections
+    ) {
+        if (depth != 0) {
+            return -1;
+        }
+        int closeIndex = HiveSqlTextUtils.findMatchingParen(sql, openIndex);
+        if (closeIndex <= openIndex) {
+            return -1;
+        }
+        String body = sql.substring(openIndex + 1, closeIndex).trim();
+        if (isQueryBody(body)) {
+            addInlineProjectionTable(sql, closeIndex, body, existingProjections, projections);
+        }
+        return closeIndex + 1;
+    }
+    private void addInlineProjectionTable(
+        String sql,
+        int closeIndex,
+        String body,
+        Map<String, Map<String, ColumnLineageProjection>> existingProjections,
+        Map<String, Map<String, ColumnLineageProjection>> projections
+    ) {
+        Map<String, Map<String, ColumnLineageProjection>> combined = combinedProjectionTables(existingProjections, projections);
+        Map<String, Map<String, ColumnLineageProjection>> nested = extractInlineProjectionTables(body, combined);
+        projections.putAll(nested);
+        combined = combinedProjectionTables(existingProjections, projections);
+        String alias = readAliasAfter(sql, closeIndex + 1);
+        if (alias != null) {
+            projections.put(alias, extractProjectionTable(body, combined));
+        }
     }
     Map<String, Map<String, ColumnLineageProjection>> combinedProjectionTables(
         Map<String, Map<String, ColumnLineageProjection>> first,
@@ -403,16 +426,10 @@ final class HiveProjectionLineageResolver {
                 continue;
             }
             if (ch == '(') {
-                if (depth == 0) {
-                    int closeIndex = HiveSqlTextUtils.findMatchingParen(sql, position);
-                    if (closeIndex > position) {
-                        String alias = readAliasAfter(sql, closeIndex + 1);
-                        if (alias != null) {
-                            aliases.put(alias, alias);
-                        }
-                        position = closeIndex + 1;
-                        continue;
-                    }
+                int nextPosition = consumeProjectionSourceAlias(sql, position, depth, aliases);
+                if (nextPosition > position) {
+                    position = nextPosition;
+                    continue;
                 }
                 depth++;
                 position++;
@@ -424,6 +441,25 @@ final class HiveProjectionLineageResolver {
             position++;
         }
         return aliases;
+    }
+    private int consumeProjectionSourceAlias(
+        String sql,
+        int openIndex,
+        int depth,
+        Map<String, String> aliases
+    ) {
+        if (depth != 0) {
+            return -1;
+        }
+        int closeIndex = HiveSqlTextUtils.findMatchingParen(sql, openIndex);
+        if (closeIndex <= openIndex) {
+            return -1;
+        }
+        String alias = readAliasAfter(sql, closeIndex + 1);
+        if (alias != null) {
+            aliases.put(alias, alias);
+        }
+        return closeIndex + 1;
     }
     SetOperationParts splitTopLevelSetOperation(String sql) {
         List<String> branches = new ArrayList<>();
@@ -640,7 +676,8 @@ final class HiveProjectionLineageResolver {
         QualifiedOwnerResolver ownerResolver
     ) {
         Set<String> columns = new LinkedHashSet<>();
-        Matcher matcher = IDENTIFIER.matcher(HiveSqlTextUtils.removeStringLiterals(expression));
+        addScalarSubquerySourceColumns(columns, expression);
+        Matcher matcher = IDENTIFIER.matcher(HiveSqlTextUtils.removeStringLiterals(maskScalarSubqueries(expression)));
         while (matcher.find()) {
             QualifiedColumnReference reference = QualifiedColumnReference.parse(matcher.group(1));
             if (reference == null) {
@@ -678,6 +715,77 @@ final class HiveProjectionLineageResolver {
         }
         return refs;
     }
+
+    boolean isScalarSubqueryExpression(String expression) {
+        if (expression == null) {
+            return false;
+        }
+        String trimmed = expression.trim().toLowerCase(Locale.ROOT);
+        return trimmed.startsWith("(select") || trimmed.startsWith("(with");
+    }
+
+    private void addScalarSubquerySourceColumns(Set<String> columns, String expression) {
+        for (String subquery : scalarSubqueries(expression)) {
+            Map<String, ColumnLineageProjection> projections = extractProjectionTable(
+                subquery,
+                Collections.<String, Map<String, ColumnLineageProjection>>emptyMap()
+            );
+            for (ColumnLineageProjection projection : projections.values()) {
+                for (ColumnRef sourceColumn : projection.getSourceColumns()) {
+                    columns.add(sourceColumn.getQualifiedName());
+                }
+            }
+        }
+    }
+
+    private String maskScalarSubqueries(String expression) {
+        if (expression == null || expression.isEmpty()) {
+            return "";
+        }
+        StringBuilder masked = new StringBuilder(expression);
+        for (Range range : scalarSubqueryRanges(expression)) {
+            for (int i = range.start; i < range.end; i++) {
+                masked.setCharAt(i, ' ');
+            }
+        }
+        return masked.toString();
+    }
+
+    private List<String> scalarSubqueries(String expression) {
+        List<String> subqueries = new ArrayList<>();
+        for (Range range : scalarSubqueryRanges(expression)) {
+            subqueries.add(expression.substring(range.start + 1, range.end - 1).trim());
+        }
+        return subqueries;
+    }
+
+    private List<Range> scalarSubqueryRanges(String expression) {
+        List<Range> ranges = new ArrayList<>();
+        if (expression == null) {
+            return ranges;
+        }
+        int position = 0;
+        while (position < expression.length()) {
+            int openIndex = expression.indexOf('(', position);
+            if (openIndex < 0) {
+                break;
+            }
+            int bodyStart = HiveSqlTextUtils.skipWhitespace(expression, openIndex + 1);
+            if (!HiveSqlTextUtils.matchesKeywordAt(expression, bodyStart, "select")
+                && !HiveSqlTextUtils.matchesKeywordAt(expression, bodyStart, "with")) {
+                position = openIndex + 1;
+                continue;
+            }
+            int closeIndex = HiveSqlTextUtils.findMatchingParen(expression, openIndex);
+            if (closeIndex < 0) {
+                break;
+            }
+            ranges.add(new Range(openIndex, closeIndex + 1));
+            position = closeIndex + 1;
+        }
+        return ranges;
+    }
+
     void addMappedColumn(Set<String> columns, String mappedSource, String defaultSourceTable, Map<String, String> sourceAliases) {
         if (mappedSource.contains(".")) {
             int dotIndex = mappedSource.lastIndexOf('.');
@@ -711,7 +819,7 @@ final class HiveProjectionLineageResolver {
         if (isLiteralExpression(expression == null ? "" : expression.trim())) {
             return false;
         }
-        String expressionWithoutLiterals = HiveSqlTextUtils.removeStringLiterals(expression);
+        String expressionWithoutLiterals = HiveSqlTextUtils.removeStringLiterals(maskScalarSubqueries(expression));
         if (DOTTED_IDENTIFIER.matcher(expressionWithoutLiterals).find()) {
             return true;
         }
@@ -848,6 +956,16 @@ final class HiveProjectionLineageResolver {
 
         private String getRootSql() {
             return rootSql;
+        }
+    }
+
+    private static final class Range {
+        private final int start;
+        private final int end;
+
+        private Range(int start, int end) {
+            this.start = start;
+            this.end = end;
         }
     }
 }

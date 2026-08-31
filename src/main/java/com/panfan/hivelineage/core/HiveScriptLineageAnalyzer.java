@@ -192,15 +192,15 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             results.add(result);
         }
 
-        return new LineageAnalyzeResult(
-            request.getWorkflowId(),
-            request.getTaskId(),
-            request.getTaskVersion(),
-            results,
-            statements.size(),
-            ignored,
-            failed
-        );
+        return LineageAnalyzeResult.builder()
+            .workflowId(request.getWorkflowId())
+            .taskId(request.getTaskId())
+            .taskVersion(request.getTaskVersion())
+            .statements(results)
+            .totalStatementCount(statements.size())
+            .ignoredStatementCount(ignored)
+            .failedStatementCount(failed)
+            .build();
     }
 
     private StatementLineageResult analyzeStatement(StatementAnalysisContext context) {
@@ -407,15 +407,16 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         );
         QualifiedOwnerResolver ownerResolver = new QualifiedOwnerResolver(originalInputObjects, explicitSourceAliases);
         boolean starSelect = targetColumnResolver.isSingleStarSelect(selectItems);
-        boolean positionalSingleDirectSourceStar = isPositionalSingleDirectSourceStar(
-            operation,
-            targetColumns,
-            starSelect,
-            topLevelSetOperation,
-            analysisStatement,
-            originalInputObjects,
-            topLevelSourceAliases
-        ) && targetColumnResolver.hasColumnMetadataWithoutWarning(request, originalInputObjects.get(0));
+        PositionalStarCheck positionalStarCheck = new PositionalStarCheck();
+        positionalStarCheck.operation = operation;
+        positionalStarCheck.targetColumns = targetColumns;
+        positionalStarCheck.starSelect = starSelect;
+        positionalStarCheck.topLevelSetOperation = topLevelSetOperation;
+        positionalStarCheck.analysisStatement = analysisStatement;
+        positionalStarCheck.inputObjects = originalInputObjects;
+        positionalStarCheck.topLevelSourceAliases = topLevelSourceAliases;
+        boolean positionalSingleDirectSourceStar = isPositionalSingleDirectSourceStar(positionalStarCheck)
+            && targetColumnResolver.hasColumnMetadataWithoutWarning(request, originalInputObjects.get(0));
         List<String> expandedSelectItems = topLevelSetOperation
             ? selectItems
             : positionalSingleDirectSourceStar
@@ -431,6 +432,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 originalInputObjects,
                 ownerResolver
             );
+        List<String> textualSelectItems = extractTopLevelSelectItems(analysisStatement);
 
         List<String> inferredTargetColumns = targetColumns;
         if (targetColumns.isEmpty()) {
@@ -515,6 +517,9 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             for (int i = 0; i < expandedSelectItems.size(); i++) {
                 boolean unresolvedSetPosition = setExpansion.isUnresolvedPosition(i);
                 String expression = HiveSqlTextUtils.stripAlias(expandedSelectItems.get(i));
+                if (i < textualSelectItems.size() && projectionResolver.isScalarSubqueryExpression(expression)) {
+                    expression = HiveSqlTextUtils.stripAlias(textualSelectItems.get(i));
+                }
                 QualifiedColumnReference qualifiedReference = QualifiedColumnReference.parse(expression);
                 boolean unresolvedStarExpression = qualifiedReference != null && qualifiedReference.isStar();
                 String sourceExtractionExpression = expression;
@@ -533,10 +538,12 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                         context,
                         expression,
                         originalInputObjects,
-                        sourceAliases,
-                        topLevelProjectionSourceAliases,
-                        statementProjectionTables,
-                        ownerResolver
+                        new HiveLineageExpansionService.DirectProjectionScope(
+                            sourceAliases,
+                            topLevelProjectionSourceAliases,
+                            statementProjectionTables,
+                            ownerResolver
+                        )
                     );
                 if (directProjection != null) {
                     sourceColumns = directProjection.getSourceColumns();
@@ -600,32 +607,32 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 LineageType lineageType = directProjection == null
                     ? projectionResolver.resolveLineageType(lineageExpression, sourceExtractionExpression, sourceColumns)
                     : directProjection.getLineageType();
-                columnLineages.add(new ColumnLineage(
-                    new ColumnRef(targetTable + "." + resolvedTargetColumns.get(i)),
-                    sourceColumns,
-                    inputObjects,
-                    lineageExpression,
-                    true,
-                    lineageType,
-                    lineageType == LineageType.CONSTANT
+                columnLineages.add(ColumnLineage.builder()
+                    .targetColumn(new ColumnRef(targetTable + "." + resolvedTargetColumns.get(i)))
+                    .sourceColumns(sourceColumns)
+                    .sourceObjects(inputObjects)
+                    .expression(lineageExpression)
+                    .expressionExtracted(true)
+                    .lineageType(lineageType)
+                    .functionNames(lineageType == LineageType.CONSTANT
                         ? Collections.<String>emptyList()
-                        : projectionResolver.extractFunctionNames(lineageExpression),
-                    lineageType == LineageType.DERIVED,
-                    index
-                ));
+                        : projectionResolver.extractFunctionNames(lineageExpression))
+                    .complexExpression(lineageType == LineageType.DERIVED)
+                    .statementIndex(index)
+                    .build());
             }
             for (Map.Entry<String, String> partitionValue : resolvedParsedStatement.getStaticPartitionValues().entrySet()) {
-                columnLineages.add(new ColumnLineage(
-                    new ColumnRef(targetTable + "." + partitionValue.getKey()),
-                    Collections.<ColumnRef>emptyList(),
-                    inputObjects,
-                    projectionResolver.normalizeLineageExpression(partitionValue.getValue()),
-                    true,
-                    LineageType.CONSTANT,
-                    Collections.<String>emptyList(),
-                    false,
-                    index
-                ));
+                columnLineages.add(ColumnLineage.builder()
+                    .targetColumn(new ColumnRef(targetTable + "." + partitionValue.getKey()))
+                    .sourceColumns(Collections.<ColumnRef>emptyList())
+                    .sourceObjects(inputObjects)
+                    .expression(projectionResolver.normalizeLineageExpression(partitionValue.getValue()))
+                    .expressionExtracted(true)
+                    .lineageType(LineageType.CONSTANT)
+                    .functionNames(Collections.<String>emptyList())
+                    .complexExpression(false)
+                    .statementIndex(index)
+                    .build());
             }
         }
 
@@ -633,28 +640,29 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             ? joinAnalyzer.buildJoinConditions(context, resolvedParsedStatement)
             : Collections.<JoinCondition>emptyList();
 
-        return new StatementLineageResult(
-            request.getWorkflowId(),
-            request.getTaskId(),
-            request.getTaskVersion(),
-            index,
-            statementId(request, index),
-            operation,
-            rawStatement,
-            normalizedStatement,
-            PARSE_STATUS_SUCCESS,
-            true,
-            targetObject,
-            inputObjects,
-            parseMode,
-            null,
-            null,
-            null,
-            tableLineages,
-            columnLineages,
-            joinConditions,
-            statementWarnings
-        );
+        return statementBuilder(request, index)
+            .statementType(operation)
+            .rawSql(rawStatement)
+            .normalizedSql(normalizedStatement)
+            .parseStatusCode(PARSE_STATUS_SUCCESS)
+            .formalLineageProduced(true)
+            .outputObject(targetObject)
+            .inputObjects(inputObjects)
+            .parseMode(parseMode)
+            .tableLineages(tableLineages)
+            .columnLineages(columnLineages)
+            .joinConditions(joinConditions)
+            .warnings(statementWarnings)
+            .build();
+    }
+
+    private List<String> extractTopLevelSelectItems(String statement) {
+        int selectIndex = HiveSqlTextUtils.topLevelKeywordIndex(statement, "select", 0);
+        int fromIndex = HiveSqlTextUtils.topLevelKeywordIndex(statement, "from", selectIndex < 0 ? 0 : selectIndex + 6);
+        if (selectIndex < 0 || fromIndex < 0 || fromIndex <= selectIndex) {
+            return Collections.emptyList();
+        }
+        return HiveSqlTextUtils.splitSelectItems(statement.substring(selectIndex + 6, fromIndex));
     }
 
     private StatementLineageResult failedResult(
@@ -673,27 +681,20 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     ) {
         LineageAnalyzeRequest request = context.getRequest();
         int index = context.getStatementIndex();
-        return new StatementLineageResult(
-            request.getWorkflowId(),
-            request.getTaskId(),
-            request.getTaskVersion(),
-            index,
-            statementId(request, index),
-            statementType,
-            context.getRawStatement(),
-            context.getNormalizedStatement(),
-            PARSE_STATUS_FAILED,
-            false,
-            null,
-            Collections.emptyList(),
-            request.getOptions().getParseMode(),
-            null,
-            failureCode,
-            failureMessage,
-            Collections.emptyList(),
-            Collections.emptyList(),
-            context.getWarnings()
-        );
+        return statementBuilder(request, index)
+            .statementType(statementType)
+            .rawSql(context.getRawStatement())
+            .normalizedSql(context.getNormalizedStatement())
+            .parseStatusCode(PARSE_STATUS_FAILED)
+            .formalLineageProduced(false)
+            .inputObjects(Collections.<DataObjectRef>emptyList())
+            .parseMode(request.getOptions().getParseMode())
+            .failureCode(failureCode)
+            .failureMessage(failureMessage)
+            .tableLineages(Collections.<TableLineage>emptyList())
+            .columnLineages(Collections.<ColumnLineage>emptyList())
+            .warnings(context.getWarnings())
+            .build();
     }
 
     private boolean hasUnresolvedVariable(List<LineageWarning> warnings) {
@@ -720,26 +721,28 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         }
     }
 
-    private boolean isPositionalSingleDirectSourceStar(
-        String operation,
-        List<String> targetColumns,
-        boolean starSelect,
-        boolean topLevelSetOperation,
-        String analysisStatement,
-        List<DataObjectRef> inputObjects,
-        Map<String, String> topLevelSourceAliases
-    ) {
-        if (!operation.startsWith("INSERT_")
-            || !targetColumns.isEmpty()
-            || !starSelect
-            || topLevelSetOperation
-            || !targetColumnResolver.hasSingleTopLevelDirectSourceRelation(analysisStatement)
-            || inputObjects.size() != 1) {
+    private boolean isPositionalSingleDirectSourceStar(PositionalStarCheck check) {
+        if (!check.operation.startsWith("INSERT_")
+            || !check.targetColumns.isEmpty()
+            || !check.starSelect
+            || check.topLevelSetOperation
+            || !targetColumnResolver.hasSingleTopLevelDirectSourceRelation(check.analysisStatement)
+            || check.inputObjects.size() != 1) {
             return false;
         }
-        Set<String> topLevelSources = new LinkedHashSet<>(topLevelSourceAliases.values());
+        Set<String> topLevelSources = new LinkedHashSet<>(check.topLevelSourceAliases.values());
         return topLevelSources.size() == 1
-            && topLevelSources.iterator().next().equalsIgnoreCase(inputObjects.get(0).getQualifiedName());
+            && topLevelSources.iterator().next().equalsIgnoreCase(check.inputObjects.get(0).getQualifiedName());
+    }
+
+    private static final class PositionalStarCheck {
+        private String operation;
+        private List<String> targetColumns;
+        private boolean starSelect;
+        private boolean topLevelSetOperation;
+        private String analysisStatement;
+        private List<DataObjectRef> inputObjects;
+        private Map<String, String> topLevelSourceAliases;
     }
 
     private List<String> alignTargetColumnsForStaticPartitions(
@@ -759,21 +762,45 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         }
 
         if (!dynamicPartitionColumns.isEmpty()) {
-            int regularColumnCount = Math.max(0, selectItemCount - dynamicPartitionColumns.size());
-            if (nonStaticTargetColumns.size() >= regularColumnCount) {
-                List<String> aligned = new ArrayList<>(nonStaticTargetColumns.subList(0, regularColumnCount));
-                for (String dynamicPartitionColumn : dynamicPartitionColumns) {
-                    if (!containsIgnoreCase(aligned, dynamicPartitionColumn)) {
-                        aligned.add(preferredColumnCase(nonStaticTargetColumns, dynamicPartitionColumn));
-                    }
-                }
-                return aligned.size() == selectItemCount ? aligned : targetColumns;
+            List<String> aligned = alignDynamicPartitionColumns(
+                nonStaticTargetColumns,
+                selectItemCount,
+                dynamicPartitionColumns
+            );
+            if (aligned != null) {
+                return aligned;
             }
         }
 
         return nonStaticTargetColumns.size() >= selectItemCount
             ? new ArrayList<>(nonStaticTargetColumns.subList(0, selectItemCount))
             : targetColumns;
+    }
+
+    private List<String> alignDynamicPartitionColumns(
+        List<String> nonStaticTargetColumns,
+        int selectItemCount,
+        List<String> dynamicPartitionColumns
+    ) {
+        int regularColumnCount = Math.max(0, selectItemCount - dynamicPartitionColumns.size());
+        if (nonStaticTargetColumns.size() < regularColumnCount) {
+            return null;
+        }
+        List<String> aligned = new ArrayList<>(nonStaticTargetColumns.subList(0, regularColumnCount));
+        for (String dynamicPartitionColumn : dynamicPartitionColumns) {
+            addDynamicPartitionColumn(aligned, nonStaticTargetColumns, dynamicPartitionColumn);
+        }
+        return aligned.size() == selectItemCount ? aligned : null;
+    }
+
+    private void addDynamicPartitionColumn(
+        List<String> aligned,
+        List<String> nonStaticTargetColumns,
+        String dynamicPartitionColumn
+    ) {
+        if (!containsIgnoreCase(aligned, dynamicPartitionColumn)) {
+            aligned.add(preferredColumnCase(nonStaticTargetColumns, dynamicPartitionColumn));
+        }
     }
 
     private boolean containsIgnoreCase(List<String> values, String value) {
@@ -819,27 +846,19 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         String statementType,
         String skipReason
     ) {
-        return new StatementLineageResult(
-            request.getWorkflowId(),
-            request.getTaskId(),
-            request.getTaskVersion(),
-            index,
-            statementId(request, index),
-            statementType,
-            rawStatement,
-            normalizedStatement,
-            PARSE_STATUS_IGNORED,
-            false,
-            null,
-            Collections.emptyList(),
-            request.getOptions().getParseMode(),
-            skipReason,
-            null,
-            null,
-            Collections.emptyList(),
-            Collections.emptyList(),
-            Collections.<LineageWarning>emptyList()
-        );
+        return statementBuilder(request, index)
+            .statementType(statementType)
+            .rawSql(rawStatement)
+            .normalizedSql(normalizedStatement)
+            .parseStatusCode(PARSE_STATUS_IGNORED)
+            .formalLineageProduced(false)
+            .inputObjects(Collections.<DataObjectRef>emptyList())
+            .parseMode(request.getOptions().getParseMode())
+            .skipReason(skipReason)
+            .tableLineages(Collections.<TableLineage>emptyList())
+            .columnLineages(Collections.<ColumnLineage>emptyList())
+            .warnings(Collections.<LineageWarning>emptyList())
+            .build();
     }
 
     private StatementLineageResult ignoredResult(
@@ -849,27 +868,28 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     ) {
         LineageAnalyzeRequest request = context.getRequest();
         int index = context.getStatementIndex();
-        return new StatementLineageResult(
-            request.getWorkflowId(),
-            request.getTaskId(),
-            request.getTaskVersion(),
-            index,
-            statementId(request, index),
-            statementType,
-            context.getRawStatement(),
-            context.getNormalizedStatement(),
-            PARSE_STATUS_IGNORED,
-            false,
-            null,
-            Collections.emptyList(),
-            request.getOptions().getParseMode(),
-            skipReason,
-            null,
-            null,
-            Collections.emptyList(),
-            Collections.emptyList(),
-            context.getWarnings()
-        );
+        return statementBuilder(request, index)
+            .statementType(statementType)
+            .rawSql(context.getRawStatement())
+            .normalizedSql(context.getNormalizedStatement())
+            .parseStatusCode(PARSE_STATUS_IGNORED)
+            .formalLineageProduced(false)
+            .inputObjects(Collections.<DataObjectRef>emptyList())
+            .parseMode(request.getOptions().getParseMode())
+            .skipReason(skipReason)
+            .tableLineages(Collections.<TableLineage>emptyList())
+            .columnLineages(Collections.<ColumnLineage>emptyList())
+            .warnings(context.getWarnings())
+            .build();
+    }
+
+    private StatementLineageResult.Builder statementBuilder(LineageAnalyzeRequest request, int index) {
+        return StatementLineageResult.builder()
+            .workflowId(request.getWorkflowId())
+            .taskId(request.getTaskId())
+            .taskVersion(request.getTaskVersion())
+            .statementIndex(index)
+            .statementId(statementId(request, index));
     }
 
     private String statementId(LineageAnalyzeRequest request, int index) {
