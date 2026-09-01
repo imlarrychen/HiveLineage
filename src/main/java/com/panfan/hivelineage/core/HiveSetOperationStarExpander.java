@@ -80,16 +80,32 @@ final class HiveSetOperationStarExpander {
         List<Boundary> boundaries = new ArrayList<>();
         int depth = 0;
         char quote = 0;
-        for (int position = 0; position < sql.length(); position++) {
+        int position = 0;
+        while (position < sql.length()) {
             char ch = sql.charAt(position);
             if (quote != 0) {
-                if (ch == quote) quote = 0;
+                if (ch == quote) {
+                    quote = 0;
+                }
+                position++;
                 continue;
             }
-            if (ch == '\'' || ch == '"' || ch == '`') quote = ch;
-            else if (ch == '(') depth++;
-            else if (ch == ')') depth = Math.max(0, depth - 1);
-            else if (depth == 0) {
+            if (ch == '\'' || ch == '"' || ch == '`') {
+                quote = ch;
+                position++;
+                continue;
+            }
+            if (ch == '(') {
+                depth++;
+                position++;
+                continue;
+            }
+            if (ch == ')') {
+                depth = Math.max(0, depth - 1);
+                position++;
+                continue;
+            }
+            if (depth == 0) {
                 String operator = operatorAt(sql, position);
                 if (operator != null) {
                     int next = HiveSqlTextUtils.skipWhitespace(sql, position + operator.length());
@@ -97,9 +113,11 @@ final class HiveSetOperationStarExpander {
                         next = HiveSqlTextUtils.skipWhitespace(sql, next + 3);
                     }
                     boundaries.add(new Boundary(position, next, operator));
-                    position = next - 1;
+                    position = next;
+                    continue;
                 }
             }
+            position++;
         }
         return boundaries;
     }
@@ -107,7 +125,9 @@ final class HiveSetOperationStarExpander {
     private String operatorAt(String sql, int position) {
         String[] operators = {"union", "intersect", "except"};
         for (String operator : operators) {
-            if (HiveSqlTextUtils.matchesKeywordAt(sql, position, operator)) return operator;
+            if (HiveSqlTextUtils.matchesKeywordAt(sql, position, operator)) {
+                return operator;
+            }
         }
         return null;
     }

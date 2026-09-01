@@ -4,6 +4,8 @@ import com.panfan.hivelineage.metadata.TableIdentifier;
 import java.util.Locale;
 
 final class HivePhysicalNameResolver {
+    private static final String DOT_REGEX = "\\.";
+
     String normalizeDatabase(String database) {
         if (isBlank(database)) {
             return null;
@@ -54,7 +56,7 @@ final class HivePhysicalNameResolver {
     }
 
     private String[] normalizeParts(String identifier) {
-        String[] rawParts = identifier.trim().split("\\.", -1);
+        String[] rawParts = identifier.trim().split(DOT_REGEX, -1);
         String[] normalizedParts = new String[rawParts.length];
         for (int i = 0; i < rawParts.length; i++) {
             normalizedParts[i] = normalizePart(rawParts[i]);

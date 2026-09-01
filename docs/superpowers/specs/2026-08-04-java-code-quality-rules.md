@@ -54,13 +54,16 @@
 
 - Java 源码不得保留未使用的 import。
 - 职责拆分、方法迁移和重命名完成后，应同步清理失效 import。
-- 不使用通配符 import 掩盖依赖关系。
+- 不使用通配符 import 掩盖依赖关系，包含普通 import 与 static import。
+- `JavaImportAndBraceStyleTest` 对 `src/main/java` 与 `src/test/java` 下的通配符 import 做项目级门禁。
 
 ### CQ-09 花括号位置统一
 
 - 类型、方法和控制语句的左花括号放在声明或条件所在行末。
 - 右花括号单独占一行；后接 `else`、`catch`、`finally` 时使用 `} else {` 等标准形式。
 - 即使分支或循环体只有一条语句，也保留花括号以降低后续修改风险。
+- 方法、构造器、控制结构和枚举声明不得把代码块内容写在同一物理行内；左花括号后的可执行内容必须另起一行。
+- `JavaImportAndBraceStyleTest` 对 `src/main/java` 与 `src/test/java` 下的一行代码块体做项目级门禁。
 
 ### CQ-10 一行一条语句
 
@@ -93,6 +96,13 @@
 - 修复记录中的回归案例必须长期保留；后续重构如需迁移或合并测试，应同步更新记录中的定位信息，不得无理由删除保护该 Bug 的断言。
 - 合并前必须重新运行相关回归测试和完整测试，并把测试数量、失败数、错误数及条件跳过项写入修复记录。
 
+### CQ-14 正则表达式常量化
+
+- 生产代码中的正则表达式必须声明为命名常量，例如 `private static final Pattern AS_WITH_SELECT = Pattern.compile("...")`。
+- 直接使用 `Pattern.compile("...")`、`String#matches("...")`、`String#split("...")`、`String#replaceAll("...")` 或 `String#replaceFirst("...")` 传入正则字面量视为违规。
+- 需要复用匹配能力时优先使用 `private static final Pattern`；只作为 `split` 参数传入时可使用语义明确的 `private static final String`。
+- 常量名应表达 SQL 语法或文本结构含义，不使用 `REGEX_1`、`PATTERN_TMP` 等机械命名。
+
 ## 本次报告涉及范围
 
 本次截图共报告 82 项问题，涉及以下 10 个文件：
@@ -118,6 +128,26 @@
 
 补充报告覆盖 CQ-04 和 CQ-11。
 
+2026-08-31 补充扫描报告新增 14 项问题：
+
+- `HiveFallbackJoinSourceResolver.java`：2 处 boolean 表达式复杂度超过 4、2 处方法参数重新赋值、3 处 `for` 循环控制变量在循环体内被修改。
+- `HiveJoinConditionAnalyzer.java`：1 处 boolean 表达式复杂度超过 4。
+- `HiveScriptLineageAnalyzer.java`：1 处代码行宽超过 150 字符、2 处方法参数重新赋值、1 处方法长度超过 80 行、1 处 boolean 表达式复杂度超过 4。
+- `HiveSetOperationStarExpander.java`：1 处 `for` 循环控制变量在循环体内被修改。
+
+本次补充报告覆盖 CQ-02、CQ-04、CQ-05、CQ-06，并补充执行约束：长方法不得仅通过机械拆分成大量同类私有方法规避，应优先提取有职责边界的包级协作类；循环扫描需要跳转游标时，应优先使用 `while` 和语义明确的局部游标变量。
+
+同日补充约束新增 CQ-14：生产代码中的正则表达式统一常量化，并由 `JavaRegexConstantTest` 做项目级门禁。
+
+2026-09-01 补充扫描报告新增 8 项问题：
+
+- `SetOperationExpansionResult.java`：4 处方法体写在同一物理行内，违反 CQ-09。
+- `HiveFallbackJoinSourceResolver.java`：1 处代码块体写在同一物理行内，1 处 boolean 表达式复杂度超过 4。
+- `HiveScriptLineageAnalyzer.java`：1 处无用导入。
+- `HiveSelectLineageStatementAnalyzer.java`：1 处无用导入。
+
+本次补充报告覆盖 CQ-04、CQ-08、CQ-09，并新增 `JavaImportAndBraceStyleTest` 门禁，防止通配符 import 与一行代码块体回归。
+
 ## 修复约束
 
 - 保持 Java 8 兼容，不修改现有公开接口、请求模型和结果模型。
@@ -135,4 +165,5 @@
 - 每个 Bug 修复均存在 `docs/bugfixes/` 修复记录及对应自动化回归测试。
 - 完整 Maven 测试退出码为 0，无失败和错误。
 - 质量检查能够报告具体规则、文件和行号，便于后续定位。
+- 生产代码中的正则表达式均通过命名常量引用，不在方法体或调用参数中直接书写正则字面量。
 - `git diff` 不包含 `release/` 或与本次质量修复无关的变更。

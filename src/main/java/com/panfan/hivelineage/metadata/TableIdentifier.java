@@ -4,6 +4,8 @@ import java.util.Locale;
 import java.util.Objects;
 
 public final class TableIdentifier {
+    private static final String DOT_REGEX = "\\.";
+
     private final String clusterName;
     private final String databaseName;
     private final String tableName;
@@ -19,7 +21,7 @@ public final class TableIdentifier {
     }
 
     public static TableIdentifier parse(String qualifiedName, String defaultCluster, String defaultDatabase) {
-        String[] parts = qualifiedName.split("\\.");
+        String[] parts = qualifiedName.split(DOT_REGEX);
         if (parts.length == 1) {
             return of(defaultCluster, defaultDatabase, parts[0]);
         }

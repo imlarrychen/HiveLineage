@@ -1,13 +1,9 @@
 package com.panfan.hivelineage.core;
 
 import com.panfan.hivelineage.request.LineageAnalyzeRequest;
-import com.panfan.hivelineage.request.LineageParseMode;
 import com.panfan.hivelineage.result.ColumnLineage;
-import com.panfan.hivelineage.result.ColumnRef;
 import com.panfan.hivelineage.result.DataObjectRef;
-import com.panfan.hivelineage.result.JoinCondition;
 import com.panfan.hivelineage.result.LineageAnalyzeResult;
-import com.panfan.hivelineage.result.LineageType;
 import com.panfan.hivelineage.result.LineageWarning;
 import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.result.StatementParseStatus;
@@ -16,7 +12,6 @@ import com.panfan.hivelineage.result.WarningCode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
@@ -33,10 +28,18 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             + "(?:\\s*\\((.*?)\\))?\\s+select\\s+(.+?)\\s+from\\s+([a-zA-Z_][\\w.]*)(?:\\s+.*)?$"
     );
     private static final Pattern CREATE_TABLE_AS_SELECT = Pattern.compile(
-        "(?is)^create\\s+table\\s+(?:if\\s+not\\s+exists\\s+)?([a-zA-Z_][\\w.]*).*?\\bas\\s+select\\s+(.+?)\\s+from\\s+([a-zA-Z_][\\w.]*)(?:\\s+.*)?$"
+        "(?is)^create\\s+table\\s+(?:if\\s+not\\s+exists\\s+)?([a-zA-Z_][\\w.]*)"
+            + ".*?\\bas\\s+select\\s+(.+?)\\s+from\\s+([a-zA-Z_][\\w.]*)(?:\\s+.*)?$"
     );
     private static final Pattern CREATE_TEMPORARY_TABLE_AS_SELECT = Pattern.compile(
         "(?is)^create\\s+temporary\\s+table\\s+([a-zA-Z_][\\w.]*).*?\\bas\\s+select\\s+(.+?)\\s+from\\s+([a-zA-Z_][\\w.]*)(?:\\s+.*)?$"
+    );
+    private static final Pattern AS_WITH_SELECT = Pattern.compile("(?is)\\bas\\s+(?:with\\b.*)?select\\b");
+    private static final Pattern INSERT_OVERWRITE_DIRECTORY = Pattern.compile(
+        "(?is)^insert\\s+overwrite\\s+(local\\s+)?directory\\b.*"
+    );
+    private static final Pattern INSERT_VALUES = Pattern.compile(
+        "(?is)^insert\\s+(overwrite\\s+table|into(?:\\s+table)?)\\s+.*\\s+values\\s*\\(.*"
     );
     private final HiveAstParserAdapter parserAdapter;
     private final HivePhysicalNameResolver nameResolver;
@@ -47,7 +50,9 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         new HiveFallbackJoinSourceResolver();
     private final HiveProjectionLineageResolver projectionResolver;
     private final HiveLineageExpansionService expansionService;
+    private final HiveColumnLineageBuilder columnLineageBuilder;
     private final HiveJoinConditionAnalyzer joinAnalyzer;
+    private final HiveSelectLineageStatementAnalyzer selectStatementAnalyzer;
 
     public HiveScriptLineageAnalyzer() {
         this(new FallbackHiveAstParserAdapter(new HiveParserAstAdapter(), new HeuristicHiveAstParserAdapter()));
@@ -66,6 +71,11 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             nameResolver,
             databaseBinder
         );
+        this.columnLineageBuilder = new HiveColumnLineageBuilder(
+            targetColumnResolver,
+            projectionResolver,
+            expansionService
+        );
         this.joinAnalyzer = new HiveJoinConditionAnalyzer(
             this.parserAdapter,
             targetColumnResolver,
@@ -73,6 +83,16 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             expansionService,
             databaseBinder
         );
+        HiveSelectLineageStatementAnalyzer.Dependencies selectDependencies =
+            new HiveSelectLineageStatementAnalyzer.Dependencies();
+        selectDependencies.parserAdapter = this.parserAdapter;
+        selectDependencies.databaseBinder = databaseBinder;
+        selectDependencies.targetColumnResolver = targetColumnResolver;
+        selectDependencies.projectionResolver = projectionResolver;
+        selectDependencies.expansionService = expansionService;
+        selectDependencies.columnLineageBuilder = columnLineageBuilder;
+        selectDependencies.joinAnalyzer = joinAnalyzer;
+        this.selectStatementAnalyzer = new HiveSelectLineageStatementAnalyzer(selectDependencies);
     }
 
     @Override
@@ -352,317 +372,14 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         List<String> selectItems,
         ParsedHiveStatement parsedStatement
     ) {
-        LineageAnalyzeRequest request = context.getRequest();
-        String rawStatement = context.getRawStatement();
-        String normalizedStatement = context.getNormalizedStatement();
-        int index = context.getStatementIndex();
-        List<LineageWarning> statementWarnings = context.getWarnings();
-        LineageParseMode parseMode = request.getOptions().getParseMode();
-
-        ParsedHiveStatement resolvedParsedStatement = parsedStatement == null
-            ? parseAndBind(context, normalizedStatement)
-            : parsedStatement;
-        if (resolvedParsedStatement.getOutputObject() != null) {
-            targetTable = resolvedParsedStatement.getOutputObject().getQualifiedName();
-        }
-        DataObjectRef targetObject = new DataObjectRef(targetTable);
-        List<DataObjectRef> originalInputObjects = resolvedParsedStatement.getInputObjects();
-        if (originalInputObjects.isEmpty()) {
-            return failedResult(context, "SQL_PARSE_ERROR", "No input object found");
-        }
-        ColumnResolutionContext columnContext = new ColumnResolutionContext(request, parseMode, statementWarnings, index);
-        HiveSetOperationStarExpander setOperationStarExpander = new HiveSetOperationStarExpander(targetColumnResolver);
-        SetOperationExpansionResult setExpansion = setOperationStarExpander.expand(
-            columnContext,
-            normalizedStatement
-        );
-        boolean topLevelSetOperation = setExpansion.isSetOperation();
-        if (topLevelSetOperation && !setExpansion.hasConsistentBranchWidths()) {
-            return failedResult(context, "COLUMN_COUNT_MISMATCH", "Set operation branch columns do not align");
-        }
-        String analysisStatement = setExpansion.getSql();
-        if (!analysisStatement.equals(normalizedStatement)) {
-            resolvedParsedStatement = parseAndBind(context, analysisStatement);
-            originalInputObjects = resolvedParsedStatement.getInputObjects();
-            selectItems = resolvedParsedStatement.getSelectExpressions();
-        }
-        Map<String, String> sourceAliases = databaseBinder.bindExtractedAliasTargets(
-            targetColumnResolver.extractSourceAliases(analysisStatement),
-            originalInputObjects
-        );
-        sourceAliases.putAll(resolvedParsedStatement.getSourceAliases());
-        Map<String, String> topLevelSourceAliases = databaseBinder.bindExtractedAliasTargets(
-            targetColumnResolver.extractTopLevelSourceAliases(analysisStatement),
-            originalInputObjects
-        );
-        targetColumnResolver.mergeTopLevelSourceAliases(sourceAliases, topLevelSourceAliases);
-        Map<String, String> topLevelProjectionSourceAliases = databaseBinder.bindExtractedAliasTargets(
-            projectionResolver.extractProjectionSourceAliases(analysisStatement),
-            originalInputObjects
-        );
-        sourceAliases.putAll(topLevelProjectionSourceAliases);
-        Map<String, String> explicitSourceAliases = databaseBinder.bindExtractedAliasTargets(
-            targetColumnResolver.extractExplicitSourceAliases(analysisStatement),
-            originalInputObjects
-        );
-        QualifiedOwnerResolver ownerResolver = new QualifiedOwnerResolver(originalInputObjects, explicitSourceAliases);
-        boolean starSelect = targetColumnResolver.isSingleStarSelect(selectItems);
-        PositionalStarCheck positionalStarCheck = new PositionalStarCheck();
-        positionalStarCheck.operation = operation;
-        positionalStarCheck.targetColumns = targetColumns;
-        positionalStarCheck.starSelect = starSelect;
-        positionalStarCheck.topLevelSetOperation = topLevelSetOperation;
-        positionalStarCheck.analysisStatement = analysisStatement;
-        positionalStarCheck.inputObjects = originalInputObjects;
-        positionalStarCheck.topLevelSourceAliases = topLevelSourceAliases;
-        boolean positionalSingleDirectSourceStar = isPositionalSingleDirectSourceStar(positionalStarCheck)
-            && targetColumnResolver.hasColumnMetadataWithoutWarning(request, originalInputObjects.get(0));
-        List<String> expandedSelectItems = topLevelSetOperation
-            ? selectItems
-            : positionalSingleDirectSourceStar
-            ? targetColumnResolver.expandPositionalSingleInputStar(
-                columnContext,
-                selectItems,
-                originalInputObjects.get(0)
-            )
-            : targetColumnResolver.expandStarSelectItems(
-                columnContext,
-                targetTable,
-                selectItems,
-                originalInputObjects,
-                ownerResolver
-            );
-        List<String> textualSelectItems = extractTopLevelSelectItems(analysisStatement);
-
-        List<String> inferredTargetColumns = targetColumns;
-        if (targetColumns.isEmpty()) {
-            inferredTargetColumns = positionalSingleDirectSourceStar
-                ? targetColumnResolver.resolveStarTargetColumns(
-                    request,
-                    targetTable,
-                    expandedSelectItems,
-                    parseMode,
-                    statementWarnings,
-                    index
-                )
-                : starSelect
-                ? new ArrayList<>(expandedSelectItems)
-                : targetColumnResolver.resolveTargetColumns(
-                    request,
-                    targetTable,
-                    expandedSelectItems,
-                    parseMode,
-                    statementWarnings,
-                    index
-                );
-        }
-        List<String> resolvedTargetColumns = alignTargetColumnsForStaticPartitions(
-            inferredTargetColumns,
-            expandedSelectItems.size(),
-            resolvedParsedStatement.getStaticPartitionValues(),
-            extractDynamicPartitionColumns(analysisStatement)
-        );
-        if (resolvedTargetColumns.size() != expandedSelectItems.size()) {
-            return failedResult(context, "COLUMN_COUNT_MISMATCH", "Target columns and select items do not align");
-        }
-
-        Map<String, Map<String, ColumnLineageProjection>> statementProjectionTables =
-            projectionResolver.bindPhysicalProjectionSources(
-                projectionResolver.extractStatementProjectionTables(analysisStatement),
-                sourceAliases,
-                databaseBinder
-            );
-        boolean throughTemporaryTable = expansionService.containsTemporaryTable(
-            originalInputObjects,
-            context.getTemporaryTableSources()
-        );
-        List<DataObjectRef> expandedTemporaryInputs = expansionService.expandTemporaryInputObjects(
-            originalInputObjects,
-            context.getTemporaryTableSources()
-        );
-        List<DataObjectRef> columnReferenceInputObjects = expansionService.filterProjectionInputObjects(
-            expandedTemporaryInputs,
-            statementProjectionTables
-        );
-        List<DataObjectRef> inputObjects = expansionService.expandViewInputObjects(
+        return selectStatementAnalyzer.analyze(
             context,
-            columnReferenceInputObjects,
-            0,
-            new LinkedHashSet<String>()
+            operation,
+            targetTable,
+            targetColumns,
+            selectItems,
+            parsedStatement
         );
-        String defaultColumnSourceTable = columnReferenceInputObjects.get(0).getQualifiedName();
-
-        List<TableLineage> tableLineages = new ArrayList<>();
-        if (parseMode == LineageParseMode.TABLE_ONLY || parseMode == LineageParseMode.TABLE_AND_COLUMN) {
-            tableLineages.add(new TableLineage(
-                targetObject,
-                inputObjects,
-                operation,
-                index,
-                throughTemporaryTable
-            ));
-        }
-
-        List<ColumnLineage> columnLineages = new ArrayList<>();
-        if (parseMode == LineageParseMode.COLUMN_ONLY || parseMode == LineageParseMode.TABLE_AND_COLUMN) {
-            Map<String, String> columnAliasSources = targetColumnResolver.filterColumnAliasSources(
-                resolvedParsedStatement.getColumnAliasSources(),
-                topLevelSourceAliases
-            );
-            Map<String, String> columnOwners = targetColumnResolver.buildColumnOwners(request, inputObjects, parseMode, statementWarnings, index);
-            boolean setOperationQuery = projectionResolver.hasCompleteSetOperationProjection(
-                resolvedParsedStatement,
-                expandedSelectItems.size()
-            );
-            for (int i = 0; i < expandedSelectItems.size(); i++) {
-                boolean unresolvedSetPosition = setExpansion.isUnresolvedPosition(i);
-                String expression = HiveSqlTextUtils.stripAlias(expandedSelectItems.get(i));
-                if (i < textualSelectItems.size() && projectionResolver.isScalarSubqueryExpression(expression)) {
-                    expression = HiveSqlTextUtils.stripAlias(textualSelectItems.get(i));
-                }
-                QualifiedColumnReference qualifiedReference = QualifiedColumnReference.parse(expression);
-                boolean unresolvedStarExpression = qualifiedReference != null && qualifiedReference.isStar();
-                String sourceExtractionExpression = expression;
-                String lineageExpression = setOperationQuery
-                    ? projectionResolver.setOperationExpression(resolvedParsedStatement, analysisStatement, i)
-                    : projectionResolver.normalizeLineageExpression(expression);
-                List<ColumnRef> sourceColumns = setOperationQuery
-                    ? projectionResolver.setOperationSourceColumns(resolvedParsedStatement, i)
-                    : Collections.<ColumnRef>emptyList();
-                if (setOperationQuery && unresolvedSetPosition) {
-                    sourceColumns = Collections.emptyList();
-                }
-                ColumnLineageProjection directProjection = setOperationQuery
-                    ? null
-                    : expansionService.resolveDirectColumnProjection(
-                        context,
-                        expression,
-                        originalInputObjects,
-                        new HiveLineageExpansionService.DirectProjectionScope(
-                            sourceAliases,
-                            topLevelProjectionSourceAliases,
-                            statementProjectionTables,
-                            ownerResolver
-                        )
-                    );
-                if (directProjection != null) {
-                    sourceColumns = directProjection.getSourceColumns();
-                    if (directProjection.getLineageType() == LineageType.DERIVED) {
-                        lineageExpression = directProjection.getExpression();
-                    }
-                } else if (!setOperationQuery) {
-                    String aliasExpression = projectionResolver.directColumnAliasExpression(
-                        expression,
-                        resolvedParsedStatement.getColumnAliasExpressions()
-                    );
-                    if (aliasExpression != null) {
-                        lineageExpression = aliasExpression;
-                        sourceExtractionExpression = aliasExpression;
-                    }
-                }
-                if (sourceColumns.isEmpty() && setOperationQuery && !unresolvedSetPosition) {
-                    sourceColumns = projectionResolver.extractSetOperationSourceColumns(
-                        request,
-                        expression,
-                        columnReferenceInputObjects,
-                        statementWarnings,
-                        index
-                    );
-                }
-                if (sourceColumns.isEmpty()
-                    && directProjection == null
-                    && !unresolvedSetPosition
-                    && !unresolvedStarExpression
-                    && !projectionResolver.isConstantLineageExpression(lineageExpression)) {
-                    sourceColumns = projectionResolver.extractSourceColumns(
-                        sourceExtractionExpression,
-                        defaultColumnSourceTable,
-                        sourceAliases,
-                        columnOwners,
-                        columnAliasSources,
-                        ownerResolver
-                    );
-                }
-                if (directProjection == null) {
-                    sourceColumns = expansionService.expandViewSourceColumns(
-                        context,
-                        sourceColumns,
-                        0,
-                        new LinkedHashSet<String>()
-                    );
-                }
-                boolean unresolvedDirectProjection = directProjection != null && directProjection.isUnresolved();
-                if (unresolvedDirectProjection
-                    || (sourceColumns.isEmpty()
-                    && directProjection == null
-                    && !unresolvedStarExpression
-                    && projectionResolver.mayContainColumnReference(sourceExtractionExpression))) {
-                    targetColumnResolver.addWarning(
-                        statementWarnings,
-                        WarningCode.UNKNOWN_COLUMN_LINEAGE,
-                        "Unable to resolve source columns for expression: " + sourceExtractionExpression,
-                        index
-                    );
-                }
-                LineageType lineageType = directProjection == null
-                    ? projectionResolver.resolveLineageType(lineageExpression, sourceExtractionExpression, sourceColumns)
-                    : directProjection.getLineageType();
-                columnLineages.add(ColumnLineage.builder()
-                    .targetColumn(new ColumnRef(targetTable + "." + resolvedTargetColumns.get(i)))
-                    .sourceColumns(sourceColumns)
-                    .sourceObjects(inputObjects)
-                    .expression(lineageExpression)
-                    .expressionExtracted(true)
-                    .lineageType(lineageType)
-                    .functionNames(lineageType == LineageType.CONSTANT
-                        ? Collections.<String>emptyList()
-                        : projectionResolver.extractFunctionNames(lineageExpression))
-                    .complexExpression(lineageType == LineageType.DERIVED)
-                    .statementIndex(index)
-                    .build());
-            }
-            for (Map.Entry<String, String> partitionValue : resolvedParsedStatement.getStaticPartitionValues().entrySet()) {
-                columnLineages.add(ColumnLineage.builder()
-                    .targetColumn(new ColumnRef(targetTable + "." + partitionValue.getKey()))
-                    .sourceColumns(Collections.<ColumnRef>emptyList())
-                    .sourceObjects(inputObjects)
-                    .expression(projectionResolver.normalizeLineageExpression(partitionValue.getValue()))
-                    .expressionExtracted(true)
-                    .lineageType(LineageType.CONSTANT)
-                    .functionNames(Collections.<String>emptyList())
-                    .complexExpression(false)
-                    .statementIndex(index)
-                    .build());
-            }
-        }
-
-        List<JoinCondition> joinConditions = request.getOptions().isParseJoinConditions()
-            ? joinAnalyzer.buildJoinConditions(context, resolvedParsedStatement)
-            : Collections.<JoinCondition>emptyList();
-
-        return statementBuilder(request, index)
-            .statementType(operation)
-            .rawSql(rawStatement)
-            .normalizedSql(normalizedStatement)
-            .parseStatusCode(PARSE_STATUS_SUCCESS)
-            .formalLineageProduced(true)
-            .outputObject(targetObject)
-            .inputObjects(inputObjects)
-            .parseMode(parseMode)
-            .tableLineages(tableLineages)
-            .columnLineages(columnLineages)
-            .joinConditions(joinConditions)
-            .warnings(statementWarnings)
-            .build();
-    }
-
-    private List<String> extractTopLevelSelectItems(String statement) {
-        int selectIndex = HiveSqlTextUtils.topLevelKeywordIndex(statement, "select", 0);
-        int fromIndex = HiveSqlTextUtils.topLevelKeywordIndex(statement, "from", selectIndex < 0 ? 0 : selectIndex + 6);
-        if (selectIndex < 0 || fromIndex < 0 || fromIndex <= selectIndex) {
-            return Collections.emptyList();
-        }
-        return HiveSqlTextUtils.splitSelectItems(statement.substring(selectIndex + 6, fromIndex));
     }
 
     private StatementLineageResult failedResult(
@@ -719,123 +436,6 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 );
             }
         }
-    }
-
-    private boolean isPositionalSingleDirectSourceStar(PositionalStarCheck check) {
-        if (!check.operation.startsWith("INSERT_")
-            || !check.targetColumns.isEmpty()
-            || !check.starSelect
-            || check.topLevelSetOperation
-            || !targetColumnResolver.hasSingleTopLevelDirectSourceRelation(check.analysisStatement)
-            || check.inputObjects.size() != 1) {
-            return false;
-        }
-        Set<String> topLevelSources = new LinkedHashSet<>(check.topLevelSourceAliases.values());
-        return topLevelSources.size() == 1
-            && topLevelSources.iterator().next().equalsIgnoreCase(check.inputObjects.get(0).getQualifiedName());
-    }
-
-    private static final class PositionalStarCheck {
-        private String operation;
-        private List<String> targetColumns;
-        private boolean starSelect;
-        private boolean topLevelSetOperation;
-        private String analysisStatement;
-        private List<DataObjectRef> inputObjects;
-        private Map<String, String> topLevelSourceAliases;
-    }
-
-    private List<String> alignTargetColumnsForStaticPartitions(
-        List<String> targetColumns,
-        int selectItemCount,
-        Map<String, String> staticPartitionValues,
-        List<String> dynamicPartitionColumns
-    ) {
-        if (staticPartitionValues.isEmpty() && dynamicPartitionColumns.isEmpty()) {
-            return targetColumns;
-        }
-        List<String> nonStaticTargetColumns = new ArrayList<>();
-        for (String targetColumn : targetColumns) {
-            if (!staticPartitionValues.containsKey(targetColumn.toLowerCase(Locale.ROOT))) {
-                nonStaticTargetColumns.add(targetColumn);
-            }
-        }
-
-        if (!dynamicPartitionColumns.isEmpty()) {
-            List<String> aligned = alignDynamicPartitionColumns(
-                nonStaticTargetColumns,
-                selectItemCount,
-                dynamicPartitionColumns
-            );
-            if (aligned != null) {
-                return aligned;
-            }
-        }
-
-        return nonStaticTargetColumns.size() >= selectItemCount
-            ? new ArrayList<>(nonStaticTargetColumns.subList(0, selectItemCount))
-            : targetColumns;
-    }
-
-    private List<String> alignDynamicPartitionColumns(
-        List<String> nonStaticTargetColumns,
-        int selectItemCount,
-        List<String> dynamicPartitionColumns
-    ) {
-        int regularColumnCount = Math.max(0, selectItemCount - dynamicPartitionColumns.size());
-        if (nonStaticTargetColumns.size() < regularColumnCount) {
-            return null;
-        }
-        List<String> aligned = new ArrayList<>(nonStaticTargetColumns.subList(0, regularColumnCount));
-        for (String dynamicPartitionColumn : dynamicPartitionColumns) {
-            addDynamicPartitionColumn(aligned, nonStaticTargetColumns, dynamicPartitionColumn);
-        }
-        return aligned.size() == selectItemCount ? aligned : null;
-    }
-
-    private void addDynamicPartitionColumn(
-        List<String> aligned,
-        List<String> nonStaticTargetColumns,
-        String dynamicPartitionColumn
-    ) {
-        if (!containsIgnoreCase(aligned, dynamicPartitionColumn)) {
-            aligned.add(preferredColumnCase(nonStaticTargetColumns, dynamicPartitionColumn));
-        }
-    }
-
-    private boolean containsIgnoreCase(List<String> values, String value) {
-        for (String candidate : values) {
-            if (candidate.equalsIgnoreCase(value)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private String preferredColumnCase(List<String> candidates, String value) {
-        for (String candidate : candidates) {
-            if (candidate.equalsIgnoreCase(value)) {
-                return candidate;
-            }
-        }
-        return value;
-    }
-
-    private List<String> extractDynamicPartitionColumns(String normalizedStatement) {
-        Matcher matcher = Pattern.compile("(?is)\\bpartition\\s*\\(([^)]*)\\)").matcher(normalizedStatement);
-        if (!matcher.find()) {
-            return Collections.emptyList();
-        }
-        List<String> dynamicColumns = new ArrayList<>();
-        for (String partitionItem : HiveSqlTextUtils.splitSelectItems(matcher.group(1))) {
-            if (!partitionItem.contains("=")) {
-                String column = partitionItem.trim();
-                if (!column.isEmpty()) {
-                    dynamicColumns.add(column);
-                }
-            }
-        }
-        return dynamicColumns;
     }
 
     private StatementLineageResult ignoredResult(
@@ -912,13 +512,13 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         if (lower.startsWith("create temporary macro ")) {
             return "CREATE_TEMPORARY_MACRO";
         }
-        if (lower.startsWith("create table ") && !Pattern.compile("(?is)\\bas\\s+(?:with\\b.*)?select\\b").matcher(lower).find()) {
+        if (lower.startsWith("create table ") && !AS_WITH_SELECT.matcher(lower).find()) {
             return "CREATE_TABLE_DDL";
         }
-        if (lower.matches("(?is)^insert\\s+overwrite\\s+(local\\s+)?directory\\b.*")) {
+        if (INSERT_OVERWRITE_DIRECTORY.matcher(lower).matches()) {
             return "NO_OUTPUT_TABLE";
         }
-        if (lower.matches("(?is)^insert\\s+(overwrite\\s+table|into(?:\\s+table)?)\\s+.*\\s+values\\s*\\(.*")) {
+        if (INSERT_VALUES.matcher(lower).matches()) {
             return "INSERT_VALUES";
         }
         return null;

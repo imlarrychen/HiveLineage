@@ -11,7 +11,9 @@ import com.panfan.hivelineage.result.WarningCode;
 import java.util.List;
 import org.junit.Test;
 
-import static com.panfan.hivelineage.AnalyzerTestSupport.*;
+import static com.panfan.hivelineage.AnalyzerTestSupport.MapMetadataProvider;
+import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsColumn;
+import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsWarning;
 
 public class HiveQualifiedProjectionHardeningTest {
     @Test

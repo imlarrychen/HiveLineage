@@ -27,6 +27,17 @@ final class HiveJoinConditionAnalyzer {
     private static final Pattern QUALIFIED_COLUMN = Pattern.compile(
         "(?<![\\w.])([a-zA-Z_][\\w]*(?:\\.[a-zA-Z_][\\w]*){1,2})(?![\\w.])"
     );
+    private static final Pattern JOIN_ON_CANDIDATE = Pattern.compile("(?is)\\bjoin\\b.+\\bon\\b");
+    private static final Pattern COMMA_JOIN_WHERE_CANDIDATE = Pattern.compile(
+        "(?is)\\bfrom\\b[^;]+,[^;]+\\bwhere\\b"
+    );
+    private static final Pattern LEFT_SEMI_JOIN_PREFIX = Pattern.compile("(?is).*\\bleft\\s+semi\\s+$");
+    private static final Pattern LEFT_ANTI_JOIN_PREFIX = Pattern.compile("(?is).*\\bleft\\s+anti\\s+$");
+    private static final Pattern LEFT_JOIN_PREFIX = Pattern.compile("(?is).*\\bleft\\s+(outer\\s+)?$");
+    private static final Pattern RIGHT_JOIN_PREFIX = Pattern.compile("(?is).*\\bright\\s+(outer\\s+)?$");
+    private static final Pattern FULL_JOIN_PREFIX = Pattern.compile("(?is).*\\bfull\\s+(outer\\s+)?$");
+    private static final Pattern CROSS_JOIN_PREFIX = Pattern.compile("(?is).*\\bcross\\s+$");
+    private static final String DOT_REGEX = "\\.";
     private final HiveAstParserAdapter parserAdapter;
     private final HiveTargetColumnResolver targetColumnResolver;
     private final HiveProjectionLineageResolver projectionResolver;
@@ -180,14 +191,7 @@ final class HiveJoinConditionAnalyzer {
             String owner = HiveSqlTextUtils.tableNameOfColumn(qualifiedName);
             String columnName = HiveSqlTextUtils.columnNameOf(qualifiedName);
             String sourceObject = owner == null ? null : sourceAliases.get(owner.toLowerCase(Locale.ROOT));
-            boolean logical = owner != null && (
-                containsProjectionTable(owner, projectionTables)
-                    || containsProjectionTable(owner, context.getTemporaryTableColumns())
-                    || sourceObject != null && (
-                        containsProjectionTable(sourceObject, projectionTables)
-                            || containsProjectionTable(sourceObject, context.getTemporaryTableColumns())
-                    )
-            );
+            boolean logical = isLogicalJoinColumnOwner(context, owner, sourceObject, projectionTables);
             String resolved = sourceObject != null && sourceObject.contains(".") && !logical
                 ? sourceObject + "." + columnName
                 : qualifiedName;
@@ -283,8 +287,8 @@ final class HiveJoinConditionAnalyzer {
             .build();
     }
     boolean hasJoinConditionCandidate(String statement) {
-        return Pattern.compile("(?is)\\bjoin\\b.+\\bon\\b").matcher(statement).find()
-            || Pattern.compile("(?is)\\bfrom\\b[^;]+,[^;]+\\bwhere\\b").matcher(statement).find();
+        return JOIN_ON_CANDIDATE.matcher(statement).find()
+            || COMMA_JOIN_WHERE_CANDIDATE.matcher(statement).find();
     }
     List<DataObjectRef> joinInputObjects(List<JoinCondition> joinConditions) {
         List<DataObjectRef> inputObjects = new ArrayList<>();
@@ -561,7 +565,9 @@ final class HiveJoinConditionAnalyzer {
         QualifiedOwnerResolver ownerResolver = new QualifiedOwnerResolver(inputObjects, sourceAliases);
         for (ColumnRef directColumn : directColumns) {
             String owner = HiveSqlTextUtils.tableNameOfColumn(directColumn.getQualifiedName());
-            String columnName = owner == null ? directColumn.getQualifiedName() : HiveSqlTextUtils.columnNameOf(directColumn.getQualifiedName());
+            String columnName = owner == null
+                ? directColumn.getQualifiedName()
+                : HiveSqlTextUtils.columnNameOf(directColumn.getQualifiedName());
             if (columnName == null) {
                 continue;
             }
@@ -599,6 +605,33 @@ final class HiveJoinConditionAnalyzer {
             }
         }
         return resolvedColumns;
+    }
+    private boolean isLogicalJoinColumnOwner(
+        StatementAnalysisContext context,
+        String owner,
+        String sourceObject,
+        Map<String, Map<String, ColumnLineageProjection>> projectionTables
+    ) {
+        return owner != null
+            && (isProjectionTable(owner, context, projectionTables)
+            || isResolvedProjectionTable(sourceObject, context, projectionTables));
+    }
+
+    private boolean isResolvedProjectionTable(
+        String sourceObject,
+        StatementAnalysisContext context,
+        Map<String, Map<String, ColumnLineageProjection>> projectionTables
+    ) {
+        return sourceObject != null && isProjectionTable(sourceObject, context, projectionTables);
+    }
+
+    private boolean isProjectionTable(
+        String tableName,
+        StatementAnalysisContext context,
+        Map<String, Map<String, ColumnLineageProjection>> projectionTables
+    ) {
+        return containsProjectionTable(tableName, projectionTables)
+            || containsProjectionTable(tableName, context.getTemporaryTableColumns());
     }
     private String resolveQualifiedJoinOwner(
         StatementAnalysisContext context,
@@ -799,7 +832,7 @@ final class HiveJoinConditionAnalyzer {
         if (object == null || object.getQualifiedName() == null) {
             return false;
         }
-        String[] parts = object.getQualifiedName().split("\\.", -1);
+        String[] parts = object.getQualifiedName().split(DOT_REGEX, -1);
         return parts.length == 2 && !parts[0].isEmpty() && !parts[1].isEmpty();
     }
     CteExtraction extractCtes(String sql) {
@@ -853,22 +886,22 @@ final class HiveJoinConditionAnalyzer {
 
     JoinTypeInfo resolveJoinType(String sql, int joinKeywordIndex) {
         String prefix = sql.substring(Math.max(0, joinKeywordIndex - 32), joinKeywordIndex).toLowerCase(Locale.ROOT);
-        if (prefix.matches("(?is).*\\bleft\\s+semi\\s+$")) {
+        if (LEFT_SEMI_JOIN_PREFIX.matcher(prefix).matches()) {
             return new JoinTypeInfo(5, "LEFT_SEMI_JOIN");
         }
-        if (prefix.matches("(?is).*\\bleft\\s+anti\\s+$")) {
+        if (LEFT_ANTI_JOIN_PREFIX.matcher(prefix).matches()) {
             return new JoinTypeInfo(6, "LEFT_ANTI_JOIN");
         }
-        if (prefix.matches("(?is).*\\bleft\\s+(outer\\s+)?$")) {
+        if (LEFT_JOIN_PREFIX.matcher(prefix).matches()) {
             return new JoinTypeInfo(2, "LEFT_JOIN");
         }
-        if (prefix.matches("(?is).*\\bright\\s+(outer\\s+)?$")) {
+        if (RIGHT_JOIN_PREFIX.matcher(prefix).matches()) {
             return new JoinTypeInfo(3, "RIGHT_JOIN");
         }
-        if (prefix.matches("(?is).*\\bfull\\s+(outer\\s+)?$")) {
+        if (FULL_JOIN_PREFIX.matcher(prefix).matches()) {
             return new JoinTypeInfo(4, "FULL_JOIN");
         }
-        if (prefix.matches("(?is).*\\bcross\\s+$")) {
+        if (CROSS_JOIN_PREFIX.matcher(prefix).matches()) {
             return new JoinTypeInfo(7, "CROSS_JOIN");
         }
         return new JoinTypeInfo(1, "INNER_JOIN");
@@ -957,11 +990,9 @@ final class HiveJoinConditionAnalyzer {
             this.cteBlocks = Collections.unmodifiableList(new ArrayList<>(cteBlocks));
             this.rootSql = rootSql;
         }
-
         private List<CteBlock> getCteBlocks() {
             return cteBlocks;
         }
-
         private String getRootSql() {
             return rootSql;
         }

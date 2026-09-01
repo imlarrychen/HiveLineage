@@ -8,7 +8,11 @@ import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.result.WarningCode;
 import org.junit.Test;
 
-import static com.panfan.hivelineage.AnalyzerTestSupport.*;
+import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsColumn;
+import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsSource;
+import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsWarning;
+import static com.panfan.hivelineage.AnalyzerTestSupport.containsColumn;
+import static com.panfan.hivelineage.AnalyzerTestSupport.containsSource;
 
 public class HiveQualifiedJoinColumnTest {
     @Test

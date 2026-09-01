@@ -1,21 +1,23 @@
 package com.panfan.hivelineage;
 
-import com.panfan.hivelineage.core.*;
-import com.panfan.hivelineage.metadata.*;
-import com.panfan.hivelineage.request.*;
-import com.panfan.hivelineage.result.*;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
+import com.panfan.hivelineage.core.HiveLineageAnalyzer;
+import com.panfan.hivelineage.core.HiveScriptLineageAnalyzer;
+import com.panfan.hivelineage.metadata.HiveMetadataCache;
+import com.panfan.hivelineage.request.LineageAnalyzeOptions;
+import com.panfan.hivelineage.request.LineageAnalyzeRequest;
+import com.panfan.hivelineage.result.JoinCondition;
+import com.panfan.hivelineage.result.LineageAnalyzeResult;
+import com.panfan.hivelineage.result.StatementLineageResult;
+import com.panfan.hivelineage.result.WarningCode;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Test;
 
-import static com.panfan.hivelineage.AnalyzerTestSupport.*;
+import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsColumn;
+import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsSource;
+import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsWarning;
+import static com.panfan.hivelineage.AnalyzerTestSupport.containsColumn;
+import static com.panfan.hivelineage.AnalyzerTestSupport.containsSource;
+import static com.panfan.hivelineage.AnalyzerTestSupport.findJoinCondition;
 
 public class HiveJoinLineageTest {
     @Test

@@ -17,7 +17,8 @@ import java.nio.file.Paths;
 import java.util.List;
 import org.junit.Test;
 
-import static com.panfan.hivelineage.AnalyzerTestSupport.*;
+import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsColumn;
+import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsSource;
 
 public class HiveQualifiedStarDdlScenarioTest {
     private static final String SQL = "INSERT INTO whc.c \n"

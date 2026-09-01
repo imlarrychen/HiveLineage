@@ -1,14 +1,18 @@
 package com.panfan.hivelineage;
 
-import com.panfan.hivelineage.core.*;
-import com.panfan.hivelineage.metadata.*;
-import com.panfan.hivelineage.request.*;
-import com.panfan.hivelineage.result.*;
+import com.panfan.hivelineage.metadata.HiveMetadataProvider;
+import com.panfan.hivelineage.metadata.HiveTableMetadata;
+import com.panfan.hivelineage.metadata.TableIdentifier;
+import com.panfan.hivelineage.result.ColumnRef;
+import com.panfan.hivelineage.result.DataObjectRef;
+import com.panfan.hivelineage.result.JoinCondition;
+import com.panfan.hivelineage.result.LineageWarning;
+import com.panfan.hivelineage.result.StatementLineageResult;
+import com.panfan.hivelineage.result.WarningCode;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

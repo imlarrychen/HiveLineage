@@ -9,7 +9,8 @@ import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.result.WarningCode;
 import org.junit.Test;
 
-import static com.panfan.hivelineage.AnalyzerTestSupport.*;
+import static com.panfan.hivelineage.AnalyzerTestSupport.MapMetadataProvider;
+import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsWarning;
 
 public class HiveScopedViewOwnerResolutionTest {
     @Test

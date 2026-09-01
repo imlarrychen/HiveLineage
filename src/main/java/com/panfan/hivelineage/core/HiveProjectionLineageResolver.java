@@ -26,6 +26,14 @@ final class HiveProjectionLineageResolver {
     private static final Pattern DOTTED_IDENTIFIER = Pattern.compile(
         "(?<![\\w.])[a-zA-Z_][\\w]*(?:\\.[a-zA-Z_][\\w]*)+(?![\\w.])"
     );
+    private static final Pattern UNION_ALL = Pattern.compile("(?i)\\bunion\\s+all\\b");
+    private static final Pattern UNION = Pattern.compile("(?i)\\bunion\\b");
+    private static final Pattern INTERSECT = Pattern.compile("(?i)\\bintersect\\b");
+    private static final Pattern EXCEPT = Pattern.compile("(?i)\\bexcept\\b");
+    private static final Pattern SINGLE_QUOTED_LITERAL = Pattern.compile("'(?:[^']|'')*'");
+    private static final Pattern DOUBLE_QUOTED_LITERAL = Pattern.compile("\"(?:[^\"]|\"\")*\"");
+    private static final Pattern NUMERIC_LITERAL = Pattern.compile("[-+]?\\d+(?:\\.\\d+)?");
+    private static final Pattern FUNCTION_CALL = Pattern.compile("\\b([a-zA-Z_][\\w]*)\\s*\\(");
     private final HiveAstParserAdapter parserAdapter;
     private final HiveTargetColumnResolver targetColumnResolver;
 
@@ -60,16 +68,16 @@ final class HiveProjectionLineageResolver {
     }
     String setOperationFunctionName(String normalizedStatement) {
         String statement = normalizedStatement == null ? "" : normalizedStatement;
-        if (Pattern.compile("(?i)\\bunion\\s+all\\b").matcher(statement).find()) {
+        if (UNION_ALL.matcher(statement).find()) {
             return "union_all";
         }
-        if (Pattern.compile("(?i)\\bunion\\b").matcher(statement).find()) {
+        if (UNION.matcher(statement).find()) {
             return "union_distinct";
         }
-        if (Pattern.compile("(?i)\\bintersect\\b").matcher(statement).find()) {
+        if (INTERSECT.matcher(statement).find()) {
             return "intersect";
         }
-        if (Pattern.compile("(?i)\\bexcept\\b").matcher(statement).find()) {
+        if (EXCEPT.matcher(statement).find()) {
             return "except";
         }
         return "set_operation";
@@ -656,11 +664,11 @@ final class HiveProjectionLineageResolver {
             || isKeywordLiteral(expression);
     }
     private boolean isQuotedLiteral(String expression) {
-        return expression.matches("'(?:[^']|'')*'")
-            || expression.matches("\"(?:[^\"]|\"\")*\"");
+        return SINGLE_QUOTED_LITERAL.matcher(expression).matches()
+            || DOUBLE_QUOTED_LITERAL.matcher(expression).matches();
     }
     private boolean isNumericLiteral(String expression) {
-        return expression.matches("[-+]?\\d+(?:\\.\\d+)?");
+        return NUMERIC_LITERAL.matcher(expression).matches();
     }
     private boolean isKeywordLiteral(String expression) {
         return "true".equalsIgnoreCase(expression)
@@ -799,7 +807,7 @@ final class HiveProjectionLineageResolver {
     }
     List<String> extractFunctionNames(String expression) {
         List<String> names = new ArrayList<>();
-        Matcher matcher = Pattern.compile("\\b([a-zA-Z_][\\w]*)\\s*\\(").matcher(expression);
+        Matcher matcher = FUNCTION_CALL.matcher(expression);
         while (matcher.find()) {
             String name = matcher.group(1);
             if (!isKeyword(name)) {

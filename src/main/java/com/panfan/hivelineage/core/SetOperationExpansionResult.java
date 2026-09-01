@@ -19,11 +19,23 @@ final class SetOperationExpansionResult {
         this.unresolvedPositions = Collections.unmodifiableSet(new LinkedHashSet<>(unresolvedPositions));
     }
 
-    String getSql() { return sql; }
-    boolean isSetOperation() { return operator != null; }
-    String getOperator() { return operator; }
+    String getSql() {
+        return sql;
+    }
+
+    boolean isSetOperation() {
+        return operator != null;
+    }
+
+    String getOperator() {
+        return operator;
+    }
+
     boolean hasConsistentBranchWidths() {
         return branchWidths.isEmpty() || Collections.frequency(branchWidths, branchWidths.get(0)) == branchWidths.size();
     }
-    boolean isUnresolvedPosition(int position) { return unresolvedPositions.contains(position); }
+
+    boolean isUnresolvedPosition(int position) {
+        return unresolvedPositions.contains(position);
+    }
 }

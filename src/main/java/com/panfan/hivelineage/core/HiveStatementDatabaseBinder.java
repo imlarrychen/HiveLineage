@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.Set;
 
 final class HiveStatementDatabaseBinder {
+    private static final String DOT_REGEX = "\\.";
+
     private final HivePhysicalNameResolver nameResolver;
 
     HiveStatementDatabaseBinder(HivePhysicalNameResolver nameResolver) {
@@ -160,7 +162,7 @@ final class HiveStatementDatabaseBinder {
 
     private String bindColumn(String column, Map<String, String> aliases, Map<String, String> physicalNames) {
         String normalized = normalizeLogicalName(column);
-        String[] parts = normalized.split("\\.");
+        String[] parts = normalized.split(DOT_REGEX);
         if (parts.length == 3 || parts.length == 1) {
             return normalized;
         }

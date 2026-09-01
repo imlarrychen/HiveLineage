@@ -9,7 +9,14 @@ import java.util.Locale;
 import java.util.Set;
 
 final class HiveFallbackJoinSourceResolver {
-    private enum TokenType { WORD, QUOTED_IDENTIFIER, DOT, COMMA, LPAREN, RPAREN }
+    private enum TokenType {
+        WORD,
+        QUOTED_IDENTIFIER,
+        DOT,
+        COMMA,
+        LPAREN,
+        RPAREN
+    }
 
     private static final class Token {
         private final TokenType type;
@@ -79,14 +86,15 @@ final class HiveFallbackJoinSourceResolver {
         int unionBranchIndex = 0;
         boolean nextQueryStartsUnionBranch = false;
 
-        for (int index = bodyStart; index < end; index++) {
+        int index = bodyStart;
+        while (index < end) {
             Token token = tokens.get(index);
             if (token.type == TokenType.LPAREN) {
                 int close = matchingParen(tokens, index, end);
                 if (expectRelation) {
                     RelationParse relation = parseRelation(context, index, end, currentPath, visibleCtes);
                     context.output.add(relation.source);
-                    index = relation.lastTokenIndex;
+                    index = relation.lastTokenIndex + 1;
                     expectRelation = false;
                     continue;
                 }
@@ -98,7 +106,7 @@ final class HiveFallbackJoinSourceResolver {
                     }
                     parseQueryBlock(context, index + 1, close, childPath(currentPath, index), visibleCtes);
                 }
-                index = close;
+                index = close + 1;
                 continue;
             }
             if (token.type == TokenType.RPAREN) {
@@ -112,6 +120,7 @@ final class HiveFallbackJoinSourceResolver {
                 inFromClause = false;
                 expectRelation = false;
                 nextQueryStartsUnionBranch = true;
+                index++;
                 continue;
             }
             if (isKeyword(token, "select")) {
@@ -121,36 +130,44 @@ final class HiveFallbackJoinSourceResolver {
                     nextQueryStartsUnionBranch = false;
                 }
                 seenSelect = true;
+                index++;
                 continue;
             }
             if (seenSelect && !inFromClause && isKeyword(token, "from")) {
                 inFromClause = true;
                 expectRelation = true;
+                index++;
                 continue;
             }
             if (inFromClause && isClauseBoundary(token)) {
                 inFromClause = false;
                 expectRelation = false;
+                index++;
                 continue;
             }
             if (inFromClause && isKeyword(token, "join")) {
                 expectRelation = true;
+                index++;
                 continue;
             }
             if (inFromClause && (isKeyword(token, "on") || isKeyword(token, "using"))) {
                 expectRelation = false;
+                index++;
                 continue;
             }
             if (inFromClause && token.type == TokenType.COMMA) {
                 expectRelation = true;
+                index++;
                 continue;
             }
             if (expectRelation) {
                 RelationParse relation = parseRelation(context, index, end, currentPath, visibleCtes);
                 context.output.add(relation.source);
-                index = relation.lastTokenIndex;
+                index = relation.lastTokenIndex + 1;
                 expectRelation = false;
+                continue;
             }
+            index++;
         }
         if (expectRelation) {
             throw new IllegalArgumentException("missing relation in FROM or JOIN clause");
@@ -303,16 +320,39 @@ final class HiveFallbackJoinSourceResolver {
             if (name == null) {
                 continue;
             }
-            String value = name.trim();
-            if (value.length() >= 2 && value.charAt(0) == '`'
-                && value.charAt(value.length() - 1) == '`') {
-                value = value.substring(1, value.length() - 1).replace("``", "`");
-            }
+            String value = normalizeTemporaryName(name.trim());
             if (!value.isEmpty()) {
                 normalized.add(value.toLowerCase(Locale.ROOT));
             }
         }
         return normalized;
+    }
+
+    private String normalizeTemporaryName(String value) {
+        if (value.length() >= 2 && value.charAt(0) == '`'
+            && value.charAt(value.length() - 1) == '`') {
+            return value.substring(1, value.length() - 1).replace("``", "`");
+        }
+        return value;
+    }
+
+    private int skipLineComment(String sql, int index) {
+        int cursor = index;
+        while (cursor < sql.length() && sql.charAt(cursor) != '\n' && sql.charAt(cursor) != '\r') {
+            cursor++;
+        }
+        return cursor;
+    }
+
+    private int skipBlockComment(String sql, int index) {
+        int cursor = index;
+        while (cursor + 1 < sql.length()) {
+            if (sql.charAt(cursor) == '*' && sql.charAt(cursor + 1) == '/') {
+                return cursor + 2;
+            }
+            cursor++;
+        }
+        throw new IllegalArgumentException("unclosed block comment");
     }
 
     private int matchingParen(List<Token> tokens, int open, int end) {
@@ -349,10 +389,23 @@ final class HiveFallbackJoinSourceResolver {
     }
 
     private boolean isClauseBoundary(Token token) {
+        return isFilteringOrGroupingBoundary(token)
+            || isOrderingOrLimitBoundary(token)
+            || isHiveSpecificBoundary(token);
+    }
+
+    private boolean isFilteringOrGroupingBoundary(Token token) {
         return isKeyword(token, "where") || isKeyword(token, "group")
-            || isKeyword(token, "having") || isKeyword(token, "order")
-            || isKeyword(token, "cluster") || isKeyword(token, "distribute")
-            || isKeyword(token, "sort") || isKeyword(token, "limit")
+            || isKeyword(token, "having");
+    }
+
+    private boolean isOrderingOrLimitBoundary(Token token) {
+        return isKeyword(token, "order") || isKeyword(token, "limit")
+            || isKeyword(token, "sort");
+    }
+
+    private boolean isHiveSpecificBoundary(Token token) {
+        return isKeyword(token, "cluster") || isKeyword(token, "distribute")
             || isKeyword(token, "union") || isKeyword(token, "qualify")
             || isKeyword(token, "window");
     }
@@ -370,13 +423,22 @@ final class HiveFallbackJoinSourceResolver {
             return true;
         }
         return token.type == TokenType.WORD
-            && !isKeyword(token, "select")
-            && !isKeyword(token, "from")
-            && !isKeyword(token, "join")
-            && !isKeyword(token, "on")
-            && !isKeyword(token, "using")
-            && !isKeyword(token, "as")
+            && !isRelationSyntaxKeyword(token)
             && !isClauseBoundary(token);
+    }
+
+    private boolean isRelationSyntaxKeyword(Token token) {
+        return isQuerySyntaxKeyword(token) || isJoinSyntaxKeyword(token);
+    }
+
+    private boolean isQuerySyntaxKeyword(Token token) {
+        return isKeyword(token, "select") || isKeyword(token, "from")
+            || isKeyword(token, "as");
+    }
+
+    private boolean isJoinSyntaxKeyword(Token token) {
+        return isKeyword(token, "join") || isKeyword(token, "on")
+            || isKeyword(token, "using");
     }
 
     private List<Token> tokenize(String sql) {
@@ -407,23 +469,6 @@ final class HiveFallbackJoinSourceResolver {
 
     private boolean hasNext(String sql, int index, char expected) {
         return index + 1 < sql.length() && sql.charAt(index + 1) == expected;
-    }
-
-    private int skipLineComment(String sql, int index) {
-        while (index < sql.length() && sql.charAt(index) != '\n' && sql.charAt(index) != '\r') {
-            index++;
-        }
-        return index;
-    }
-
-    private int skipBlockComment(String sql, int index) {
-        while (index + 1 < sql.length()) {
-            if (sql.charAt(index) == '*' && sql.charAt(index + 1) == '/') {
-                return index + 2;
-            }
-            index++;
-        }
-        throw new IllegalArgumentException("unclosed block comment");
     }
 
     private int skipString(String sql, int start, char quote) {
@@ -486,11 +531,16 @@ final class HiveFallbackJoinSourceResolver {
 
     private TokenType punctuationType(char value) {
         switch (value) {
-            case '.': return TokenType.DOT;
-            case ',': return TokenType.COMMA;
-            case '(': return TokenType.LPAREN;
-            case ')': return TokenType.RPAREN;
-            default: return null;
+            case '.':
+                return TokenType.DOT;
+            case ',':
+                return TokenType.COMMA;
+            case '(':
+                return TokenType.LPAREN;
+            case ')':
+                return TokenType.RPAREN;
+            default:
+                return null;
         }
     }
 }

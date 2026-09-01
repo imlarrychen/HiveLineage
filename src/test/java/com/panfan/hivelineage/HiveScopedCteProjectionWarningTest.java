@@ -10,7 +10,10 @@ import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.result.WarningCode;
 import org.junit.Test;
 
-import static com.panfan.hivelineage.AnalyzerTestSupport.*;
+import static com.panfan.hivelineage.AnalyzerTestSupport.MapMetadataProvider;
+import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsColumn;
+import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsWarning;
+import static com.panfan.hivelineage.AnalyzerTestSupport.containsColumn;
 
 public class HiveScopedCteProjectionWarningTest {
     private static final String[] SET_OPERATORS = {"union all", "intersect", "except"};

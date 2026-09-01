@@ -18,6 +18,7 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
     private static final Pattern INSERT_TARGET_COLUMNS = Pattern.compile(
         "(?is)^(insert\\s+(?:overwrite\\s+table|into(?:\\s+table)?)\\s+[a-zA-Z_][\\w.]*)(\\s*\\(([^)]*)\\))(\\s+select\\b.*)$"
     );
+    private static final String COMMA_REGEX = ",";
     private final ParseDriver parseDriver = new ParseDriver();
     private final HiveAstWalker astWalker = new HiveAstWalker();
     private final HiveAstExpressionExtractor expressionExtractor = new HiveAstExpressionExtractor();
@@ -168,7 +169,7 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
             return Collections.emptyList();
         }
         List<String> columns = new ArrayList<>();
-        for (String column : rawColumns.split(",")) {
+        for (String column : rawColumns.split(COMMA_REGEX)) {
             String trimmed = stripIdentifier(column.trim()).toLowerCase(Locale.ROOT);
             if (!trimmed.isEmpty()) {
                 columns.add(trimmed);

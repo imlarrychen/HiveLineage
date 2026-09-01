@@ -17,6 +17,8 @@ final class HiveScriptPreprocessor {
     private static final Pattern USE_DATABASE = Pattern.compile(
         "(?is)^use\\s+(`[^`\\s.]+`|[a-zA-Z_][\\w]*)\\s*$"
     );
+    private static final Pattern HIVE_CONF_VARIABLE = Pattern.compile("\\$\\{[^}]+}");
+    private static final Pattern HIVE_VAR_VARIABLE = Pattern.compile("@\\{[^}]+}");
     private final HivePhysicalNameResolver nameResolver = new HivePhysicalNameResolver();
 
     boolean isSetStatement(String statement) {
@@ -88,8 +90,20 @@ final class HiveScriptPreprocessor {
         for (Map.Entry<String, String> entry : sessionVariables.entrySet()) {
             resolved = resolved.replace("${" + entry.getKey() + "}", entry.getValue());
         }
-        resolved = replaceUnresolvedVariables(resolved, Pattern.compile("\\$\\{[^}]+}"), fallbackVariableValue, warnings, statementIndex);
-        return replaceUnresolvedVariables(resolved, Pattern.compile("@\\{[^}]+}"), fallbackVariableValue, warnings, statementIndex);
+        resolved = replaceUnresolvedVariables(
+            resolved,
+            HIVE_CONF_VARIABLE,
+            fallbackVariableValue,
+            warnings,
+            statementIndex
+        );
+        return replaceUnresolvedVariables(
+            resolved,
+            HIVE_VAR_VARIABLE,
+            fallbackVariableValue,
+            warnings,
+            statementIndex
+        );
     }
 
     private String replaceUnresolvedVariables(

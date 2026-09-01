@@ -25,6 +25,7 @@ final class HiveTargetColumnResolver {
     private static final Pattern SOURCE_OBJECT = Pattern.compile(
         "(?is)\\b(?:from|join)\\s+([a-zA-Z_][\\w.]*)"
     );
+    private static final String COMMA_REGEX = ",";
     private final HivePhysicalNameResolver nameResolver;
 
     HiveTargetColumnResolver(HivePhysicalNameResolver nameResolver) {
@@ -36,7 +37,7 @@ final class HiveTargetColumnResolver {
             return Collections.emptyList();
         }
         List<String> columns = new ArrayList<>();
-        for (String column : rawColumns.split(",")) {
+        for (String column : rawColumns.split(COMMA_REGEX)) {
             columns.add(column.trim());
         }
         return columns;
