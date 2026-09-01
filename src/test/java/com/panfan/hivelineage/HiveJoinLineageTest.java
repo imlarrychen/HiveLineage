@@ -9,7 +9,6 @@ import com.panfan.hivelineage.result.JoinCondition;
 import com.panfan.hivelineage.result.LineageAnalyzeResult;
 import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.result.WarningCode;
-import java.util.List;
 import org.junit.Test;
 
 import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsColumn;

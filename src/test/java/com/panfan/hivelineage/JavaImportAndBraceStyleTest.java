@@ -12,6 +12,7 @@ import org.junit.Test;
 
 public class JavaImportAndBraceStyleTest {
     private static final Pattern WILDCARD_IMPORT = Pattern.compile("^\\s*import\\s+(?:static\\s+)?[^;]*\\.\\*;\\s*$");
+    private static final Pattern IMPORT = Pattern.compile("^\\s*import\\s+(?:static\\s+)?([^;]+);\\s*$");
     private static final Pattern INLINE_BLOCK_BODY = Pattern.compile(
         "^\\s*(?:.*\\)\\s*|.*\\belse\\s*)\\{\\s*\\S.*}\\s*$"
     );
@@ -22,6 +23,14 @@ public class JavaImportAndBraceStyleTest {
         inspect(Paths.get("src/main/java"), violations, JavaImportAndBraceStyleTest::findWildcardImport);
         inspect(Paths.get("src/test/java"), violations, JavaImportAndBraceStyleTest::findWildcardImport);
         TestSupport.assertTrue(violations.isEmpty(), "wildcard imports: " + violations);
+    }
+
+    @Test
+    public void javaSourcesDoNotKeepUnusedImports() throws IOException {
+        List<String> violations = new ArrayList<>();
+        inspect(Paths.get("src/main/java"), violations, JavaImportAndBraceStyleTest::findUnusedImport);
+        inspect(Paths.get("src/test/java"), violations, JavaImportAndBraceStyleTest::findUnusedImport);
+        TestSupport.assertTrue(violations.isEmpty(), "unused imports: " + violations);
     }
 
     @Test
@@ -39,6 +48,13 @@ public class JavaImportAndBraceStyleTest {
         }
     }
 
+    private static void inspect(Path root, List<String> violations, FileViolationFinder finder) throws IOException {
+        try (Stream<Path> paths = Files.walk(root)) {
+            paths.filter(path -> path.toString().endsWith(".java"))
+                .forEach(path -> finder.findViolations(path, violations));
+        }
+    }
+
     private static void inspectFile(Path path, List<String> violations, LineViolationFinder finder) {
         try {
             List<String> lines = Files.readAllLines(path);
@@ -52,6 +68,36 @@ public class JavaImportAndBraceStyleTest {
         }
     }
 
+    private static void findUnusedImport(Path path, List<String> violations) {
+        try {
+            List<String> lines = Files.readAllLines(path);
+            String sourceWithoutImports = sourceWithoutImports(lines);
+            for (int index = 0; index < lines.size(); index++) {
+                java.util.regex.Matcher matcher = IMPORT.matcher(lines.get(index));
+                if (matcher.matches() && !usesImportedName(sourceWithoutImports, matcher.group(1))) {
+                    violations.add(path + ":" + (index + 1));
+                }
+            }
+        } catch (IOException ex) {
+            throw new IllegalStateException("Cannot inspect " + path, ex);
+        }
+    }
+
+    private static String sourceWithoutImports(List<String> lines) {
+        StringBuilder source = new StringBuilder();
+        for (String line : lines) {
+            if (!IMPORT.matcher(line).matches()) {
+                source.append(line).append('\n');
+            }
+        }
+        return source.toString();
+    }
+
+    private static boolean usesImportedName(String sourceWithoutImports, String importedName) {
+        String simpleName = importedName.substring(importedName.lastIndexOf('.') + 1);
+        return Pattern.compile("\\b" + Pattern.quote(simpleName) + "\\b").matcher(sourceWithoutImports).find();
+    }
+
     private static boolean findWildcardImport(String line) {
         return WILDCARD_IMPORT.matcher(line).matches();
     }
@@ -63,5 +109,9 @@ public class JavaImportAndBraceStyleTest {
 
     private interface LineViolationFinder {
         boolean isViolation(String line);
+    }
+
+    private interface FileViolationFinder {
+        void findViolations(Path path, List<String> violations);
     }
 }

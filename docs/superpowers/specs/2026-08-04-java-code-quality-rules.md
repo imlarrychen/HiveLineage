@@ -55,7 +55,7 @@
 - Java 源码不得保留未使用的 import。
 - 职责拆分、方法迁移和重命名完成后，应同步清理失效 import。
 - 不使用通配符 import 掩盖依赖关系，包含普通 import 与 static import。
-- `JavaImportAndBraceStyleTest` 对 `src/main/java` 与 `src/test/java` 下的通配符 import 做项目级门禁。
+- `JavaImportAndBraceStyleTest` 对 `src/main/java` 与 `src/test/java` 下的通配符 import 和无用 import 做项目级门禁。
 
 ### CQ-09 花括号位置统一
 
