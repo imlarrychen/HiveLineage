@@ -169,9 +169,9 @@ final class HiveSqlTextUtils {
     static String stripAlias(String selectItem) {
         int asIndex = topLevelAsIndex(selectItem);
         if (asIndex < 0) {
-            return selectItem.trim();
+            return stripLeadingDistinct(selectItem.trim());
         }
-        return selectItem.substring(0, asIndex).trim();
+        return stripLeadingDistinct(selectItem.substring(0, asIndex).trim());
     }
     static String extractAlias(String selectItem) {
         int asIndex = topLevelAsIndex(selectItem);
@@ -183,9 +183,20 @@ final class HiveSqlTextUtils {
     static int topLevelAsIndex(String selectItem) {
         String lower = selectItem.toLowerCase(Locale.ROOT);
         int depth = 0;
+        char quote = 0;
         int found = -1;
         for (int i = 0; i <= lower.length() - 4; i++) {
             char ch = lower.charAt(i);
+            if (quote != 0) {
+                if (ch == quote) {
+                    quote = 0;
+                }
+                continue;
+            }
+            if (ch == '\'' || ch == '"' || ch == '`') {
+                quote = ch;
+                continue;
+            }
             if (ch == '(') {
                 depth++;
                 continue;
@@ -199,6 +210,14 @@ final class HiveSqlTextUtils {
             }
         }
         return found;
+    }
+
+    static String stripLeadingDistinct(String expression) {
+        String trimmed = expression == null ? "" : expression.trim();
+        if (!matchesKeywordAt(trimmed, 0, "distinct")) {
+            return trimmed;
+        }
+        return trimmed.substring("distinct".length()).trim();
     }
     static String removeStringLiterals(String expression) {
         if (expression == null || expression.isEmpty()) {

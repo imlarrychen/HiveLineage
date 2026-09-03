@@ -97,6 +97,23 @@ public class HiveParserAstAdapterTest {
     }
 
     @Test
+    public void hiveParserAstAdapterParsesCreateViewColumnListAndStarProjection() {
+        HiveAstParserAdapter adapter = new HiveParserAstAdapter();
+
+        ParsedHiveStatement statement = adapter.parse(
+            "create view if not exists c_hjx002.v312_001998_01 (field1, field2, field3) "
+                + "as select * from c_hjx002.v312_001998_04"
+        );
+
+        TestSupport.assertEquals(StatementType.CREATE_VIEW_AS_SELECT, statement.getStatementType(), "ast create view statement type");
+        TestSupport.assertEquals("c_hjx002.v312_001998_01", statement.getOutputObject().getQualifiedName(), "ast create view target");
+        assertContainsSource(statement.getInputObjects(), "c_hjx002.v312_001998_04");
+        TestSupport.assertEquals(Arrays.asList("field1", "field2", "field3"), statement.getTargetColumns(),
+            "ast create view target columns");
+        TestSupport.assertEquals(Arrays.asList("*"), statement.getSelectExpressions(), "ast create view select expressions");
+    }
+
+    @Test
     public void fallbackParserAdapterUsesHeuristicWhenPrimaryFails() {
         HiveAstParserAdapter adapter = new FallbackHiveAstParserAdapter(
             new HiveAstParserAdapter() {

@@ -34,6 +34,7 @@ final class HiveProjectionLineageResolver {
     private static final Pattern DOUBLE_QUOTED_LITERAL = Pattern.compile("\"(?:[^\"]|\"\")*\"");
     private static final Pattern NUMERIC_LITERAL = Pattern.compile("[-+]?\\d+(?:\\.\\d+)?");
     private static final Pattern FUNCTION_CALL = Pattern.compile("\\b([a-zA-Z_][\\w]*)\\s*\\(");
+    private static final Pattern SIMPLE_BACKTICK_IDENTIFIER = Pattern.compile("`([^`]+)`");
     private final HiveAstParserAdapter parserAdapter;
     private final HiveTargetColumnResolver targetColumnResolver;
 
@@ -685,7 +686,8 @@ final class HiveProjectionLineageResolver {
     ) {
         Set<String> columns = new LinkedHashSet<>();
         addScalarSubquerySourceColumns(columns, expression);
-        Matcher matcher = IDENTIFIER.matcher(HiveSqlTextUtils.removeStringLiterals(maskScalarSubqueries(expression)));
+        Matcher matcher = IDENTIFIER.matcher(HiveSqlTextUtils.removeStringLiterals(
+            maskBacktickIdentifiers(maskScalarSubqueries(expression), columns, defaultSourceTable)));
         while (matcher.find()) {
             QualifiedColumnReference reference = QualifiedColumnReference.parse(matcher.group(1));
             if (reference == null) {
@@ -722,6 +724,23 @@ final class HiveProjectionLineageResolver {
             refs.add(new ColumnRef(column));
         }
         return refs;
+    }
+
+    private String maskBacktickIdentifiers(String expression, Set<String> columns, String defaultSourceTable) {
+        if (expression == null || expression.isEmpty()) {
+            return "";
+        }
+        StringBuilder masked = new StringBuilder(expression);
+        Matcher matcher = SIMPLE_BACKTICK_IDENTIFIER.matcher(expression);
+        while (matcher.find()) {
+            if (defaultSourceTable != null && matcher.start() == 0 && matcher.end() == expression.trim().length()) {
+                columns.add(defaultSourceTable + "." + matcher.group(1).toLowerCase(Locale.ROOT));
+            }
+            for (int i = matcher.start(); i < matcher.end(); i++) {
+                masked.setCharAt(i, ' ');
+            }
+        }
+        return masked.toString();
     }
 
     boolean isScalarSubqueryExpression(String expression) {
@@ -953,7 +972,6 @@ final class HiveProjectionLineageResolver {
             return sql;
         }
     }
-
     private static final class CteExtraction {
         private final List<CteBlock> cteBlocks;
         private final String rootSql;
@@ -970,7 +988,6 @@ final class HiveProjectionLineageResolver {
             return rootSql;
         }
     }
-
     private static final class Range {
         private final int start;
         private final int end;

@@ -605,10 +605,21 @@ final class HiveAstProjectionExtractor {
 
     private List<String> directChildTexts(ASTNode node) {
         List<String> texts = new ArrayList<>();
-        for (int i = 0; i < node.getChildCount(); i++) {
-            texts.add(stripIdentifier(node.getChild(i).getText()).toLowerCase(Locale.ROOT));
-        }
+        collectIdentifierTexts(node, texts);
         return texts;
+    }
+
+    private void collectIdentifierTexts(ASTNode node, List<String> texts) {
+        if (node == null) {
+            return;
+        }
+        if (node.getType() == HiveParser.Identifier) {
+            texts.add(stripIdentifier(node.getText()).toLowerCase(Locale.ROOT));
+            return;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            collectIdentifierTexts((ASTNode) node.getChild(i), texts);
+        }
     }
 
     private String tableAlias(ASTNode tabRef, ASTNode tableNameNode) {

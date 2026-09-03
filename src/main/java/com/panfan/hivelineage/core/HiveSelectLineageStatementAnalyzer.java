@@ -84,7 +84,7 @@ final class HiveSelectLineageStatementAnalyzer {
             : parsedStatement;
         work.targetTable = resolvedTargetTable(work.parsedStatement, targetTable);
         work.targetObject = new DataObjectRef(work.targetTable);
-        work.originalInputObjects = work.parsedStatement.getInputObjects();
+        work.originalInputObjects = filterOutputObjectFromInputs(work.parsedStatement, work.targetTable);
         work.analysisSelectItems = selectItems;
         if (work.originalInputObjects.isEmpty()) {
             work.failure = failedResult(context, "SQL_PARSE_ERROR", "No input object found");
@@ -133,9 +133,22 @@ final class HiveSelectLineageStatementAnalyzer {
         work.analysisStatement = work.setExpansion.getSql();
         if (!work.analysisStatement.equals(context.getNormalizedStatement())) {
             work.parsedStatement = parseAndBind(context, work.analysisStatement);
-            work.originalInputObjects = work.parsedStatement.getInputObjects();
+            work.originalInputObjects = filterOutputObjectFromInputs(work.parsedStatement, work.targetTable);
             work.analysisSelectItems = work.parsedStatement.getSelectExpressions();
         }
+    }
+
+    private List<DataObjectRef> filterOutputObjectFromInputs(ParsedHiveStatement parsedStatement, String targetTable) {
+        if (parsedStatement.getStatementType() == StatementType.INSERT_SELECT || targetTable == null) {
+            return parsedStatement.getInputObjects();
+        }
+        List<DataObjectRef> filtered = new ArrayList<>();
+        for (DataObjectRef inputObject : parsedStatement.getInputObjects()) {
+            if (!targetTable.equalsIgnoreCase(inputObject.getQualifiedName())) {
+                filtered.add(inputObject);
+            }
+        }
+        return filtered;
     }
 
     private void populateSelectItems(
@@ -215,13 +228,35 @@ final class HiveSelectLineageStatementAnalyzer {
                 work.originalInputObjects.get(0)
             );
         }
+        List<DataObjectRef> starInputObjects = starExpansionInputObjects(work);
         return targetColumnResolver.expandStarSelectItems(
             work.columnContext,
             work.targetTable,
             work.analysisSelectItems,
-            work.originalInputObjects,
-            work.scope.ownerResolver
+            starInputObjects,
+            new QualifiedOwnerResolver(starInputObjects, topLevelExplicitAliases(work))
         );
+    }
+
+    private Map<String, String> topLevelExplicitAliases(SelectAnalysisWork work) {
+        Map<String, String> explicitAliases = targetColumnResolver.extractExplicitSourceAliases(work.analysisStatement);
+        return databaseBinder.bindExtractedAliasTargets(explicitAliases, work.originalInputObjects);
+    }
+
+    private List<DataObjectRef> starExpansionInputObjects(SelectAnalysisWork work) {
+        List<DataObjectRef> topLevelInputs = inputObjectsFromAliases(work.scope.topLevelSourceAliases);
+        return topLevelInputs.isEmpty() ? work.originalInputObjects : topLevelInputs;
+    }
+
+    private List<DataObjectRef> inputObjectsFromAliases(Map<String, String> aliases) {
+        List<DataObjectRef> inputObjects = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (String source : aliases.values()) {
+            if (source.contains(".") && seen.add(source)) {
+                inputObjects.add(new DataObjectRef(source));
+            }
+        }
+        return inputObjects;
     }
 
     private List<String> extractTopLevelSelectItems(String statement) {

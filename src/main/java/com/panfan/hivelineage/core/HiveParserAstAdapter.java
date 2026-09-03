@@ -36,6 +36,10 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
             ASTNode mainSetOperation = projectionExtractor.findMainSetOperation(root, mainInsert);
             List<String> selectExpressions = projectionExtractor.resolveSelectExpressions(root, mainInsert);
             List<String> targetColumns = projectionExtractor.resolveTargetColumns(root, mainInsert, statementType, selectExpressions);
+            List<String> viewTargetColumns = resolveViewTargetColumns(root, statementType);
+            if (!viewTargetColumns.isEmpty()) {
+                targetColumns = viewTargetColumns;
+            }
             if (targetColumns.isEmpty() && statementType == StatementType.INSERT_SELECT) {
                 targetColumns = resolveInsertTargetColumns(normalizedSql);
             }
@@ -118,6 +122,22 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
         return qualifiedName == null ? null : new DataObjectRef(qualifiedName);
     }
 
+    private List<String> resolveViewTargetColumns(ASTNode root, StatementType statementType) {
+        ASTNode viewNode = null;
+        if (statementType == StatementType.CREATE_VIEW_AS_SELECT) {
+            viewNode = astWalker.first(root, HiveParser.TOK_CREATEVIEW);
+        } else if (statementType == StatementType.ALTER_VIEW_AS_SELECT) {
+            viewNode = astWalker.first(root, HiveParser.TOK_ALTERVIEW);
+        }
+        ASTNode targetColumnNode = astWalker.first(viewNode, HiveParser.TOK_TABCOLNAME);
+        if (targetColumnNode == null) {
+            return Collections.emptyList();
+        }
+        List<String> columns = new ArrayList<>();
+        collectIdentifierTexts(targetColumnNode, columns);
+        return columns;
+    }
+
     private ASTNode findMainInsert(ASTNode root, StatementType statementType) {
         ASTNode queryNode;
         if (statementType == StatementType.CREATE_VIEW_AS_SELECT) {
@@ -162,6 +182,19 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
             texts.add(stripIdentifier(node.getChild(i).getText()).toLowerCase(Locale.ROOT));
         }
         return texts;
+    }
+
+    private void collectIdentifierTexts(ASTNode node, List<String> texts) {
+        if (node == null) {
+            return;
+        }
+        if (node.getType() == HiveParser.Identifier) {
+            texts.add(stripIdentifier(node.getText()).toLowerCase(Locale.ROOT));
+            return;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            collectIdentifierTexts((ASTNode) node.getChild(i), texts);
+        }
     }
 
     private List<String> splitColumnNames(String rawColumns) {
