@@ -98,7 +98,7 @@ final class HiveProjectionLineageResolver {
     }
     Map<String, Map<String, ColumnLineageProjection>> extractStatementProjectionTables(String statement) {
         Map<String, Map<String, ColumnLineageProjection>> projections = new HashMap<>();
-        CteExtraction cteExtraction = extractCtes(statement);
+        CteExtraction cteExtraction = extractCtes(HiveSqlTextUtils.projectionQuerySql(statement));
         for (CteBlock cteBlock : cteExtraction.getCteBlocks()) {
             projections.putAll(extractInlineProjectionTables(cteBlock.getSql(), projections));
             projections.put(cteBlock.getName().toLowerCase(Locale.ROOT), extractProjectionTable(cteBlock.getSql(), projections));

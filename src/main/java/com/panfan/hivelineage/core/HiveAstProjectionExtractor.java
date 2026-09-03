@@ -56,11 +56,17 @@ final class HiveAstProjectionExtractor {
             || statementType == StatementType.ALTER_VIEW_AS_SELECT) {
             ASTNode selectNode = directSelectChild(mainInsert);
             List<String> inferred = resolveSelectAliases(selectNode);
-            if (!inferred.isEmpty()) {
+            if (!inferred.isEmpty() && !isSingleStar(inferred)) {
                 return inferred;
             }
         }
-        return selectExpressions.isEmpty() ? Collections.<String>emptyList() : new ArrayList<String>();
+        return selectExpressions.isEmpty() || isSingleStar(selectExpressions)
+            ? Collections.<String>emptyList()
+            : new ArrayList<String>();
+    }
+
+    private boolean isSingleStar(List<String> values) {
+        return values.size() == 1 && "*".equals(values.get(0));
     }
 
     List<String> resolveSelectExpressions(ASTNode root, ASTNode mainInsert) {

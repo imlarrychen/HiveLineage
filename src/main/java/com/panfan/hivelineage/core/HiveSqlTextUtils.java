@@ -119,6 +119,21 @@ final class HiveSqlTextUtils {
         }
         return cursor;
     }
+    static String projectionQuerySql(String statement) {
+        String trimmed = statement == null ? "" : statement.trim();
+        if (!matchesKeywordAt(trimmed, 0, "create")) {
+            return trimmed;
+        }
+        int asIndex = topLevelKeywordIndex(trimmed, "as", 0);
+        if (asIndex < 0) {
+            return trimmed;
+        }
+        int queryStart = skipWhitespace(trimmed, asIndex + 2);
+        if (matchesKeywordAt(trimmed, queryStart, "with") || matchesKeywordAt(trimmed, queryStart, "select")) {
+            return trimmed.substring(queryStart);
+        }
+        return trimmed;
+    }
     static boolean isIdentifierCharacter(char ch) {
         return Character.isLetterOrDigit(ch) || ch == '_' || ch == '.';
     }

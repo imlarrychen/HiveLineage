@@ -1,15 +1,19 @@
 package com.panfan.hivelineage.core;
 
+import com.panfan.hivelineage.metadata.HiveTableMetadata;
 import com.panfan.hivelineage.request.LineageAnalyzeRequest;
 import com.panfan.hivelineage.request.LineageParseMode;
 import com.panfan.hivelineage.result.ColumnLineage;
+import com.panfan.hivelineage.result.ColumnRef;
 import com.panfan.hivelineage.result.DataObjectRef;
 import com.panfan.hivelineage.result.JoinCondition;
+import com.panfan.hivelineage.result.LineageType;
 import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.result.StatementParseStatus;
 import com.panfan.hivelineage.result.TableLineage;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -100,6 +104,7 @@ final class HiveSelectLineageStatementAnalyzer {
             work.analysisStatement,
             work.originalInputObjects
         );
+        populateSingleProjectionStarColumns(context, work);
         populateSelectItems(context, operation, targetColumns, work);
         return work;
     }
@@ -178,6 +183,71 @@ final class HiveSelectLineageStatementAnalyzer {
         }
     }
 
+    private void populateSingleProjectionStarColumns(StatementAnalysisContext context, SelectAnalysisWork work) {
+        String projectionTable = projectionResolver.singleProjectionTable(
+            work.scope.topLevelProjectionSourceAliases,
+            work.scope.statementProjectionTables
+        );
+        if (projectionTable == null) {
+            projectionTable = singleLogicalTopLevelSource(work.scope.topLevelProjectionSourceAliases);
+            if (projectionTable == null || work.originalInputObjects.size() <= 1) {
+                return;
+            }
+            work.scope.statementProjectionTables.put(projectionTable, new HashMap<String, ColumnLineageProjection>());
+        }
+        Map<String, ColumnLineageProjection> projections = work.scope.statementProjectionTables.get(projectionTable);
+        if (projections == null || !projections.isEmpty()) {
+            return;
+        }
+        List<String> columns = commonPhysicalInputColumns(context, work.originalInputObjects);
+        for (String column : columns) {
+            projections.put(column.toLowerCase(Locale.ROOT), projectionFromPhysicalInputs(work.originalInputObjects, column));
+        }
+    }
+
+    private String singleLogicalTopLevelSource(Map<String, String> aliases) {
+        Set<String> sources = new LinkedHashSet<>();
+        for (String source : aliases.values()) {
+            if (!source.contains(".")) {
+                sources.add(source);
+            }
+        }
+        return sources.size() == 1 ? sources.iterator().next() : null;
+    }
+
+    private List<String> commonPhysicalInputColumns(StatementAnalysisContext context, List<DataObjectRef> inputObjects) {
+        List<String> columns = null;
+        for (DataObjectRef inputObject : inputObjects) {
+            HiveTableMetadata metadata = targetColumnResolver.loadTableMetadata(
+                context.getRequest(),
+                inputObject.getQualifiedName(),
+                context.getWarnings(),
+                context.getStatementIndex()
+            );
+            if (metadata == null || metadata.getColumns().isEmpty()) {
+                return Collections.emptyList();
+            }
+            columns = columns == null
+                ? new ArrayList<>(metadata.getColumns())
+                : targetColumnResolver.intersectionInTargetOrder(columns, metadata.getColumns());
+        }
+        return columns == null ? Collections.<String>emptyList() : columns;
+    }
+
+    private ColumnLineageProjection projectionFromPhysicalInputs(List<DataObjectRef> inputObjects, String column) {
+        List<ColumnRef> sources = new ArrayList<>();
+        List<String> expressions = new ArrayList<>();
+        for (DataObjectRef inputObject : inputObjects) {
+            String sourceColumn = inputObject.getQualifiedName() + "." + column;
+            sources.add(new ColumnRef(sourceColumn));
+            expressions.add(sourceColumn);
+        }
+        String expression = sources.size() == 1
+            ? sources.get(0).getQualifiedName()
+            : "union_all(" + HiveSqlTextUtils.joinWithComma(expressions) + ")";
+        return new ColumnLineageProjection(sources, expression, sources.size() == 1 ? LineageType.DIRECT : LineageType.DERIVED);
+    }
+
     private StatementLineageResult successResult(
         StatementAnalysisContext context,
         String operation,
@@ -228,6 +298,10 @@ final class HiveSelectLineageStatementAnalyzer {
                 work.originalInputObjects.get(0)
             );
         }
+        List<String> projectionColumns = projectionStarSelectItems(work);
+        if (!projectionColumns.isEmpty()) {
+            return projectionColumns;
+        }
         List<DataObjectRef> starInputObjects = starExpansionInputObjects(work);
         return targetColumnResolver.expandStarSelectItems(
             work.columnContext,
@@ -236,6 +310,22 @@ final class HiveSelectLineageStatementAnalyzer {
             starInputObjects,
             new QualifiedOwnerResolver(starInputObjects, topLevelExplicitAliases(work))
         );
+    }
+
+    private List<String> projectionStarSelectItems(SelectAnalysisWork work) {
+        if (!targetColumnResolver.isSingleStarSelect(work.analysisSelectItems)) {
+            return Collections.emptyList();
+        }
+        String projectionTable = projectionResolver.singleProjectionTable(
+            work.scope.topLevelProjectionSourceAliases,
+            work.scope.statementProjectionTables
+        );
+        Map<String, ColumnLineageProjection> projections = projectionTable == null
+            ? null
+            : work.scope.statementProjectionTables.get(projectionTable);
+        return projections == null || projections.isEmpty()
+            ? Collections.<String>emptyList()
+            : new ArrayList<>(projections.keySet());
     }
 
     private Map<String, String> topLevelExplicitAliases(SelectAnalysisWork work) {
