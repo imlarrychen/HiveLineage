@@ -75,6 +75,12 @@ final class HiveAstExpressionExtractor {
             if ("when".equalsIgnoreCase(functionName) && args.size() >= 2) {
                 return renderCaseWhen(args);
             }
+            if ("between".equalsIgnoreCase(functionName)) {
+                String betweenExpression = renderBetween(args);
+                if (betweenExpression != null) {
+                    return betweenExpression;
+                }
+            }
             String functionCall = functionName + "(" + joinWithComma(args) + ")";
             if (windowSpec != null) {
                 return functionCall + " " + renderWindowSpec(windowSpec);
@@ -190,6 +196,35 @@ final class HiveAstExpressionExtractor {
             builder.append(" else ").append(args.get(args.size() - 1));
         }
         return builder.append(" end").toString();
+    }
+
+    private String renderBetween(List<String> args) {
+        if (args.size() < 4) {
+            return null;
+        }
+        int flagIndex = betweenFlagIndex(args);
+        if (flagIndex < 0) {
+            return null;
+        }
+        List<String> terms = new ArrayList<>(args);
+        String flag = terms.remove(flagIndex);
+        if (terms.size() < 3) {
+            return null;
+        }
+        String operator = "KW_TRUE".equalsIgnoreCase(flag) ? " not between " : " between ";
+        return terms.get(0) + operator + terms.get(1) + " and " + terms.get(2);
+    }
+
+    private int betweenFlagIndex(List<String> args) {
+        if (isBetweenFlag(args.get(0))) {
+            return 0;
+        }
+        int lastIndex = args.size() - 1;
+        return isBetweenFlag(args.get(lastIndex)) ? lastIndex : -1;
+    }
+
+    private boolean isBetweenFlag(String value) {
+        return "KW_TRUE".equalsIgnoreCase(value) || "KW_FALSE".equalsIgnoreCase(value);
     }
 
     private boolean isWindowSpec(ASTNode node) {

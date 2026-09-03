@@ -842,9 +842,9 @@ final class HiveProjectionLineageResolver {
     }
     boolean isKeyword(String token) {
         return Arrays.asList(
-            "case", "when", "then", "else", "end", "as", "null", "true", "false",
+            "case", "when", "then", "else", "end", "as", "and", "or", "not", "null", "true", "false",
             "over", "partition", "by", "order", "asc", "desc", "rows", "range",
-            "between", "preceding", "following", "current", "row", "unbounded",
+            "between", "kw_true", "kw_false", "preceding", "following", "current", "row", "unbounded",
             "nulls", "first", "last",
             "tinyint", "smallint", "int", "integer", "bigint", "float", "double", "decimal",
             "string", "char", "varchar", "boolean", "binary", "date", "timestamp",
