@@ -53,6 +53,42 @@ public class HiveScalarSubqueryLineageTest {
         assertColumnLineage(statement, "whc.c.field1", LineageType.DERIVED, "whc.a.field1");
     }
 
+    @Test
+    public void scalarSubqueryDerivedTableAliasWithoutAsDoesNotRequirePhysicalDatabase() {
+        StatementLineageResult statement = analyzeV312(
+            "insert into c_hjx002.v312_001925_02 "
+                + "select field1, "
+                + "(select a.field2 from "
+                + "(select count(field1) as field2 from c_hjx002.v312_001925_01) a) as field2, "
+                + "(select count(*) as field3 from c_hjx002.v312_001925_04) as field3 "
+                + "from c_hjx002.v312_001925_03"
+        );
+
+        assertTableLineage(statement, "c_hjx002.v312_001925_02",
+            "c_hjx002.v312_001925_01", "c_hjx002.v312_001925_03", "c_hjx002.v312_001925_04");
+        assertColumnLineage(statement, "c_hjx002.v312_001925_02.field2",
+            LineageType.DERIVED, "c_hjx002.v312_001925_01.field1");
+        assertDoesNotContainColumn(statement, "c_hjx002.v312_001925_02.field2", "c_hjx002.v312_001925_03.field2");
+    }
+
+    @Test
+    public void scalarSubqueryDerivedTableAliasWithAsDoesNotUseOuterDefaultSourceColumn() {
+        StatementLineageResult statement = analyzeV312(
+            "insert into c_hjx002.v312_001925_02 "
+                + "select field1, "
+                + "(select a.field2 from "
+                + "(select count(field1) as field2 from c_hjx002.v312_001925_01) as a) as field2, "
+                + "(select count(*) as field3 from c_hjx002.v312_001925_04) as field3 "
+                + "from c_hjx002.v312_001925_03"
+        );
+
+        assertTableLineage(statement, "c_hjx002.v312_001925_02",
+            "c_hjx002.v312_001925_01", "c_hjx002.v312_001925_03", "c_hjx002.v312_001925_04");
+        assertColumnLineage(statement, "c_hjx002.v312_001925_02.field2",
+            LineageType.DERIVED, "c_hjx002.v312_001925_01.field1");
+        assertDoesNotContainColumn(statement, "c_hjx002.v312_001925_02.field2", "c_hjx002.v312_001925_03.field2");
+    }
+
     private StatementLineageResult analyze(String sql) {
         TestMetadataProvider metadata = new TestMetadataProvider()
             .addTable("whc.a", "id", "field1")
@@ -77,6 +113,35 @@ public class HiveScalarSubqueryLineageTest {
         TestSupport.assertEquals(1, result.getStatements().size(), "statement count");
         StatementLineageResult statement = result.getStatements().get(0);
         TestSupport.assertEquals(0, statement.getParseStatusCode(), "parse status");
+        return statement;
+    }
+
+    private StatementLineageResult analyzeV312(String sql) {
+        TestMetadataProvider metadata = new TestMetadataProvider()
+            .addTable("c_hjx002.v312_001925_01", "field1", "field2", "field3")
+            .addTable("c_hjx002.v312_001925_02", "field1", "field2", "field3")
+            .addTable("c_hjx002.v312_001925_03", "field1", "field2", "field3")
+            .addTable("c_hjx002.v312_001925_04", "field1", "field2", "field3");
+
+        LineageAnalyzeResult result = new HiveScriptLineageAnalyzer().analyzeScript(
+            LineageAnalyzeRequest.builder()
+                .workflowId("wf_scalar_subquery")
+                .taskId("task_scalar_subquery")
+                .taskVersion("V1")
+                .defaultDatabase("c_hjx002")
+                .metadataProvider(metadata)
+                .metadataCache(new HiveMetadataCache())
+                .rawScript(sql)
+                .options(LineageAnalyzeOptions.builder()
+                    .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                    .build())
+                .build()
+        );
+
+        TestSupport.assertEquals(1, result.getStatements().size(), "statement count");
+        StatementLineageResult statement = result.getStatements().get(0);
+        TestSupport.assertEquals(0, statement.getParseStatusCode(), "parse status, failure="
+            + statement.getFailureCode() + ":" + statement.getFailureMessage());
         return statement;
     }
 
@@ -125,6 +190,15 @@ public class HiveScalarSubqueryLineageTest {
             }
         }
         throw new AssertionError("Expected source column " + qualifiedName);
+    }
+
+    private void assertDoesNotContainColumn(StatementLineageResult statement, String targetColumn, String unexpectedSource) {
+        ColumnLineage lineage = findColumnLineage(statement.getColumnLineages(), targetColumn);
+        for (ColumnRef column : lineage.getSourceColumns()) {
+            if (unexpectedSource.equals(column.getQualifiedName())) {
+                throw new AssertionError("Did not expect source column " + unexpectedSource + " for " + targetColumn);
+            }
+        }
     }
 
     private String sourceNames(List<ColumnRef> columns) {

@@ -734,9 +734,13 @@ final class HiveProjectionLineageResolver {
 
     private void addScalarSubquerySourceColumns(Set<String> columns, String expression) {
         for (String subquery : scalarSubqueries(expression)) {
-            Map<String, ColumnLineageProjection> projections = extractProjectionTable(
+            Map<String, Map<String, ColumnLineageProjection>> inlineProjections = extractInlineProjectionTables(
                 subquery,
                 Collections.<String, Map<String, ColumnLineageProjection>>emptyMap()
+            );
+            Map<String, ColumnLineageProjection> projections = extractProjectionTable(
+                subquery,
+                inlineProjections
             );
             for (ColumnLineageProjection projection : projections.values()) {
                 for (ColumnRef sourceColumn : projection.getSourceColumns()) {
