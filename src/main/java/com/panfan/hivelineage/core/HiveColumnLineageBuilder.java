@@ -39,7 +39,7 @@ final class HiveColumnLineageBuilder {
             input.context.getWarnings(),
             input.context.getStatementIndex()
         );
-        boolean setOperationQuery = projectionResolver.hasCompleteSetOperationProjection(
+        boolean setOperationQuery = input.setExpansion.isSetOperation() || projectionResolver.hasCompleteSetOperationProjection(
             input.parsedStatement,
             input.expandedSelectItems.size()
         );
@@ -88,13 +88,40 @@ final class HiveColumnLineageBuilder {
 
     private Expression resolveColumnLineageExpression(Input input, boolean setOperationQuery, int index) {
         String expression = HiveSqlTextUtils.stripAlias(input.expandedSelectItems.get(index));
-        if (index < input.textualSelectItems.size() && projectionResolver.isScalarSubqueryExpression(expression)) {
+        if (index < input.textualSelectItems.size() && containsScalarSubquery(expression, input.textualSelectItems.get(index))) {
             expression = HiveSqlTextUtils.stripAlias(input.textualSelectItems.get(index));
         }
-        String lineageExpression = setOperationQuery
-            ? projectionResolver.setOperationExpression(input.parsedStatement, input.analysisStatement, index)
-            : projectionResolver.normalizeLineageExpression(expression);
-        return new Expression(expression, lineageExpression);
+        String lineageExpression = resolveLineageExpression(input, setOperationQuery, index, expression);
+        Expression resolved = new Expression(expression, lineageExpression);
+        if (setOperationQuery) {
+            resolved.sourceExtractionExpression = lineageExpression;
+        }
+        return resolved;
+    }
+
+    private boolean containsScalarSubquery(String expression, String textualSelectItem) {
+        return projectionResolver.containsScalarSubquery(expression)
+            || projectionResolver.containsScalarSubquery(textualSelectItem);
+    }
+
+    private String resolveLineageExpression(
+        Input input,
+        boolean setOperationQuery,
+        int index,
+        String expression
+    ) {
+        if (!setOperationQuery) {
+            return projectionResolver.normalizeLineageExpression(expression);
+        }
+        String setOperationExpression = projectionResolver.setOperationTextExpression(input.analysisStatement, index);
+        if (setOperationExpression == null || setOperationExpression.isEmpty()) {
+            setOperationExpression = projectionResolver.setOperationExpression(
+                input.parsedStatement,
+                input.analysisStatement,
+                index
+            );
+        }
+        return setOperationExpression;
     }
 
     private ColumnLineageProjection resolveDirectProjection(
@@ -125,10 +152,16 @@ final class HiveColumnLineageBuilder {
         int index
     ) {
         List<ColumnRef> sourceColumns = setOperationQuery
-            ? projectionResolver.setOperationSourceColumns(input.parsedStatement, index)
+            ? projectionResolver.setOperationTextSourceColumns(input.analysisStatement, index)
             : Collections.<ColumnRef>emptyList();
         if (setOperationQuery && input.setExpansion.isUnresolvedPosition(index)) {
             return Collections.emptyList();
+        }
+        if (setOperationQuery && projectionResolver.hasSetOperationTextProjection(input.analysisStatement, index)) {
+            return sourceColumns;
+        }
+        if (sourceColumns.isEmpty() && setOperationQuery) {
+            sourceColumns = projectionResolver.setOperationSourceColumns(input.parsedStatement, index);
         }
         if (sourceColumns.isEmpty() && setOperationQuery) {
             return projectionResolver.extractSetOperationSourceColumns(

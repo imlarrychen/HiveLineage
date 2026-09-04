@@ -96,6 +96,33 @@ final class HiveProjectionLineageResolver {
         }
         return true;
     }
+    List<String> setOperationTextSelectItems(String statement) {
+        Map<String, ColumnLineageProjection> projections =
+            extractProjectionTable(statement, Collections.<String, Map<String, ColumnLineageProjection>>emptyMap());
+        if (projections.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return new ArrayList<>(projections.keySet());
+    }
+    List<ColumnRef> setOperationTextSourceColumns(String statement, int selectIndex) {
+        ColumnLineageProjection projection = setOperationTextProjection(statement, selectIndex);
+        return projection == null ? Collections.<ColumnRef>emptyList() : projection.getSourceColumns();
+    }
+    String setOperationTextExpression(String statement, int selectIndex) {
+        ColumnLineageProjection projection = setOperationTextProjection(statement, selectIndex);
+        return projection == null ? "" : projection.getExpression();
+    }
+    boolean hasSetOperationTextProjection(String statement, int selectIndex) {
+        return setOperationTextProjection(statement, selectIndex) != null;
+    }
+    ColumnLineageProjection setOperationTextProjection(String statement, int selectIndex) {
+        Map<String, ColumnLineageProjection> projections =
+            extractProjectionTable(statement, Collections.<String, Map<String, ColumnLineageProjection>>emptyMap());
+        if (selectIndex < 0 || selectIndex >= projections.size()) {
+            return null;
+        }
+        return new ArrayList<>(projections.values()).get(selectIndex);
+    }
     Map<String, Map<String, ColumnLineageProjection>> extractStatementProjectionTables(String statement) {
         Map<String, Map<String, ColumnLineageProjection>> projections = new HashMap<>();
         CteExtraction cteExtraction = extractCtes(HiveSqlTextUtils.projectionQuerySql(statement));
@@ -685,7 +712,7 @@ final class HiveProjectionLineageResolver {
         QualifiedOwnerResolver ownerResolver
     ) {
         Set<String> columns = new LinkedHashSet<>();
-        addScalarSubquerySourceColumns(columns, expression);
+        addScalarSubquerySourceColumns(columns, expression, sourceAliases);
         Matcher matcher = IDENTIFIER.matcher(HiveSqlTextUtils.removeStringLiterals(
             maskBacktickIdentifiers(maskScalarSubqueries(expression), columns, defaultSourceTable)));
         while (matcher.find()) {
@@ -750,8 +777,15 @@ final class HiveProjectionLineageResolver {
         String trimmed = expression.trim().toLowerCase(Locale.ROOT);
         return trimmed.startsWith("(select") || trimmed.startsWith("(with");
     }
+    boolean containsScalarSubquery(String expression) {
+        return !scalarSubqueryRanges(expression).isEmpty();
+    }
 
-    private void addScalarSubquerySourceColumns(Set<String> columns, String expression) {
+    private void addScalarSubquerySourceColumns(
+        Set<String> columns,
+        String expression,
+        Map<String, String> sourceAliases
+    ) {
         for (String subquery : scalarSubqueries(expression)) {
             Map<String, Map<String, ColumnLineageProjection>> inlineProjections = extractInlineProjectionTables(
                 subquery,
@@ -763,10 +797,22 @@ final class HiveProjectionLineageResolver {
             );
             for (ColumnLineageProjection projection : projections.values()) {
                 for (ColumnRef sourceColumn : projection.getSourceColumns()) {
-                    columns.add(sourceColumn.getQualifiedName());
+                    columns.add(resolveScalarSubquerySourceColumn(sourceColumn.getQualifiedName(), sourceAliases));
                 }
             }
         }
+    }
+
+    private String resolveScalarSubquerySourceColumn(String sourceColumn, Map<String, String> sourceAliases) {
+        String tableName = HiveSqlTextUtils.tableNameOfColumn(sourceColumn);
+        String columnName = HiveSqlTextUtils.columnNameOf(sourceColumn);
+        if (tableName == null || columnName == null) {
+            return sourceColumn;
+        }
+        String resolvedTable = sourceAliases.get(tableName.toLowerCase(Locale.ROOT));
+        return resolvedTable != null && resolvedTable.contains(".")
+            ? resolvedTable + "." + columnName
+            : sourceColumn;
     }
 
     private String maskScalarSubqueries(String expression) {
@@ -936,65 +982,6 @@ final class HiveProjectionLineageResolver {
             return parserAdapter.parse(normalizedStatement);
         } catch (RuntimeException ex) {
             return new ParsedHiveStatement(StatementType.UNSUPPORTED, null, Collections.<DataObjectRef>emptyList(), normalizedStatement);
-        }
-    }
-    private static final class SetOperationParts {
-        private final String functionName;
-        private final List<String> branches;
-
-        private SetOperationParts(String functionName, List<String> branches) {
-            this.functionName = functionName;
-            this.branches = Collections.unmodifiableList(new ArrayList<>(branches));
-        }
-
-        private String getFunctionName() {
-            return functionName;
-        }
-
-        private List<String> getBranches() {
-            return branches;
-        }
-    }
-    private static final class CteBlock {
-        private final String name;
-        private final String sql;
-
-        private CteBlock(String name, String sql) {
-            this.name = name;
-            this.sql = sql;
-        }
-
-        private String getName() {
-            return name;
-        }
-
-        private String getSql() {
-            return sql;
-        }
-    }
-    private static final class CteExtraction {
-        private final List<CteBlock> cteBlocks;
-        private final String rootSql;
-
-        private CteExtraction(List<CteBlock> cteBlocks, String rootSql) {
-            this.cteBlocks = Collections.unmodifiableList(new ArrayList<>(cteBlocks));
-            this.rootSql = rootSql;
-        }
-        private List<CteBlock> getCteBlocks() {
-            return cteBlocks;
-        }
-
-        private String getRootSql() {
-            return rootSql;
-        }
-    }
-    private static final class Range {
-        private final int start;
-        private final int end;
-
-        private Range(int start, int end) {
-            this.start = start;
-            this.end = end;
         }
     }
 }

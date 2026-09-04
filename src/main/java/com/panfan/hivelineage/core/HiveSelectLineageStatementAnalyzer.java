@@ -169,8 +169,8 @@ final class HiveSelectLineageStatementAnalyzer {
             context.getRequest(),
             work.originalInputObjects.get(0)
         );
-        work.expandedSelectItems = expandSelectItems(work);
         work.textualSelectItems = extractTopLevelSelectItems(work.analysisStatement);
+        work.expandedSelectItems = expandSelectItems(work);
         List<String> inferredTargetColumns = inferTargetColumns(targetColumns, starSelect, work);
         work.resolvedTargetColumns = alignTargetColumnsForStaticPartitions(
             inferredTargetColumns,
@@ -289,7 +289,12 @@ final class HiveSelectLineageStatementAnalyzer {
 
     private List<String> expandSelectItems(SelectAnalysisWork work) {
         if (work.topLevelSetOperation) {
-            return work.analysisSelectItems;
+            List<String> textSelectItems = projectionResolver.setOperationTextSelectItems(work.analysisStatement);
+            return textSelectItems.isEmpty() ? work.analysisSelectItems : textSelectItems;
+        }
+        if (work.textualSelectItems.size() > work.analysisSelectItems.size()
+            && !containsStarSelectItem(work.textualSelectItems)) {
+            return work.textualSelectItems;
         }
         if (work.positionalSingleDirectSourceStar) {
             return targetColumnResolver.expandPositionalSingleInputStar(
@@ -310,6 +315,16 @@ final class HiveSelectLineageStatementAnalyzer {
             starInputObjects,
             new QualifiedOwnerResolver(starInputObjects, topLevelExplicitAliases(work))
         );
+    }
+
+    private boolean containsStarSelectItem(List<String> selectItems) {
+        for (String selectItem : selectItems) {
+            QualifiedColumnReference reference = QualifiedColumnReference.parse(HiveSqlTextUtils.stripAlias(selectItem));
+            if (reference != null && reference.isStar()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<String> projectionStarSelectItems(SelectAnalysisWork work) {
