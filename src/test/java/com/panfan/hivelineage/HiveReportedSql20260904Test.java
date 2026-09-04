@@ -49,10 +49,13 @@ public class HiveReportedSql20260904Test {
         assertContainsSource(statement, "c_hjx001.v312_002005_04");
         assertContainsSource(statement, "c_hjx002.v312_002005_05");
         assertColumnContains(statement, "c_hjx002.v312_002005_02.id", "c_hjx002.v312_002005_01.id");
+        assertColumnContains(statement, "c_hjx002.v312_002005_02.date", "c_hjx002.v312_002005_01.date");
         assertColumnContains(statement, "c_hjx002.v312_002005_02.region", "c_hjx001.v312_002005_03.field1");
         assertColumnContains(statement, "c_hjx002.v312_002005_02.product", "c_hjx001.v312_002005_04.field2");
         assertColumnContains(statement, "c_hjx002.v312_002005_02.sales", "c_hjx002.v312_002005_05.field3");
         assertColumnContains(statement, "c_hjx002.v312_002005_02.cost", "c_hjx002.v312_002005_01.cost");
+        assertColumnContains(statement, "c_hjx002.v312_002005_02.cumulative_cost", "c_hjx002.v312_002005_01.date");
+        assertColumnContains(statement, "c_hjx002.v312_002005_02.moving_avg_sales", "c_hjx002.v312_002005_01.date");
     }
 
     private StatementLineageResult analyze(TestMetadataProvider metadata) {

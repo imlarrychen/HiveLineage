@@ -34,7 +34,6 @@ final class HiveProjectionLineageResolver {
     private static final Pattern DOUBLE_QUOTED_LITERAL = Pattern.compile("\"(?:[^\"]|\"\")*\"");
     private static final Pattern NUMERIC_LITERAL = Pattern.compile("[-+]?\\d+(?:\\.\\d+)?");
     private static final Pattern FUNCTION_CALL = Pattern.compile("\\b([a-zA-Z_][\\w]*)\\s*\\(");
-    private static final Pattern SIMPLE_BACKTICK_IDENTIFIER = Pattern.compile("`([^`]+)`");
     private final HiveAstParserAdapter parserAdapter;
     private final HiveTargetColumnResolver targetColumnResolver;
 
@@ -375,7 +374,7 @@ final class HiveProjectionLineageResolver {
                 continue;
             }
             projections.put(
-                outputColumn.toLowerCase(Locale.ROOT),
+                normalizeProjectionColumnName(outputColumn),
                 projectionForExpression(
                     expression,
                     defaultSourceTable,
@@ -597,7 +596,11 @@ final class HiveProjectionLineageResolver {
         Map<String, Map<String, ColumnLineageProjection>> projectionsByTable
     ) {
         Map<String, ColumnLineageProjection> projections = projectionsByTable.get(tableName);
-        return projections == null ? null : projections.get(columnName.toLowerCase(Locale.ROOT));
+        return projections == null ? null : projections.get(normalizeProjectionColumnName(columnName));
+    }
+
+    private String normalizeProjectionColumnName(String columnName) {
+        return columnName.replace("`", "").toLowerCase(Locale.ROOT);
     }
     String directColumnAliasExpression(String expression, Map<String, String> columnAliasExpressions) {
         DirectColumn directColumn = parseDirectColumn(expression);
@@ -610,7 +613,7 @@ final class HiveProjectionLineageResolver {
         return columnAliasExpressions.get(directColumn.getColumn().toLowerCase(Locale.ROOT));
     }
     DirectColumn parseDirectColumn(String expression) {
-        QualifiedColumnReference reference = QualifiedColumnReference.parse(expression);
+        QualifiedColumnReference reference = QualifiedColumnReference.parse(normalizeColumnReference(expression));
         if (reference == null || reference.isStar()) {
             return null;
         }
@@ -625,8 +628,12 @@ final class HiveProjectionLineageResolver {
         return false;
     }
     boolean isDirectExpression(String expression) {
-        QualifiedColumnReference reference = QualifiedColumnReference.parse(expression);
+        QualifiedColumnReference reference = QualifiedColumnReference.parse(normalizeColumnReference(expression));
         return reference != null && !reference.isStar();
+    }
+
+    private String normalizeColumnReference(String expression) {
+        return expression == null ? null : expression.replace("`", "");
     }
     LineageType resolveLineageType(String lineageExpression, String rawExpression, List<ColumnRef> sourceColumns) {
         if (isConstantLineageExpression(lineageExpression)) {
@@ -714,7 +721,12 @@ final class HiveProjectionLineageResolver {
         Set<String> columns = new LinkedHashSet<>();
         addScalarSubquerySourceColumns(columns, expression, sourceAliases);
         Matcher matcher = IDENTIFIER.matcher(HiveSqlTextUtils.removeStringLiterals(
-            maskBacktickIdentifiers(maskScalarSubqueries(expression), columns, defaultSourceTable)));
+            BacktickColumnReferenceExtractor.maskAndCollect(
+                maskScalarSubqueries(expression),
+                columns,
+                defaultSourceTable,
+                ownerResolver
+            )));
         while (matcher.find()) {
             QualifiedColumnReference reference = QualifiedColumnReference.parse(matcher.group(1));
             if (reference == null) {
@@ -751,23 +763,6 @@ final class HiveProjectionLineageResolver {
             refs.add(new ColumnRef(column));
         }
         return refs;
-    }
-
-    private String maskBacktickIdentifiers(String expression, Set<String> columns, String defaultSourceTable) {
-        if (expression == null || expression.isEmpty()) {
-            return "";
-        }
-        StringBuilder masked = new StringBuilder(expression);
-        Matcher matcher = SIMPLE_BACKTICK_IDENTIFIER.matcher(expression);
-        while (matcher.find()) {
-            if (defaultSourceTable != null && matcher.start() == 0 && matcher.end() == expression.trim().length()) {
-                columns.add(defaultSourceTable + "." + matcher.group(1).toLowerCase(Locale.ROOT));
-            }
-            for (int i = matcher.start(); i < matcher.end(); i++) {
-                masked.setCharAt(i, ' ');
-            }
-        }
-        return masked.toString();
     }
 
     boolean isScalarSubqueryExpression(String expression) {
