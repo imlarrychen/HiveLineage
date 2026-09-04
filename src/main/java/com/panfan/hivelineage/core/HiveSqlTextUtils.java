@@ -112,6 +112,36 @@ final class HiveSqlTextUtils {
         }
         return cursor;
     }
+    static int skipWhitespaceAndComments(String statement, int position) {
+        int cursor = position;
+        while (cursor < statement.length()) {
+            int afterWhitespace = skipWhitespace(statement, cursor);
+            if (afterWhitespace + 1 < statement.length()
+                && statement.charAt(afterWhitespace) == '-'
+                && statement.charAt(afterWhitespace + 1) == '-') {
+                cursor = afterLineComment(statement, afterWhitespace + 2);
+                continue;
+            }
+            if (afterWhitespace + 1 < statement.length()
+                && statement.charAt(afterWhitespace) == '/'
+                && statement.charAt(afterWhitespace + 1) == '*') {
+                int commentEnd = statement.indexOf("*/", afterWhitespace + 2);
+                cursor = commentEnd < 0 ? statement.length() : commentEnd + 2;
+                continue;
+            }
+            return afterWhitespace;
+        }
+        return cursor;
+    }
+    private static int afterLineComment(String statement, int position) {
+        int cursor = position;
+        while (cursor < statement.length()
+            && statement.charAt(cursor) != '\n'
+            && statement.charAt(cursor) != '\r') {
+            cursor++;
+        }
+        return cursor;
+    }
     static int readIdentifier(String statement, int position) {
         int cursor = position;
         while (cursor < statement.length() && isIdentifierCharacter(statement.charAt(cursor))) {

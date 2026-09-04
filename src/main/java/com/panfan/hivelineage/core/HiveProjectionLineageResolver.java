@@ -880,7 +880,7 @@ final class HiveProjectionLineageResolver {
             return new CteExtraction(Collections.<CteBlock>emptyList(), trimmed);
         }
         List<CteBlock> cteBlocks = new ArrayList<>();
-        int position = HiveSqlTextUtils.skipWhitespace(trimmed, 4);
+        int position = HiveSqlTextUtils.skipWhitespaceAndComments(trimmed, 4);
         while (position < trimmed.length()) {
             int nameStart = position;
             int nameEnd = HiveSqlTextUtils.readIdentifier(trimmed, nameStart);
@@ -888,17 +888,17 @@ final class HiveProjectionLineageResolver {
                 break;
             }
             String cteName = HiveSqlTextUtils.normalizeIdentifier(trimmed.substring(nameStart, nameEnd));
-            position = HiveSqlTextUtils.skipWhitespace(trimmed, nameEnd);
+            position = HiveSqlTextUtils.skipWhitespaceAndComments(trimmed, nameEnd);
             if (position < trimmed.length() && trimmed.charAt(position) == '(') {
                 position = HiveSqlTextUtils.findMatchingParen(trimmed, position) + 1;
-                position = HiveSqlTextUtils.skipWhitespace(trimmed, position);
+                position = HiveSqlTextUtils.skipWhitespaceAndComments(trimmed, position);
             }
             int asStart = position;
             int asEnd = HiveSqlTextUtils.readIdentifier(trimmed, asStart);
             if (asEnd <= asStart || !"as".equalsIgnoreCase(trimmed.substring(asStart, asEnd))) {
                 break;
             }
-            position = HiveSqlTextUtils.skipWhitespace(trimmed, asEnd);
+            position = HiveSqlTextUtils.skipWhitespaceAndComments(trimmed, asEnd);
             if (position >= trimmed.length() || trimmed.charAt(position) != '(') {
                 break;
             }
@@ -908,9 +908,9 @@ final class HiveProjectionLineageResolver {
                 break;
             }
             cteBlocks.add(new CteBlock(cteName, trimmed.substring(bodyStart, bodyEnd).trim()));
-            position = HiveSqlTextUtils.skipWhitespace(trimmed, bodyEnd + 1);
+            position = HiveSqlTextUtils.skipWhitespaceAndComments(trimmed, bodyEnd + 1);
             if (position < trimmed.length() && trimmed.charAt(position) == ',') {
-                position = HiveSqlTextUtils.skipWhitespace(trimmed, position + 1);
+                position = HiveSqlTextUtils.skipWhitespaceAndComments(trimmed, position + 1);
                 continue;
             }
             break;

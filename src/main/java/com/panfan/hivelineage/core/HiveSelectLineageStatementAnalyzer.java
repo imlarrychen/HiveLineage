@@ -399,7 +399,7 @@ final class HiveSelectLineageStatementAnalyzer {
             targetColumnResolver.extractSourceAliases(analysisStatement),
             originalInputObjects
         );
-        scope.sourceAliases.putAll(parsedStatement.getSourceAliases());
+        mergeMissingSourceAliases(scope.sourceAliases, parsedStatement.getSourceAliases());
         scope.topLevelSourceAliases = databaseBinder.bindExtractedAliasTargets(
             targetColumnResolver.extractTopLevelSourceAliases(analysisStatement),
             originalInputObjects
@@ -440,6 +440,14 @@ final class HiveSelectLineageStatementAnalyzer {
         );
         scope.defaultColumnSourceTable = scope.columnReferenceInputObjects.get(0).getQualifiedName();
         return scope;
+    }
+
+    private void mergeMissingSourceAliases(Map<String, String> aliases, Map<String, String> fallbackAliases) {
+        for (Map.Entry<String, String> fallbackAlias : fallbackAliases.entrySet()) {
+            if (!aliases.containsKey(fallbackAlias.getKey())) {
+                aliases.put(fallbackAlias.getKey(), fallbackAlias.getValue());
+            }
+        }
     }
 
     private List<TableLineage> buildTableLineages(
