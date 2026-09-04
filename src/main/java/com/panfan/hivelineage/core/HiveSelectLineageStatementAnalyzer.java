@@ -13,7 +13,7 @@ import com.panfan.hivelineage.result.StatementParseStatus;
 import com.panfan.hivelineage.result.TableLineage;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -193,7 +193,7 @@ final class HiveSelectLineageStatementAnalyzer {
             if (projectionTable == null || work.originalInputObjects.size() <= 1) {
                 return;
             }
-            work.scope.statementProjectionTables.put(projectionTable, new HashMap<String, ColumnLineageProjection>());
+            work.scope.statementProjectionTables.put(projectionTable, new LinkedHashMap<String, ColumnLineageProjection>());
         }
         Map<String, ColumnLineageProjection> projections = work.scope.statementProjectionTables.get(projectionTable);
         if (projections == null || !projections.isEmpty()) {

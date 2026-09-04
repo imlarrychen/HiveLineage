@@ -42,6 +42,10 @@ public class HiveReportedSql202609032034Test {
         assertSuccessful(ctas);
         assertContainsSource(ctas, "c_hjx002.v312_001945_03");
         assertContainsSource(ctas, "c_hjx002.v312_001945_04");
+        assertTargetColumnOrder(ctas,
+            "c_hjx002.v312_001945_01.field1",
+            "c_hjx002.v312_001945_01.field2",
+            "c_hjx002.v312_001945_01.field3");
         assertColumnContains(ctas, "c_hjx002.v312_001945_01.field1", "c_hjx002.v312_001945_03.field1");
         assertColumnContains(ctas, "c_hjx002.v312_001945_01.field1", "c_hjx002.v312_001945_04.field1");
         assertColumnContains(ctas, "c_hjx002.v312_001945_01.field2", "c_hjx002.v312_001945_03.field2");
@@ -102,6 +106,17 @@ public class HiveReportedSql202609032034Test {
     private void assertColumnContains(StatementLineageResult statement, String targetColumn, String sourceColumn) {
         ColumnLineage lineage = findColumnLineage(statement.getColumnLineages(), targetColumn);
         assertContainsColumn(lineage.getSourceColumns(), sourceColumn);
+    }
+
+    private void assertTargetColumnOrder(StatementLineageResult statement, String... targetColumns) {
+        TestSupport.assertEquals(targetColumns.length, statement.getColumnLineages().size(), "column lineage count");
+        for (int i = 0; i < targetColumns.length; i++) {
+            TestSupport.assertEquals(
+                targetColumns[i],
+                statement.getColumnLineages().get(i).getTargetColumn().getQualifiedName(),
+                "target column order at " + i
+            );
+        }
     }
 
     private ColumnLineage findColumnLineage(List<ColumnLineage> lineages, String targetColumn) {

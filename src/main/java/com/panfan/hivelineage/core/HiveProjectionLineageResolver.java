@@ -113,7 +113,7 @@ final class HiveProjectionLineageResolver {
     ) {
         Map<String, Map<String, ColumnLineageProjection>> bound = new HashMap<>();
         for (Map.Entry<String, Map<String, ColumnLineageProjection>> table : projections.entrySet()) {
-            Map<String, ColumnLineageProjection> columns = new HashMap<>();
+            Map<String, ColumnLineageProjection> columns = new LinkedHashMap<>();
             for (Map.Entry<String, ColumnLineageProjection> column : table.getValue().entrySet()) {
                 ColumnLineageProjection value = column.getValue();
                 columns.put(column.getKey(), new ColumnLineageProjection(
@@ -139,7 +139,7 @@ final class HiveProjectionLineageResolver {
             if (aliases == null) {
                 aliases = fallbackAliases;
             }
-            Map<String, ColumnLineageProjection> columns = new HashMap<>();
+            Map<String, ColumnLineageProjection> columns = new LinkedHashMap<>();
             for (Map.Entry<String, ColumnLineageProjection> column : table.getValue().entrySet()) {
                 ColumnLineageProjection value = column.getValue();
                 columns.put(column.getKey(), new ColumnLineageProjection(
