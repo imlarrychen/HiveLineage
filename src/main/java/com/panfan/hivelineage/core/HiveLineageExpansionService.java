@@ -539,9 +539,20 @@ final class HiveLineageExpansionService {
             context.getTemporaryTableColumns()
         );
         if (temporaryProjection != null) {
+            if (context.getRequest().getOptions().isIncludeTemporaryLineage()) {
+                return temporaryColumnProjection(tableName, directColumn.getColumn());
+            }
             return temporaryProjection;
         }
         return viewColumnProjection(context, tableName, directColumn.getColumn());
+    }
+
+    private ColumnLineageProjection temporaryColumnProjection(String tableName, String columnName) {
+        return new ColumnLineageProjection(
+            Collections.singletonList(new ColumnRef(tableName + "." + columnName)),
+            columnName,
+            LineageType.DIRECT
+        );
     }
     ColumnLineageProjection viewColumnProjection(
         StatementAnalysisContext context,

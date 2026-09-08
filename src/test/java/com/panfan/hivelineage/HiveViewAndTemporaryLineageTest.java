@@ -329,10 +329,14 @@ public class HiveViewAndTemporaryLineageTest {
             userStatus.getTargetColumn().getQualifiedName(),
             "final user_status target"
         );
-        TestSupport.assertEquals("ods.user_base.status", userStatus.getSourceColumns().get(0).getQualifiedName(), "final user_status source");
-        TestSupport.assertEquals(LineageType.DERIVED, userStatus.getLineageType(), "final user_status type");
         TestSupport.assertEquals(
-            "case when u.status = 1 then 'ACTIVE' else 'INACTIVE' end",
+            "seele_tmp_db_wf_001_task_temp_columns.tmp_user_profile.user_status",
+            userStatus.getSourceColumns().get(0).getQualifiedName(),
+            "final user_status source"
+        );
+        TestSupport.assertEquals(LineageType.DIRECT, userStatus.getLineageType(), "final user_status type");
+        TestSupport.assertEquals(
+            "user_status",
             userStatus.getExpression(),
             "final user_status expression"
         );
@@ -416,7 +420,7 @@ public class HiveViewAndTemporaryLineageTest {
         assertContainsSource(finalStatement, "seele_tmp_db_wf_001_task_temp_shadow.tmp_shadow_user");
         assertNotContainsSource(finalStatement, "ods.union_source_a");
         TestSupport.assertEquals(
-            "ods.user_base.user_id",
+            "seele_tmp_db_wf_001_task_temp_shadow.tmp_shadow_user.user_id",
             finalStatement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(),
             "shadow first column"
         );

@@ -850,10 +850,10 @@ from tmp_user_profile
 
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| dwd.user_profile_enriched.user_id | ods.user_base.user_id | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile | DIRECT | user_id |  | false | true |
-| dwd.user_profile_enriched.user_name | ods.user_base.user_name | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile | DIRECT | user_name |  | false | true |
-| dwd.user_profile_enriched.dept_name | ods.user_dept.dept_name | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile | DIRECT | dept_name |  | false | true |
-| dwd.user_profile_enriched.user_status | ods.user_base.status | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile | DERIVED | case when u.status = 1 then 'ACTIVE' else 'INACTIVE' end |  | true | true |
+| dwd.user_profile_enriched.user_id | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile.user_id | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile | DIRECT | user_id |  | false | true |
+| dwd.user_profile_enriched.user_name | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile.user_name | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile | DIRECT | user_name |  | false | true |
+| dwd.user_profile_enriched.dept_name | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile.dept_name | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile | DIRECT | dept_name |  | false | true |
+| dwd.user_profile_enriched.user_status | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile.user_status | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile | DIRECT | user_status |  | false | true |
 | dwd.user_profile_enriched.process_date |  | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile | CONSTANT | constant('fallback_value') |  | false | true |
 
 #### Warnings
@@ -1555,8 +1555,8 @@ from tmp_shadow_user
 
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| dwd.temp_shadow_target.user_id | ods.user_base.user_id | seele_tmp_db_wf_generated_lineage_case_13.tmp_shadow_user | DIRECT | user_id |  | false | true |
-| dwd.temp_shadow_target.user_name | ods.user_base.user_name | seele_tmp_db_wf_generated_lineage_case_13.tmp_shadow_user | DIRECT | user_name |  | false | true |
+| dwd.temp_shadow_target.user_id | seele_tmp_db_wf_generated_lineage_case_13.tmp_shadow_user.user_id | seele_tmp_db_wf_generated_lineage_case_13.tmp_shadow_user | DIRECT | user_id |  | false | true |
+| dwd.temp_shadow_target.user_name | seele_tmp_db_wf_generated_lineage_case_13.tmp_shadow_user.user_name | seele_tmp_db_wf_generated_lineage_case_13.tmp_shadow_user | DIRECT | user_name |  | false | true |
 
 #### Warnings
 
