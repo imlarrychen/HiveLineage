@@ -13,6 +13,7 @@ import com.panfan.hivelineage.request.LineageParseMode;
 import com.panfan.hivelineage.result.JoinCondition;
 import com.panfan.hivelineage.result.LineageAnalyzeResult;
 import com.panfan.hivelineage.result.StatementLineageResult;
+import com.panfan.hivelineage.result.TableLineage;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -129,7 +130,8 @@ public class JdbcMetadataColumnV2ProviderIntegrationTest {
 
         StatementLineageResult statement = result.getStatements().get(0);
         TestSupport.assertEquals(0, statement.getParseStatusCode(), "jdbc view analyzer parse status");
-        TestSupport.assertEquals("ods_it.user_base_it", statement.getInputObjects().get(0).getQualifiedName(), "jdbc view expanded input");
+        TestSupport.assertEquals("dim_it.v_user_it", statement.getInputObjects().get(0).getQualifiedName(), "jdbc view direct input");
+        assertContainsTableLineage(statement, "dim_it.v_user_it", "ods_it.user_base_it");
         TestSupport.assertEquals(
             "ods_it.user_base_it.user_id",
             statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(),
@@ -295,5 +297,19 @@ public class JdbcMetadataColumnV2ProviderIntegrationTest {
             insert.setInt(6, 2);
             insert.executeUpdate();
         }
+    }
+
+    private void assertContainsTableLineage(StatementLineageResult statement, String targetObject, String sourceObject) {
+        for (TableLineage tableLineage : statement.getTableLineages()) {
+            if (!targetObject.equals(tableLineage.getTargetObject().getQualifiedName())) {
+                continue;
+            }
+            for (int i = 0; i < tableLineage.getSourceObjects().size(); i++) {
+                if (sourceObject.equals(tableLineage.getSourceObjects().get(i).getQualifiedName())) {
+                    return;
+                }
+            }
+        }
+        throw new AssertionError("Expected table lineage " + sourceObject + " -> " + targetObject);
     }
 }

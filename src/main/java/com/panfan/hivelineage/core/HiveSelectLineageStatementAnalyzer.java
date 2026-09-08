@@ -451,12 +451,13 @@ final class HiveSelectLineageStatementAnalyzer {
             expandedTemporaryInputs,
             scope.statementProjectionTables
         );
-        scope.inputObjects = expansionService.expandViewInputObjects(
+        scope.columnLineageInputObjects = expansionService.expandViewInputObjects(
             context,
             scope.columnReferenceInputObjects,
             0,
             new LinkedHashSet<String>()
         );
+        scope.inputObjects = scope.columnReferenceInputObjects;
         scope.defaultColumnSourceTable = scope.columnReferenceInputObjects.get(0).getQualifiedName();
         return scope;
     }
@@ -479,6 +480,12 @@ final class HiveSelectLineageStatementAnalyzer {
             return Collections.emptyList();
         }
         List<TableLineage> tableLineages = new ArrayList<>();
+        tableLineages.addAll(expansionService.viewDefinitionTableLineages(
+            context,
+            work.scope.inputObjects,
+            0,
+            new LinkedHashSet<String>()
+        ));
         tableLineages.add(new TableLineage(
             work.targetObject,
             work.scope.inputObjects,
@@ -517,7 +524,7 @@ final class HiveSelectLineageStatementAnalyzer {
             ),
             new HiveColumnLineageBuilder.InputObjects(
                 work.scope.columnReferenceInputObjects,
-                work.scope.inputObjects,
+                work.scope.columnLineageInputObjects,
                 work.scope.defaultColumnSourceTable
             )
         ));
@@ -734,6 +741,7 @@ final class HiveSelectLineageStatementAnalyzer {
         private Map<String, Map<String, ColumnLineageProjection>> statementProjectionTables;
         private boolean throughTemporaryTable;
         private List<DataObjectRef> columnReferenceInputObjects;
+        private List<DataObjectRef> columnLineageInputObjects;
         private List<DataObjectRef> inputObjects;
         private String defaultColumnSourceTable;
     }

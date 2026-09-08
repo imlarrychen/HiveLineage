@@ -16,6 +16,7 @@ import com.panfan.hivelineage.result.LineageAnalyzeResult;
 import com.panfan.hivelineage.result.LineageType;
 import com.panfan.hivelineage.result.LineageWarning;
 import com.panfan.hivelineage.result.StatementLineageResult;
+import com.panfan.hivelineage.result.TableLineage;
 import com.panfan.hivelineage.result.WarningCode;
 import java.util.List;
 import org.junit.Test;
@@ -117,8 +118,10 @@ public class HiveViewAndTemporaryLineageTest {
 
         TestSupport.assertEquals(0, result.getFailedStatementCount(), "view failed statement count");
         TestSupport.assertEquals(2, result.getStatements().size(), "view statement count");
-        assertContainsSource(result.getStatements().get(0), "ods.user_base");
-        assertContainsSource(result.getStatements().get(1), "ods.user_base");
+        assertContainsSource(result.getStatements().get(0), "dim.v_user_base");
+        assertContainsSource(result.getStatements().get(1), "dim.v_user_base");
+        assertContainsTableLineage(result.getStatements().get(0), "dim.v_user_base", "ods.user_base");
+        assertContainsTableLineage(result.getStatements().get(1), "dim.v_user_base", "ods.user_base");
         TestSupport.assertEquals(2, metadataProvider.getLoadCount(), "view and base metadata should be cached");
     }
 
@@ -185,6 +188,44 @@ public class HiveViewAndTemporaryLineageTest {
     }
 
     @Test
+    public void viewInputKeepsViewBoundaryAndAddsViewDefinitionLineage() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        MapMetadataProvider metadataProvider = new MapMetadataProvider()
+            .addView(
+                "dim.v_user_base",
+                "select user_id, user_name from ods.user_base",
+                "user_id",
+                "user_name"
+            );
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_view_boundary")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .metadataProvider(metadataProvider)
+            .metadataCache(new HiveMetadataCache())
+            .rawScript("insert overwrite table dwd.user_profile(user_id, user_name) select user_id, user_name from dim.v_user_base;")
+            .options(LineageAnalyzeOptions.builder()
+                .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                .expandViewLineage(true)
+                .build())
+            .build();
+
+        StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
+
+        assertContainsSource(statement, "dim.v_user_base");
+        assertNotContainsSource(statement, "ods.user_base");
+        assertContainsTableLineage(statement, "dwd.user_profile", "dim.v_user_base");
+        assertContainsTableLineage(statement, "dim.v_user_base", "ods.user_base");
+        TestSupport.assertEquals(
+            "ods.user_base.user_id",
+            statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(),
+            "view boundary field source"
+        );
+    }
+
+    @Test
     public void missingViewDefinitionEmitsWarningAndKeepsViewSource() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
         MapMetadataProvider metadataProvider = new MapMetadataProvider()
@@ -242,7 +283,8 @@ public class HiveViewAndTemporaryLineageTest {
 
         StatementLineageResult statement = analyzer.analyzeScript(request).getStatements().get(0);
 
-        assertContainsSource(statement, "dim.v_user_level_2");
+        assertContainsSource(statement, "dim.v_user_level_1");
+        assertContainsTableLineage(statement, "dim.v_user_level_1", "dim.v_user_level_2");
         assertContainsWarning(statement.getWarnings(), WarningCode.VIEW_EXPANSION_DEPTH_EXCEEDED);
     }
 
@@ -484,7 +526,8 @@ public class HiveViewAndTemporaryLineageTest {
                 .build()
         ).getStatements().get(0);
 
-        assertContainsSource(statement, "view_db.base_t");
+        assertContainsSource(statement, "view_db.v_user");
+        assertContainsTableLineage(statement, "view_db.v_user", "view_db.base_t");
         assertNotContainsSource(statement, "session_db.base_t");
         assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "view_db.base_t.id");
     }
@@ -548,5 +591,19 @@ public class HiveViewAndTemporaryLineageTest {
         assertContainsSource(finalStatement, "seele_tmp_db_wf_same_tmp_task_same_tmp.tmp_t");
         assertNotContainsSource(finalStatement, "old_db.tmp_t");
         assertNotContainsSource(finalStatement, "db1.source_t");
+    }
+
+    private void assertContainsTableLineage(StatementLineageResult statement, String targetObject, String sourceObject) {
+        for (TableLineage tableLineage : statement.getTableLineages()) {
+            if (!targetObject.equals(tableLineage.getTargetObject().getQualifiedName())) {
+                continue;
+            }
+            for (int i = 0; i < tableLineage.getSourceObjects().size(); i++) {
+                if (sourceObject.equals(tableLineage.getSourceObjects().get(i).getQualifiedName())) {
+                    return;
+                }
+            }
+        }
+        throw new AssertionError("Expected table lineage " + sourceObject + " -> " + targetObject);
     }
 }

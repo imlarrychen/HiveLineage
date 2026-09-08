@@ -868,7 +868,7 @@ from tmp_user_profile
 
 ```sql
 -- 覆盖点：create view as select + alter view as select + 视图作为输入表
--- 预期：create/alter view 本身产生正式血缘；后续读取 dim.v_user_profile 时，expandViewLineage=true 应通过元数据识别视图并展开到 ods.user_base / ods.user_dept。
+-- 预期：create/alter view 本身产生正式血缘；后续读取 dim.v_user_profile 时，expandViewLineage=true 应保留视图输入，并补充 ods.user_base / ods.user_dept 到视图的定义血缘。
 create view if not exists dim.v_user_profile as
 select
        u.user_id
@@ -911,7 +911,7 @@ from dim.v_user_profile;
 
 ```sql
 -- 覆盖点：create view as select + alter view as select + 视图作为输入表
--- 预期：create/alter view 本身产生正式血缘；后续读取 dim.v_user_profile 时，expandViewLineage=true 应通过元数据识别视图并展开到 ods.user_base / ods.user_dept。
+-- 预期：create/alter view 本身产生正式血缘；后续读取 dim.v_user_profile 时，expandViewLineage=true 应保留视图输入，并补充 ods.user_base / ods.user_dept 到视图的定义血缘。
 create view if not exists dim.v_user_profile as
 select
        u.user_id
@@ -1017,7 +1017,7 @@ from dim.v_user_profile
 | formalLineageProduced | true |
 | parseMode | TABLE_AND_COLUMN |
 | outputObject | dwd.active_user_profile |
-| inputObjects | ods.user_base<br>ods.user_dept |
+| inputObjects | dim.v_user_profile |
 | skipReason |  |
 | failureCode |  |
 | failureMessage |  |
@@ -1026,7 +1026,8 @@ from dim.v_user_profile
 
 | Target | Sources | Operation | Through Temporary Table |
 | --- | --- | --- | --- |
-| dwd.active_user_profile | ods.user_base<br>ods.user_dept | INSERT_OVERWRITE | false |
+| dim.v_user_profile | ods.user_base<br>ods.user_dept | VIEW_DEFINITION | false |
+| dwd.active_user_profile | dim.v_user_profile | INSERT_OVERWRITE | false |
 
 #### Column Lineage
 

@@ -114,8 +114,8 @@ JDBC provider 会结合 `hive_view_parse_info` 判断视图并生成视图展开
 ## 视图处理风险
 
 - 当前解析器通过 `HiveTableMetadata.isView()` 判断对象是否为视图，判断来源是 `MetadataProvider`，不是 SQL 文本或命名规则。
-- 当前 JDBC provider 会查询 `hive_view_parse_info.view_name/view_source` 判断视图，并基于 `view_source` 生成可解析的简单视图 SQL。
+- 当前 JDBC provider 会查询 `hive_view_parse_info.view_name/view_source` 判断视图，并基于 `view_source` 生成可解析的简单视图 SQL；表血缘保留视图节点并补充视图定义上游，字段血缘继续追溯到原表字段。
 - 当前脚本级有 `viewColumnLineageCache`，同一脚本中重复读取同一视图可以复用字段映射；如果需要工作流级跨任务复用，需要把视图展开缓存外置到 workflow/global cache。
 - 当前 `HiveMetadataProvider` 只有 `getTableMetadata(TableIdentifier)`，字段元数据和对象类型元数据没有拆成两个轻量接口；`TABLE_ONLY + expandViewLineage=true` 时也可能加载完整字段列表。
-- `hive_view_parse_info.view_source` 可以支撑视图是否存在和上游表级展开；如果需要完全保留复杂视图字段表达式、join 条件和过滤条件，生产侧仍建议补充 Hive Metastore 原始视图 SQL。
+- `hive_view_parse_info.view_source` 可以支撑视图是否存在和上游表级补充；如果需要完全保留复杂视图字段表达式、join 条件和过滤条件，生产侧仍建议补充 Hive Metastore 原始视图 SQL。
 - 嵌套视图、循环视图、视图定义缺失都应通过 warning 验证，不建议只验证 happy path。

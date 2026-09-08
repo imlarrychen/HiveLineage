@@ -9,6 +9,7 @@ import com.panfan.hivelineage.result.DataObjectRef;
 import com.panfan.hivelineage.result.LineageType;
 import com.panfan.hivelineage.result.LineageWarning;
 import com.panfan.hivelineage.result.StatementLineageResult;
+import com.panfan.hivelineage.result.TableLineage;
 import com.panfan.hivelineage.result.WarningCode;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -205,6 +206,106 @@ final class HiveLineageExpansionService {
             visitingViews.remove(viewName);
         }
         return expanded;
+    }
+    List<TableLineage> viewDefinitionTableLineages(
+        StatementAnalysisContext context,
+        List<DataObjectRef> inputObjects,
+        int depth,
+        Set<String> visitingViews
+    ) {
+        LineageAnalyzeRequest request = context.getRequest();
+        if (!request.getOptions().isExpandViewLineage()
+            || request.getMetadataProvider() == null
+            || depth >= request.getOptions().getMaxViewExpandDepth()) {
+            return Collections.emptyList();
+        }
+
+        List<TableLineage> tableLineages = new ArrayList<>();
+        Set<String> emitted = new LinkedHashSet<>();
+        for (DataObjectRef inputObject : inputObjects) {
+            appendViewDefinitionTableLineages(context, inputObject, depth, visitingViews, emitted, tableLineages);
+        }
+        return tableLineages;
+    }
+
+    private void appendViewDefinitionTableLineages(
+        StatementAnalysisContext context,
+        DataObjectRef viewObject,
+        int depth,
+        Set<String> visitingViews,
+        Set<String> emitted,
+        List<TableLineage> tableLineages
+    ) {
+        LineageAnalyzeRequest request = context.getRequest();
+        List<LineageWarning> warnings = context.getWarnings();
+        int statementIndex = context.getStatementIndex();
+        String viewName = viewObject.getQualifiedName();
+        if (context.getTemporaryTableSources().containsKey(viewName) || depth >= request.getOptions().getMaxViewExpandDepth()) {
+            return;
+        }
+
+        HiveTableMetadata metadata = targetColumnResolver.loadTableMetadata(request, viewName, warnings, statementIndex);
+        if (metadata == null || !metadata.isView()) {
+            return;
+        }
+        if (metadata.getViewOriginalSql() == null || metadata.getViewOriginalSql().trim().isEmpty()) {
+            targetColumnResolver.addWarning(
+                warnings,
+                WarningCode.VIEW_METADATA_NOT_FOUND,
+                "View definition SQL is missing for " + viewName,
+                statementIndex
+            );
+            return;
+        }
+        if (!visitingViews.add(viewName)) {
+            targetColumnResolver.addWarning(
+                warnings,
+                WarningCode.VIEW_EXPANSION_CYCLE,
+                "View expansion cycle detected at " + viewName,
+                statementIndex
+            );
+            return;
+        }
+
+        List<DataObjectRef> viewSources;
+        try {
+            viewSources = parseBoundView(context, metadata).getInputObjects();
+        } catch (RuntimeException ex) {
+            targetColumnResolver.addWarning(
+                warnings,
+                WarningCode.VIEW_EXPANSION_FAILED,
+                "View expansion failed for " + viewName + ": " + ex.getMessage(),
+                statementIndex
+            );
+            visitingViews.remove(viewName);
+            return;
+        }
+
+        for (DataObjectRef viewSource : viewSources) {
+            appendViewDefinitionTableLineages(context, viewSource, depth + 1, visitingViews, emitted, tableLineages);
+        }
+        String key = viewName + "<-" + qualifiedNames(viewSources);
+        if (!viewSources.isEmpty() && emitted.add(key)) {
+            tableLineages.add(new TableLineage(
+                new DataObjectRef(viewName),
+                viewSources,
+                "VIEW_DEFINITION",
+                statementIndex,
+                false
+            ));
+        }
+        visitingViews.remove(viewName);
+    }
+
+    private String qualifiedNames(List<DataObjectRef> objects) {
+        StringBuilder builder = new StringBuilder();
+        for (DataObjectRef object : objects) {
+            if (builder.length() > 0) {
+                builder.append(",");
+            }
+            builder.append(object.getQualifiedName());
+        }
+        return builder.toString();
     }
     List<ColumnRef> expandViewSourceColumns(
         StatementAnalysisContext context,
