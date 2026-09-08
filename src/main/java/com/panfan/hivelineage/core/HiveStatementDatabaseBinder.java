@@ -5,7 +5,6 @@ import com.panfan.hivelineage.result.DataObjectRef;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -21,17 +20,25 @@ final class HiveStatementDatabaseBinder {
     ParsedHiveStatement bind(
         ParsedHiveStatement parsed,
         String statementDatabase,
+        Set<String> logicalTableNames,
         Set<String> temporaryTableNames,
-        boolean temporaryOutput
+        boolean temporaryOutput,
+        String temporaryDatabase
     ) {
         Map<String, String> physicalNames = new HashMap<>();
         Map<String, Integer> simpleNameCounts = simpleNameCounts(parsed.getInputObjects());
         List<DataObjectRef> inputs = new ArrayList<>();
         for (DataObjectRef input : parsed.getInputObjects()) {
             String raw = input.getQualifiedName();
-            String bound = containsIgnoreCase(temporaryTableNames, raw)
-                ? normalizeLogicalName(raw)
-                : nameResolver.qualifyTable(raw, statementDatabase);
+            String temporaryName = resolveTemporaryName(temporaryTableNames, raw, temporaryDatabase);
+            String bound;
+            if (temporaryName != null) {
+                bound = temporaryName;
+            } else if (containsLogicalName(logicalTableNames, raw)) {
+                bound = normalizeLogicalName(raw);
+            } else {
+                bound = nameResolver.qualifyTable(raw, statementDatabase);
+            }
             inputs.add(new DataObjectRef(bound));
             physicalNames.put(normalizeLogicalName(raw), bound);
             String simple = simpleName(raw);
@@ -42,7 +49,7 @@ final class HiveStatementDatabaseBinder {
         DataObjectRef output = parsed.getOutputObject() == null
             ? null
             : new DataObjectRef(temporaryOutput
-                ? normalizeLogicalName(parsed.getOutputObject().getQualifiedName())
+                ? HiveTemporaryTableNamer.qualify(parsed.getOutputObject().getQualifiedName(), temporaryDatabase)
                 : nameResolver.qualifyTable(parsed.getOutputObject().getQualifiedName(), statementDatabase));
         Map<String, String> aliases = bindAliasTargets(parsed.getSourceAliases(), physicalNames);
         return ParsedHiveStatement.builder()
@@ -188,9 +195,29 @@ final class HiveStatementDatabaseBinder {
         return counts;
     }
 
-    private boolean containsIgnoreCase(Set<String> values, String candidate) {
+    private String resolveTemporaryName(Set<String> values, String candidate, String temporaryDatabase) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+        String normalizedCandidate = normalizeLogicalName(candidate);
+        String simpleCandidate = simpleName(normalizedCandidate);
         for (String value : values) {
-            if (value.equalsIgnoreCase(candidate)) {
+            String normalizedValue = normalizeLogicalName(value);
+            if (normalizedValue.equals(normalizedCandidate)
+                || simpleName(normalizedValue).equals(simpleCandidate)) {
+                return HiveTemporaryTableNamer.qualify(candidate, temporaryDatabase);
+            }
+        }
+        return null;
+    }
+
+    private boolean containsLogicalName(Set<String> values, String candidate) {
+        if (values == null || values.isEmpty()) {
+            return false;
+        }
+        String normalizedCandidate = normalizeLogicalName(candidate);
+        for (String value : values) {
+            if (normalizeLogicalName(value).equals(normalizedCandidate)) {
                 return true;
             }
         }
@@ -198,12 +225,10 @@ final class HiveStatementDatabaseBinder {
     }
 
     private String simpleName(String tableName) {
-        String normalized = normalizeLogicalName(tableName);
-        int dot = normalized.lastIndexOf('.');
-        return dot < 0 ? normalized : normalized.substring(dot + 1);
+        return HiveTemporaryTableNamer.simpleName(tableName);
     }
 
     private String normalizeLogicalName(String value) {
-        return value.replace("`", "").toLowerCase(Locale.ROOT);
+        return HiveTemporaryTableNamer.normalizeLogicalName(value);
     }
 }

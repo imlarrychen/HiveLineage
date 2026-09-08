@@ -148,6 +148,10 @@ final class HiveLineageExpansionService {
         List<DataObjectRef> expanded = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         for (DataObjectRef inputObject : inputObjects) {
+            if (context.getTemporaryTableSources().containsKey(inputObject.getQualifiedName())) {
+                addInputObject(expanded, seen, inputObject);
+                continue;
+            }
             HiveTableMetadata metadata = targetColumnResolver.loadTableMetadata(
                 request,
                 inputObject.getQualifiedName(),
@@ -398,7 +402,9 @@ final class HiveLineageExpansionService {
             parsed,
             viewDatabase,
             context.getTemporaryTableSources().keySet(),
-            false
+            context.getTemporaryTableSources().keySet(),
+            false,
+            HiveTemporaryTableNamer.temporaryDatabase(context.getRequest())
         );
     }
     void warnForBoundaryViews(

@@ -424,7 +424,7 @@ public class HiveJoinLineageTest {
         StatementLineageResult statement = result.getStatements().get(0);
         JoinCondition condition = statement.getJoinConditions().get(0);
         TestSupport.assertEquals("t.dept_id = d.dept_id", condition.getJoinExpression(), "temporary join expression");
-        assertContainsSource(condition.getDirectJoinObjects(), "tmp_user");
+        assertContainsSource(condition.getDirectJoinObjects(), "seele_tmp_db_wf_join_task_join_004.tmp_user");
         assertContainsSource(condition.getDirectJoinObjects(), "dim.dept");
         assertContainsColumn(condition.getDirectJoinColumns(), "t.dept_id");
         assertContainsColumn(condition.getDirectJoinColumns(), "dim.dept.dept_id");

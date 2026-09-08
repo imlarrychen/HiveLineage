@@ -31,7 +31,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             + ".*?\\bas\\s+select\\s+(.+?)\\s+from\\s+([a-zA-Z_][\\w.]*)(?:\\s+.*)?$"
     );
     private static final Pattern CREATE_TEMPORARY_TABLE_AS_SELECT = Pattern.compile(
-        "(?is)^create\\s+temporary\\s+table\\s+([a-zA-Z_][\\w.]*).*?\\bas\\s+select\\s+(.+?)\\s+from\\s+([a-zA-Z_][\\w.]*)(?:\\s+.*)?$"
+        "(?is)^create\\s+temporary\\s+table\\s+(?:if\\s+not\\s+exists\\s+)?([a-zA-Z_][\\w.]*).*?\\bas\\s+select\\s+(.+?)\\s+from\\s+([a-zA-Z_][\\w.]*)(?:\\s+.*)?$"
     );
     private static final Pattern AS_WITH_SELECT = Pattern.compile("(?is)\\bas\\s+(?:with\\b.*)?select\\b");
     private static final Pattern INSERT_OVERWRITE_DIRECTORY = Pattern.compile(
@@ -305,7 +305,9 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             parsed,
             context.getStatementDatabase(),
             context.getTemporaryTableSources().keySet(),
-            isCreateTemporaryTable(sql)
+            context.getTemporaryTableSources().keySet(),
+            isCreateTemporaryTable(sql),
+            HiveTemporaryTableNamer.temporaryDatabase(context.getRequest())
         );
     }
 

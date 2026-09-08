@@ -52,6 +52,7 @@ public class HiveViewAndTemporaryLineageTest {
         StatementLineageResult statement = result.getStatements().get(0);
         TestSupport.assertEquals("dwd.user_profile", statement.getOutputObject().getQualifiedName(), "temporary final target");
         assertContainsSource(statement, "ods.user_base");
+        assertNotContainsSource(statement, "seele_tmp_db_wf_001_task_014.tmp_user");
         TestSupport.assertTrue(statement.getTableLineages().get(0).isThroughTemporaryTable(), "temporary lineage marker");
     }
 
@@ -78,9 +79,10 @@ public class HiveViewAndTemporaryLineageTest {
 
         TestSupport.assertEquals(2, result.getStatements().size(), "include temporary statement count");
         TestSupport.assertEquals("CREATE_TEMPORARY_TABLE_AS_SELECT", result.getStatements().get(0).getStatementType(), "temporary statement type");
-        TestSupport.assertEquals("tmp_user", result.getStatements().get(0).getOutputObject().getQualifiedName(), "temporary table target");
+        TestSupport.assertEquals("seele_tmp_db_wf_001_task_015.tmp_user", result.getStatements().get(0).getOutputObject().getQualifiedName(), "temporary table target");
         assertContainsSource(result.getStatements().get(0), "ods.user_base");
-        assertContainsSource(result.getStatements().get(1), "ods.user_base");
+        assertContainsSource(result.getStatements().get(1), "seele_tmp_db_wf_001_task_015.tmp_user");
+        assertNotContainsSource(result.getStatements().get(1), "ods.user_base");
     }
 
     @Test
@@ -312,12 +314,12 @@ public class HiveViewAndTemporaryLineageTest {
         StatementLineageResult finalStatement = result.getStatements().get(1);
 
         TestSupport.assertEquals(
-            "tmp_user_profile.user_id",
+            "seele_tmp_db_wf_001_task_temp_columns.tmp_user_profile.user_id",
             temporaryStatement.getColumnLineages().get(0).getTargetColumn().getQualifiedName(),
             "temporary user_id target"
         );
         TestSupport.assertEquals(
-            "tmp_user_profile.dept_name",
+            "seele_tmp_db_wf_001_task_temp_columns.tmp_user_profile.dept_name",
             temporaryStatement.getColumnLineages().get(3).getTargetColumn().getQualifiedName(),
             "temporary dept_name target"
         );
@@ -411,7 +413,7 @@ public class HiveViewAndTemporaryLineageTest {
         LineageAnalyzeResult result = analyzer.analyzeScript(request);
         StatementLineageResult finalStatement = result.getStatements().get(1);
 
-        assertContainsSource(finalStatement, "ods.user_base");
+        assertContainsSource(finalStatement, "seele_tmp_db_wf_001_task_temp_shadow.tmp_shadow_user");
         assertNotContainsSource(finalStatement, "ods.union_source_a");
         TestSupport.assertEquals(
             "ods.user_base.user_id",
@@ -505,7 +507,42 @@ public class HiveViewAndTemporaryLineageTest {
 
         TestSupport.assertEquals("db2.target_t", statement.getOutputObject().getQualifiedName(), "post-use target");
         assertContainsSource(statement, "db1.source_t");
+        assertNotContainsSource(statement, "seele_tmp_db_wf_temp_use_task_temp_use.tmp_t");
         assertNotContainsSource(statement, "db2.tmp_t");
         assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "db1.source_t.id");
+    }
+
+    @Test
+    public void qualifiedTemporaryTableUsesWorkflowTaskTemporaryDatabase() {
+        LineageAnalyzeResult result = new HiveScriptLineageAnalyzer().analyzeScript(
+            LineageAnalyzeRequest.builder()
+                .workflowId("wf_same_tmp")
+                .taskId("task_same_tmp")
+                .taskVersion("V1")
+                .defaultDatabase("db1")
+                .rawScript(
+                    "create temporary table old_db.tmp_t as select id from source_t; "
+                        + "insert into db2.target_t(id) select id from old_db.tmp_t;"
+                )
+                .options(LineageAnalyzeOptions.builder()
+                    .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+                    .includeTemporaryLineage(true)
+                    .build())
+                .build()
+        );
+
+        TestSupport.assertEquals(2, result.getStatements().size(), "qualified temporary returned statement count");
+        StatementLineageResult temporary = result.getStatements().get(0);
+        StatementLineageResult finalStatement = result.getStatements().get(1);
+
+        TestSupport.assertEquals(
+            "seele_tmp_db_wf_same_tmp_task_same_tmp.tmp_t",
+            temporary.getOutputObject().getQualifiedName(),
+            "qualified temporary target"
+        );
+        assertContainsSource(temporary, "db1.source_t");
+        assertContainsSource(finalStatement, "seele_tmp_db_wf_same_tmp_task_same_tmp.tmp_t");
+        assertNotContainsSource(finalStatement, "old_db.tmp_t");
+        assertNotContainsSource(finalStatement, "db1.source_t");
     }
 }

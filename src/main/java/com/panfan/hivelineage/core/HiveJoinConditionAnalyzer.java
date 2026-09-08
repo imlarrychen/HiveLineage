@@ -404,7 +404,8 @@ final class HiveJoinConditionAnalyzer {
         if (rawInputs.isEmpty()) {
             return sourceAliases;
         }
-        Set<String> logicalNames = new LinkedHashSet<>(context.getTemporaryTableSources().keySet());
+        Set<String> temporaryNames = context.getTemporaryTableSources().keySet();
+        Set<String> logicalNames = new LinkedHashSet<>(temporaryNames);
         for (String sourceObject : sourceAliases.values()) {
             if (containsProjectionTable(sourceObject, projectionTables)) {
                 logicalNames.add(sourceObject);
@@ -416,12 +417,8 @@ final class HiveJoinConditionAnalyzer {
             rawInputs,
             context.getNormalizedStatement()
         );
-        ParsedHiveStatement bound = databaseBinder.bind(
-            synthetic,
-            context.getStatementDatabase(),
-            logicalNames,
-            false
-        );
+        ParsedHiveStatement bound = databaseBinder.bind(synthetic, context.getStatementDatabase(), logicalNames,
+            temporaryNames, false, HiveTemporaryTableNamer.temporaryDatabase(context.getRequest()));
         return databaseBinder.bindExtractedAliasTargets(sourceAliases, bound.getInputObjects());
     }
     List<JoinClause> collectTopLevelJoinClauses(String sql) {
@@ -914,12 +911,9 @@ final class HiveJoinConditionAnalyzer {
         }
     }
     private ParsedHiveStatement parseAndBind(StatementAnalysisContext context, String normalizedStatement) {
-        return databaseBinder.bind(
-            parseStatement(normalizedStatement),
-            context.getStatementDatabase(),
-            context.getTemporaryTableSources().keySet(),
-            false
-        );
+        Set<String> temporaryNames = context.getTemporaryTableSources().keySet();
+        return databaseBinder.bind(parseStatement(normalizedStatement), context.getStatementDatabase(),
+            temporaryNames, temporaryNames, false, HiveTemporaryTableNamer.temporaryDatabase(context.getRequest()));
     }
     private String statementId(LineageAnalyzeRequest request, int index) {
         return request.getWorkflowId() + "_" + request.getTaskId() + "_" + request.getTaskVersion() + "_" + index;

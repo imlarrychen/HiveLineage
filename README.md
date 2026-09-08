@@ -91,7 +91,7 @@ LineageAnalyzeResult result = analyzer.analyzeScript(LineageAnalyzeRequest.build
 
 其他重要选项：
 
-- `includeTemporaryLineage`：是否返回临时表创建语句本身的血缘结果。默认不返回，但会用它串联后续血缘。
+- `includeTemporaryLineage`：是否返回临时表创建语句本身的血缘结果。默认不返回，并把后续目标血缘穿透到真实来源；开启后保留临时表中间节点。
 - `includeIgnoredStatements`：是否返回 `set`、纯查询、无输出表等被忽略语句的解析结果。默认不返回。
 - `expandViewLineage`：是否展开视图血缘。
 - `maxViewExpandDepth`：视图递归展开最大深度，默认 `5`。
@@ -408,8 +408,9 @@ CLI 结束时也会在终端打印：
 临时表处理：
 
 - `create temporary table tmp as select ...` 会记录在当前脚本会话中。
-- 后续语句引用临时表时，会把最终目标表血缘串联到临时表的真实来源表。
-- 默认不返回临时表创建语句本身的结果，除非开启 `includeTemporaryLineage`。
+- 临时表统一命名为 `seele_tmp_db_<workflowId>_<taskId>.<temporaryTableName>`，避免不同脚本 Session 中同名临时表冲突。
+- 默认不返回临时表创建语句本身的结果，后续目标表血缘会穿透到临时表的真实来源表。
+- 开启 `includeTemporaryLineage` 后会返回临时表创建语句，并在后续目标表血缘中保留临时表中间节点。
 
 分区字段处理：
 

@@ -279,7 +279,9 @@ final class HiveSelectLineageStatementAnalyzer {
             parserAdapter.parse(sql),
             context.getStatementDatabase(),
             context.getTemporaryTableSources().keySet(),
-            isCreateTemporaryTable(sql)
+            context.getTemporaryTableSources().keySet(),
+            isCreateTemporaryTable(sql),
+            HiveTemporaryTableNamer.temporaryDatabase(context.getRequest())
         );
     }
 
@@ -439,10 +441,12 @@ final class HiveSelectLineageStatementAnalyzer {
             originalInputObjects,
             context.getTemporaryTableSources()
         );
-        List<DataObjectRef> expandedTemporaryInputs = expansionService.expandTemporaryInputObjects(
-            originalInputObjects,
-            context.getTemporaryTableSources()
-        );
+        List<DataObjectRef> expandedTemporaryInputs = context.getRequest().getOptions().isIncludeTemporaryLineage()
+            ? originalInputObjects
+            : expansionService.expandTemporaryInputObjects(
+                originalInputObjects,
+                context.getTemporaryTableSources()
+            );
         scope.columnReferenceInputObjects = expansionService.filterProjectionInputObjects(
             expandedTemporaryInputs,
             scope.statementProjectionTables

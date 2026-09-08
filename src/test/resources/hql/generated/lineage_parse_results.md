@@ -786,7 +786,7 @@ where u.dt = '${bizdate}'
 | parseStatusCode | 0 |
 | formalLineageProduced | true |
 | parseMode | TABLE_AND_COLUMN |
-| outputObject | tmp_user_profile |
+| outputObject | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile |
 | inputObjects | ods.user_base<br>ods.user_dept |
 | skipReason |  |
 | failureCode |  |
@@ -796,17 +796,17 @@ where u.dt = '${bizdate}'
 
 | Target | Sources | Operation | Through Temporary Table |
 | --- | --- | --- | --- |
-| tmp_user_profile | ods.user_base<br>ods.user_dept | CREATE_TEMPORARY_TABLE_AS_SELECT | false |
+| seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile | ods.user_base<br>ods.user_dept | CREATE_TEMPORARY_TABLE_AS_SELECT | false |
 
 #### Column Lineage
 
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| tmp_user_profile.user_id | ods.user_base.user_id | ods.user_base<br>ods.user_dept | DIRECT | u.user_id |  | false | true |
-| tmp_user_profile.user_name | ods.user_base.user_name | ods.user_base<br>ods.user_dept | DIRECT | u.user_name |  | false | true |
-| tmp_user_profile.dept_id | ods.user_base.dept_id | ods.user_base<br>ods.user_dept | DIRECT | u.dept_id |  | false | true |
-| tmp_user_profile.dept_name | ods.user_dept.dept_name | ods.user_base<br>ods.user_dept | DIRECT | d.dept_name |  | false | true |
-| tmp_user_profile.user_status | ods.user_base.status | ods.user_base<br>ods.user_dept | DERIVED | case when u.status = 1 then 'ACTIVE' else 'INACTIVE' end |  | true | true |
+| seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile.user_id | ods.user_base.user_id | ods.user_base<br>ods.user_dept | DIRECT | u.user_id |  | false | true |
+| seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile.user_name | ods.user_base.user_name | ods.user_base<br>ods.user_dept | DIRECT | u.user_name |  | false | true |
+| seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile.dept_id | ods.user_base.dept_id | ods.user_base<br>ods.user_dept | DIRECT | u.dept_id |  | false | true |
+| seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile.dept_name | ods.user_dept.dept_name | ods.user_base<br>ods.user_dept | DIRECT | d.dept_name |  | false | true |
+| seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile.user_status | ods.user_base.status | ods.user_base<br>ods.user_dept | DERIVED | case when u.status = 1 then 'ACTIVE' else 'INACTIVE' end |  | true | true |
 
 #### Warnings
 
@@ -835,7 +835,7 @@ from tmp_user_profile
 | formalLineageProduced | true |
 | parseMode | TABLE_AND_COLUMN |
 | outputObject | dwd.user_profile_enriched |
-| inputObjects | ods.user_base<br>ods.user_dept |
+| inputObjects | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile |
 | skipReason |  |
 | failureCode |  |
 | failureMessage |  |
@@ -844,17 +844,17 @@ from tmp_user_profile
 
 | Target | Sources | Operation | Through Temporary Table |
 | --- | --- | --- | --- |
-| dwd.user_profile_enriched | ods.user_base<br>ods.user_dept | INSERT_OVERWRITE | true |
+| dwd.user_profile_enriched | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile | INSERT_OVERWRITE | true |
 
 #### Column Lineage
 
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| dwd.user_profile_enriched.user_id | ods.user_base.user_id | ods.user_base<br>ods.user_dept | DIRECT | user_id |  | false | true |
-| dwd.user_profile_enriched.user_name | ods.user_base.user_name | ods.user_base<br>ods.user_dept | DIRECT | user_name |  | false | true |
-| dwd.user_profile_enriched.dept_name | ods.user_dept.dept_name | ods.user_base<br>ods.user_dept | DIRECT | dept_name |  | false | true |
-| dwd.user_profile_enriched.user_status | ods.user_base.status | ods.user_base<br>ods.user_dept | DERIVED | case when u.status = 1 then 'ACTIVE' else 'INACTIVE' end |  | true | true |
-| dwd.user_profile_enriched.process_date |  | ods.user_base<br>ods.user_dept | CONSTANT | constant('fallback_value') |  | false | true |
+| dwd.user_profile_enriched.user_id | ods.user_base.user_id | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile | DIRECT | user_id |  | false | true |
+| dwd.user_profile_enriched.user_name | ods.user_base.user_name | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile | DIRECT | user_name |  | false | true |
+| dwd.user_profile_enriched.dept_name | ods.user_dept.dept_name | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile | DIRECT | dept_name |  | false | true |
+| dwd.user_profile_enriched.user_status | ods.user_base.status | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile | DERIVED | case when u.status = 1 then 'ACTIVE' else 'INACTIVE' end |  | true | true |
+| dwd.user_profile_enriched.process_date |  | seele_tmp_db_wf_generated_lineage_case_06.tmp_user_profile | CONSTANT | constant('fallback_value') |  | false | true |
 
 #### Warnings
 
@@ -1497,7 +1497,7 @@ where dt = '${bizdate}'
 | parseStatusCode | 0 |
 | formalLineageProduced | true |
 | parseMode | TABLE_AND_COLUMN |
-| outputObject | tmp_shadow_user |
+| outputObject | seele_tmp_db_wf_generated_lineage_case_13.tmp_shadow_user |
 | inputObjects | ods.user_base |
 | skipReason |  |
 | failureCode |  |
@@ -1507,14 +1507,14 @@ where dt = '${bizdate}'
 
 | Target | Sources | Operation | Through Temporary Table |
 | --- | --- | --- | --- |
-| tmp_shadow_user | ods.user_base | CREATE_TEMPORARY_TABLE_AS_SELECT | false |
+| seele_tmp_db_wf_generated_lineage_case_13.tmp_shadow_user | ods.user_base | CREATE_TEMPORARY_TABLE_AS_SELECT | false |
 
 #### Column Lineage
 
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| tmp_shadow_user.user_id | ods.user_base.user_id | ods.user_base | DIRECT | user_id |  | false | true |
-| tmp_shadow_user.user_name | ods.user_base.user_name | ods.user_base | DIRECT | user_name |  | false | true |
+| seele_tmp_db_wf_generated_lineage_case_13.tmp_shadow_user.user_id | ods.user_base.user_id | ods.user_base | DIRECT | user_id |  | false | true |
+| seele_tmp_db_wf_generated_lineage_case_13.tmp_shadow_user.user_name | ods.user_base.user_name | ods.user_base | DIRECT | user_name |  | false | true |
 
 #### Warnings
 
@@ -1540,7 +1540,7 @@ from tmp_shadow_user
 | formalLineageProduced | true |
 | parseMode | TABLE_AND_COLUMN |
 | outputObject | dwd.temp_shadow_target |
-| inputObjects | ods.user_base |
+| inputObjects | seele_tmp_db_wf_generated_lineage_case_13.tmp_shadow_user |
 | skipReason |  |
 | failureCode |  |
 | failureMessage |  |
@@ -1549,14 +1549,14 @@ from tmp_shadow_user
 
 | Target | Sources | Operation | Through Temporary Table |
 | --- | --- | --- | --- |
-| dwd.temp_shadow_target | ods.user_base | INSERT_OVERWRITE | true |
+| dwd.temp_shadow_target | seele_tmp_db_wf_generated_lineage_case_13.tmp_shadow_user | INSERT_OVERWRITE | true |
 
 #### Column Lineage
 
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| dwd.temp_shadow_target.user_id | ods.user_base.user_id | ods.user_base | DIRECT | user_id |  | false | true |
-| dwd.temp_shadow_target.user_name | ods.user_base.user_name | ods.user_base | DIRECT | user_name |  | false | true |
+| dwd.temp_shadow_target.user_id | ods.user_base.user_id | seele_tmp_db_wf_generated_lineage_case_13.tmp_shadow_user | DIRECT | user_id |  | false | true |
+| dwd.temp_shadow_target.user_name | ods.user_base.user_name | seele_tmp_db_wf_generated_lineage_case_13.tmp_shadow_user | DIRECT | user_name |  | false | true |
 
 #### Warnings
 
