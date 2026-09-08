@@ -529,9 +529,12 @@ from test_b;
 - **并且** 语句为 `insert overwrite table dwd.user_profile select id, name from dim.v_user`
 - **并且** 请求配置 `expandViewLineage = true`
 - **当** 该语句被解析
-- **那么** 表级血缘必须展开为从 `ods.user` 到 `dwd.user_profile`
-- **并且** 字段级血缘必须展开为从 `ods.user.id` 到 `dwd.user_profile.id`
-- **并且** 字段级血缘必须展开为从 `ods.user.name` 到 `dwd.user_profile.name`
+- **那么** 表级血缘必须包含从 `ods.user` 到 `dim.v_user`
+- **并且** 表级血缘必须包含从 `dim.v_user` 到 `dwd.user_profile`
+- **并且** 字段级血缘必须包含从 `ods.user.id` 到 `dim.v_user.id`
+- **并且** 字段级血缘必须包含从 `dim.v_user.id` 到 `dwd.user_profile.id`
+- **并且** 字段级血缘必须包含从 `ods.user.name` 到 `dim.v_user.name`
+- **并且** 字段级血缘必须包含从 `dim.v_user.name` 到 `dwd.user_profile.name`
 
 #### 场景：重复读取同一视图时复用展开缓存
 

@@ -451,12 +451,7 @@ final class HiveSelectLineageStatementAnalyzer {
             expandedTemporaryInputs,
             scope.statementProjectionTables
         );
-        scope.columnLineageInputObjects = expansionService.expandViewInputObjects(
-            context,
-            scope.columnReferenceInputObjects,
-            0,
-            new LinkedHashSet<String>()
-        );
+        scope.columnLineageInputObjects = scope.columnReferenceInputObjects;
         scope.inputObjects = scope.columnReferenceInputObjects;
         scope.defaultColumnSourceTable = scope.columnReferenceInputObjects.get(0).getQualifiedName();
         return scope;
@@ -504,7 +499,7 @@ final class HiveSelectLineageStatementAnalyzer {
         if (parseMode != LineageParseMode.COLUMN_ONLY && parseMode != LineageParseMode.TABLE_AND_COLUMN) {
             return Collections.emptyList();
         }
-        return columnLineageBuilder.build(HiveColumnLineageBuilder.Input.of(
+        List<ColumnLineage> columnLineages = columnLineageBuilder.build(HiveColumnLineageBuilder.Input.of(
             context,
             work.parsedStatement,
             new HiveColumnLineageBuilder.Target(
@@ -528,6 +523,11 @@ final class HiveSelectLineageStatementAnalyzer {
                 work.scope.defaultColumnSourceTable
             )
         ));
+        return expansionService.prependViewDefinitionColumnLineages(
+            context,
+            work.scope.inputObjects,
+            columnLineages
+        );
     }
 
     private PositionalStarCheck positionalStarCheck(

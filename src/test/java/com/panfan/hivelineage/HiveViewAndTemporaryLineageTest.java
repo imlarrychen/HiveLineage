@@ -156,7 +156,7 @@ public class HiveViewAndTemporaryLineageTest {
     }
 
     @Test
-    public void viewColumnLineageExpandsToBaseColumns() {
+    public void viewColumnLineagePreservesViewFieldBoundaryAndAddsDefinitionFields() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
         MapMetadataProvider metadataProvider = new MapMetadataProvider()
             .addView(
@@ -182,9 +182,18 @@ public class HiveViewAndTemporaryLineageTest {
 
         List<ColumnLineage> columns = analyzer.analyzeScript(request).getStatements().get(0).getColumnLineages();
 
-        TestSupport.assertEquals("ods.user_base.user_id", columns.get(0).getSourceColumns().get(0).getQualifiedName(), "view direct source");
-        assertContainsColumn(columns.get(1).getSourceColumns(), "ods.user_base.first_name");
-        assertContainsColumn(columns.get(1).getSourceColumns(), "ods.user_base.last_name");
+        ColumnLineage viewUserId = findColumnLineage(columns, "dim.v_user_base.user_id");
+        TestSupport.assertEquals("ods.user_base.user_id", viewUserId.getSourceColumns().get(0).getQualifiedName(), "view direct source");
+
+        ColumnLineage targetUserId = findColumnLineage(columns, "dwd.user_profile.user_id");
+        TestSupport.assertEquals("dim.v_user_base.user_id", targetUserId.getSourceColumns().get(0).getQualifiedName(), "target direct view source");
+
+        ColumnLineage viewUserName = findColumnLineage(columns, "dim.v_user_base.user_name");
+        assertContainsColumn(viewUserName.getSourceColumns(), "ods.user_base.first_name");
+        assertContainsColumn(viewUserName.getSourceColumns(), "ods.user_base.last_name");
+
+        ColumnLineage targetUserName = findColumnLineage(columns, "dwd.user_profile.user_name");
+        TestSupport.assertEquals("dim.v_user_base.user_name", targetUserName.getSourceColumns().get(0).getQualifiedName(), "target derived view source");
     }
 
     @Test
@@ -220,8 +229,13 @@ public class HiveViewAndTemporaryLineageTest {
         assertContainsTableLineage(statement, "dim.v_user_base", "ods.user_base");
         TestSupport.assertEquals(
             "ods.user_base.user_id",
-            statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(),
-            "view boundary field source"
+            findColumnLineage(statement.getColumnLineages(), "dim.v_user_base.user_id").getSourceColumns().get(0).getQualifiedName(),
+            "view definition field source"
+        );
+        TestSupport.assertEquals(
+            "dim.v_user_base.user_id",
+            findColumnLineage(statement.getColumnLineages(), "dwd.user_profile.user_id").getSourceColumns().get(0).getQualifiedName(),
+            "target view field source"
         );
     }
 
@@ -391,7 +405,7 @@ public class HiveViewAndTemporaryLineageTest {
     }
 
     @Test
-    public void viewColumnLineageKeepsDerivedExpressionWhenExpanded() {
+    public void viewColumnLineageKeepsDerivedExpressionOnViewDefinitionEdge() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
         MapMetadataProvider metadataProvider = new MapMetadataProvider()
             .addTable("ods.user_base", "user_id", "user_name")
@@ -417,11 +431,14 @@ public class HiveViewAndTemporaryLineageTest {
                 .build())
             .build();
 
-        ColumnLineage userName = analyzer.analyzeScript(request).getStatements().get(0).getColumnLineages().get(1);
+        List<ColumnLineage> columns = analyzer.analyzeScript(request).getStatements().get(0).getColumnLineages();
+        ColumnLineage userName = findColumnLineage(columns, "dim.v_user_profile.user_name");
+        ColumnLineage targetUserName = findColumnLineage(columns, "dwd.active_user_profile.user_name");
 
         TestSupport.assertEquals("ods.user_base.user_name", userName.getSourceColumns().get(0).getQualifiedName(), "expanded view user_name source");
         TestSupport.assertEquals(LineageType.DERIVED, userName.getLineageType(), "expanded view user_name type");
         TestSupport.assertEquals("upper(user_name)", userName.getExpression(), "expanded view user_name expression");
+        TestSupport.assertEquals("dim.v_user_profile.user_name", targetUserName.getSourceColumns().get(0).getQualifiedName(), "target view user_name source");
     }
 
     @Test
@@ -529,7 +546,8 @@ public class HiveViewAndTemporaryLineageTest {
         assertContainsSource(statement, "view_db.v_user");
         assertContainsTableLineage(statement, "view_db.v_user", "view_db.base_t");
         assertNotContainsSource(statement, "session_db.base_t");
-        assertContainsColumn(statement.getColumnLineages().get(0).getSourceColumns(), "view_db.base_t.id");
+        assertContainsColumn(findColumnLineage(statement.getColumnLineages(), "view_db.v_user.id").getSourceColumns(), "view_db.base_t.id");
+        assertContainsColumn(findColumnLineage(statement.getColumnLineages(), "session_db.target_t.id").getSourceColumns(), "view_db.v_user.id");
     }
 
     @Test
@@ -605,5 +623,14 @@ public class HiveViewAndTemporaryLineageTest {
             }
         }
         throw new AssertionError("Expected table lineage " + sourceObject + " -> " + targetObject);
+    }
+
+    private ColumnLineage findColumnLineage(List<ColumnLineage> columnLineages, String targetColumn) {
+        for (ColumnLineage columnLineage : columnLineages) {
+            if (targetColumn.equals(columnLineage.getTargetColumn().getQualifiedName())) {
+                return columnLineage;
+            }
+        }
+        throw new AssertionError("Expected target column lineage " + targetColumn);
     }
 }

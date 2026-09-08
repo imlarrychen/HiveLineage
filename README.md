@@ -93,7 +93,7 @@ LineageAnalyzeResult result = analyzer.analyzeScript(LineageAnalyzeRequest.build
 
 - `includeTemporaryLineage`：是否返回临时表创建语句本身的血缘结果。默认不返回，并把后续目标血缘穿透到真实来源；开启后保留临时表中间节点。
 - `includeIgnoredStatements`：是否返回 `set`、纯查询、无输出表等被忽略语句的解析结果。默认不返回。
-- `expandViewLineage`：是否解析视图定义并补充视图上游血缘；表血缘会保留视图中间节点，字段血缘继续追溯到原表字段。
+- `expandViewLineage`：是否解析视图定义并补充视图上游血缘；表血缘和字段血缘都会保留视图中间节点，例如 `c -> a -> b`、`c.id -> a.id -> b.id`。
 - `maxViewExpandDepth`：视图递归展开最大深度，默认 `5`。
 - `fallbackVariableValue`：残留变量兜底替换值，默认 `__HIVE_LINEAGE_DEFAULT__`。
 
@@ -224,7 +224,7 @@ MySQL 元数据实现：
 - 上游来源字段：`view_source`，格式为 `库名.表名`。
 - 失败标识：`failed_status`，过滤 `b'1'` 的解析失败记录。
 
-如果命中视图来源，provider 会返回 `HiveTableMetadata.view(...)`，并用视图字段和 `view_source` 构造可解析的视图 SQL，例如 `select col1, col2 from ods.source_table`。开启 `expandViewLineage` 后，分析器会据此补充 `ods.source_table -> view` 的表血缘，并把字段血缘追溯到 `ods.source_table`。
+如果命中视图来源，provider 会返回 `HiveTableMetadata.view(...)`，并用视图字段和 `view_source` 构造可解析的视图 SQL，例如 `select col1, col2 from ods.source_table`。开启 `expandViewLineage` 后，分析器会据此补充 `ods.source_table -> view` 的表血缘，并补充 `ods.source_table.col1 -> view.col1` 这样的视图定义字段血缘；下游读取视图时继续保留 `view.col1 -> target.col1`。
 
 使用示例：
 
@@ -428,7 +428,7 @@ CLI 结束时也会在终端打印：
 
 - 如果开启 `expandViewLineage`，解析器会通过 `HiveMetadataProvider` 判断输入对象是否是视图。
 - JDBC provider 会查询 `hive_view_parse_info`，通过 `view_name` 判断视图，并使用 `view_source` 生成视图展开 SQL。
-- 如果是视图，并且元数据中存在或可生成视图 SQL，则继续解析视图 SQL，表血缘保留 `原表 -> 视图 -> 目标表` 的中间节点，字段血缘继续追溯到原表字段。
+- 如果是视图，并且元数据中存在或可生成视图 SQL，则继续解析视图 SQL，表血缘保留 `原表 -> 视图 -> 目标表` 的中间节点，字段血缘也保留 `原表字段 -> 视图字段 -> 目标字段` 的中间节点。
 - 如果视图定义缺失、解析失败、循环依赖或超过最大展开深度，会保留可推断血缘并返回 warning。
 
 ## 变量处理

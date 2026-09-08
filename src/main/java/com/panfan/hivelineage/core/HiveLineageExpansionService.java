@@ -565,6 +565,115 @@ final class HiveLineageExpansionService {
         }
     }
 
+    List<ColumnLineage> prependViewDefinitionColumnLineages(
+        StatementAnalysisContext context,
+        List<DataObjectRef> inputObjects,
+        List<ColumnLineage> downstreamColumnLineages
+    ) {
+        LineageAnalyzeRequest request = context.getRequest();
+        if (!request.getOptions().isExpandViewLineage()
+            || request.getMetadataProvider() == null
+            || downstreamColumnLineages.isEmpty()) {
+            return downstreamColumnLineages;
+        }
+
+        List<ColumnLineage> viewDefinitionLineages = new ArrayList<>();
+        Set<String> emittedTargets = new LinkedHashSet<>();
+        for (DataObjectRef inputObject : inputObjects) {
+            appendReferencedViewDefinitionColumnLineages(
+                context,
+                inputObject,
+                downstreamColumnLineages,
+                emittedTargets,
+                viewDefinitionLineages
+            );
+        }
+        if (viewDefinitionLineages.isEmpty()) {
+            return downstreamColumnLineages;
+        }
+        List<ColumnLineage> combined = new ArrayList<>(viewDefinitionLineages);
+        combined.addAll(downstreamColumnLineages);
+        return combined;
+    }
+
+    private void appendReferencedViewDefinitionColumnLineages(
+        StatementAnalysisContext context,
+        DataObjectRef inputObject,
+        List<ColumnLineage> downstreamColumnLineages,
+        Set<String> emittedTargets,
+        List<ColumnLineage> viewDefinitionLineages
+    ) {
+        String viewName = inputObject.getQualifiedName();
+        if (context.getTemporaryTableSources().containsKey(viewName)) {
+            return;
+        }
+        HiveTableMetadata metadata = targetColumnResolver.loadTableMetadata(
+            context.getRequest(),
+            viewName,
+            context.getWarnings(),
+            context.getStatementIndex()
+        );
+        if (!hasUsableViewDefinition(metadata)) {
+            return;
+        }
+
+        Map<String, ColumnLineageProjection> mapping = viewColumnMapping(
+            context,
+            metadata,
+            0,
+            new LinkedHashSet<String>()
+        );
+        for (String referencedColumn : referencedColumnsForView(viewName, downstreamColumnLineages)) {
+            ColumnLineageProjection projection = mapping.get(referencedColumn.toLowerCase(Locale.ROOT));
+            if (projection == null || projection.isUnresolved()) {
+                continue;
+            }
+            String targetColumn = viewName + "." + referencedColumn;
+            if (!emittedTargets.add(targetColumn)) {
+                continue;
+            }
+            viewDefinitionLineages.add(ColumnLineage.builder()
+                .targetColumn(new ColumnRef(targetColumn))
+                .sourceColumns(projection.getSourceColumns())
+                .sourceObjects(sourceObjectsForColumns(projection.getSourceColumns()))
+                .expression(projection.getExpression())
+                .expressionExtracted(true)
+                .lineageType(projection.getLineageType())
+                .functionNames(projection.getLineageType() == LineageType.CONSTANT
+                    ? Collections.<String>emptyList()
+                    : projectionResolver.extractFunctionNames(projection.getExpression()))
+                .complexExpression(projection.getLineageType() == LineageType.DERIVED)
+                .statementIndex(context.getStatementIndex())
+                .build());
+        }
+    }
+
+    private Set<String> referencedColumnsForView(String viewName, List<ColumnLineage> downstreamColumnLineages) {
+        Set<String> referencedColumns = new LinkedHashSet<>();
+        for (ColumnLineage columnLineage : downstreamColumnLineages) {
+            for (ColumnRef sourceColumn : columnLineage.getSourceColumns()) {
+                String tableName = HiveSqlTextUtils.tableNameOfColumn(sourceColumn.getQualifiedName());
+                String columnName = HiveSqlTextUtils.columnNameOf(sourceColumn.getQualifiedName());
+                if (columnName != null && viewName.equals(tableName)) {
+                    referencedColumns.add(columnName);
+                }
+            }
+        }
+        return referencedColumns;
+    }
+
+    private List<DataObjectRef> sourceObjectsForColumns(List<ColumnRef> sourceColumns) {
+        List<DataObjectRef> sourceObjects = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (ColumnRef sourceColumn : sourceColumns) {
+            String tableName = HiveSqlTextUtils.tableNameOfColumn(sourceColumn.getQualifiedName());
+            if (tableName != null && seen.add(tableName)) {
+                sourceObjects.add(new DataObjectRef(tableName));
+            }
+        }
+        return sourceObjects;
+    }
+
     static final class DirectProjectionScope {
         private final Map<String, String> sourceAliases;
         private final Map<String, String> topLevelProjectionSourceAliases;
@@ -645,7 +754,7 @@ final class HiveLineageExpansionService {
             }
             return temporaryProjection;
         }
-        return viewColumnProjection(context, tableName, directColumn.getColumn());
+        return null;
     }
 
     private ColumnLineageProjection temporaryColumnProjection(String tableName, String columnName) {

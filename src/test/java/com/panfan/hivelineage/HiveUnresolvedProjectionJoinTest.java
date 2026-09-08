@@ -18,7 +18,7 @@ import static com.panfan.hivelineage.AnalyzerTestSupport.containsSource;
 
 public class HiveUnresolvedProjectionJoinTest {
     @Test
-    public void unresolvedViewExpressionDoesNotFallBackToViewColumn() {
+    public void unresolvedViewExpressionKeepsDownstreamViewColumnOnly() {
         TestMetadataProvider metadata = new TestMetadataProvider()
             .addTable("db1.a", "id")
             .addTable("target.c", "id")
@@ -30,7 +30,11 @@ public class HiveUnresolvedProjectionJoinTest {
 
         assertContainsWarning(statement.getWarnings(), WarningCode.UNKNOWN_COLUMN_LINEAGE);
         TestSupport.assertEquals(1, statement.getColumnLineages().size(), "unresolved view expression count");
-        TestSupport.assertEquals(0, statement.getColumnLineages().get(0).getSourceColumns().size(), "unresolved view sources");
+        TestSupport.assertEquals(
+            "dim.v.id",
+            statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(),
+            "unresolved view downstream source"
+        );
     }
 
     @Test

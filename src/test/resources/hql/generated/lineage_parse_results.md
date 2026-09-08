@@ -1033,9 +1033,12 @@ from dim.v_user_profile
 
 | Target Column | Source Columns | Source Objects | Type | Expression | Functions | Complex | Extracted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| dwd.active_user_profile.user_id | ods.user_base.user_id | ods.user_base<br>ods.user_dept | DIRECT | user_id |  | false | true |
-| dwd.active_user_profile.user_name | ods.user_base.user_name | ods.user_base<br>ods.user_dept | DERIVED | upper(u.user_name) | upper | true | true |
-| dwd.active_user_profile.dept_name | ods.user_dept.dept_name | ods.user_base<br>ods.user_dept | DIRECT | dept_name |  | false | true |
+| dim.v_user_profile.user_id | ods.user_base.user_id | ods.user_base | DIRECT | u.user_id |  | false | true |
+| dim.v_user_profile.user_name | ods.user_base.user_name | ods.user_base | DERIVED | upper(u.user_name) | upper | true | true |
+| dim.v_user_profile.dept_name | ods.user_dept.dept_name | ods.user_dept | DIRECT | d.dept_name |  | false | true |
+| dwd.active_user_profile.user_id | dim.v_user_profile.user_id | dim.v_user_profile | DIRECT | user_id |  | false | true |
+| dwd.active_user_profile.user_name | dim.v_user_profile.user_name | dim.v_user_profile | DIRECT | user_name |  | false | true |
+| dwd.active_user_profile.dept_name | dim.v_user_profile.dept_name | dim.v_user_profile | DIRECT | dept_name |  | false | true |
 
 #### Warnings
 

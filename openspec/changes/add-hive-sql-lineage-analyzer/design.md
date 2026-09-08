@@ -515,7 +515,7 @@ Hive 视图不能简单当成普通物理表停住，否则血缘只能追到视
 - 当 SQL 读取对象是物理表时，按普通表处理。
 - 当 SQL 读取对象是视图时，从 `TableMetadata.viewExpandedSql` 或 `viewOriginalSql` 获取视图定义。
 - 对视图定义 SQL 递归执行解析，得到视图字段到上游字段、视图对象到上游对象的映射，并缓存为 `ViewLineageExpansion`。
-- 外层 SQL 读取视图字段时，通过视图字段映射继续展开到真实上游字段。
+- 外层 SQL 读取视图字段时，字段血缘保留视图字段边界，并额外输出视图定义字段血缘，形成 `上游字段 -> 视图字段 -> 目标字段` 链路。
 - 如果视图依赖另一个视图，继续递归展开，直到遇到物理表、临时表、元数据缺失或达到 `maxViewExpandDepth`。
 - 如果检测到视图循环依赖，停止展开并返回 `VIEW_EXPANSION_CYCLE` warning。
 
@@ -534,14 +534,17 @@ from dim.v_user;
 默认展开后的表血缘：
 
 ```text
-ods.user -> dwd.user_profile
+ods.user -> dim.v_user
+dim.v_user -> dwd.user_profile
 ```
 
 默认展开后的字段血缘：
 
 ```text
-ods.user.id   -> dwd.user_profile.id
-ods.user.name -> dwd.user_profile.name
+ods.user.id     -> dim.v_user.id
+dim.v_user.id   -> dwd.user_profile.id
+ods.user.name   -> dim.v_user.name
+dim.v_user.name -> dwd.user_profile.name
 ```
 
 如果 `expandViewLineage = false`，则表血缘可以停留在：

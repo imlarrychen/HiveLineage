@@ -7,7 +7,6 @@ import com.panfan.hivelineage.result.LineageType;
 import com.panfan.hivelineage.result.WarningCode;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -203,14 +202,6 @@ final class HiveColumnLineageBuilder {
                 input.columnOwners,
                 input.columnAliasSources,
                 input.ownerResolver
-            );
-        }
-        if (directProjection == null) {
-            return expansionService.expandViewSourceColumns(
-                input.context,
-                resolvedSourceColumns,
-                0,
-                new LinkedHashSet<String>()
             );
         }
         return resolvedSourceColumns;

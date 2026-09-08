@@ -14,7 +14,7 @@ import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsWarning;
 
 public class HiveScopedViewOwnerResolutionTest {
     @Test
-    public void ambiguousQualifiedOwnerInsideExpandedViewDoesNotChooseEitherTable() {
+    public void ambiguousQualifiedOwnerInsideExpandedViewKeepsDownstreamViewColumnOnly() {
         MapMetadataProvider metadata = new MapMetadataProvider()
             .addTable("db1.b", "id")
             .addTable("db2.b", "id")
@@ -43,6 +43,10 @@ public class HiveScopedViewOwnerResolutionTest {
 
         assertContainsWarning(statement.getWarnings(), WarningCode.UNKNOWN_COLUMN_LINEAGE);
         TestSupport.assertEquals(1, statement.getColumnLineages().size(), "ambiguous view lineage count");
-        TestSupport.assertEquals(0, statement.getColumnLineages().get(0).getSourceColumns().size(), "ambiguous view sources");
+        TestSupport.assertEquals(
+            "dim.v_ambiguous.id",
+            statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName(),
+            "ambiguous view downstream source"
+        );
     }
 }
