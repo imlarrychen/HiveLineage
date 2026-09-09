@@ -499,6 +499,47 @@ from test_b;
 - **那么** 最终表级血缘必须展开为从 `ods.user` 到 `dwd.user_profile`
 - **并且** 最终字段级血缘必须把 `tmp_user` 字段展开到其上游 `ods.user` 字段
 
+#### 场景：带库名的临时表使用统一临时库
+
+- **假设** 请求中的 `workflowId = 123`
+- **并且** 请求中的 `taskId = 456`
+- **并且** 脚本包含 `create temporary table source_db.tmp_user as select id from ods.user`
+- **当** 脚本被解析
+- **那么** 临时表对象名必须为 `seele_tmp_db_123_456.tmp_user`
+- **并且** 不得使用 SQL 中显式写出的库名 `source_db`
+- **并且** 后续读取 `source_db.tmp_user` 或 `tmp_user` 都必须匹配当前 Session 中的同一临时表
+
+### 需求：CTE 血缘展开
+
+解析器必须区分 `WITH` CTE 和 `CREATE TEMPORARY TABLE`。CTE 是语句级查询结构，不是 Session 级临时表对象。
+
+#### 场景：CTE 不作为临时表节点输出
+
+- **假设** SQL 为：
+
+```sql
+create table dwd.user_profile as
+with tmp_user as (
+    select id, name from ods.user_base
+)
+select * from tmp_user;
+```
+
+- **当** 脚本被解析
+- **那么** 表级血缘必须包含从 `ods.user_base` 到 `dwd.user_profile`
+- **并且** 字段级血缘必须包含从 `ods.user_base.id` 到 `dwd.user_profile.id`
+- **并且** 不得生成 `seele_tmp_db_<workflowId>_<taskId>.tmp_user` 临时表节点
+- **并且** 不得把 `tmp_user` 当作 Hive 物理表输出
+
+#### 场景：兼容后续语句引用前序纯查询 CTE
+
+- **假设** 脚本先包含纯查询 `with tmp_user as (select id from ods.user_base) select * from tmp_user`
+- **并且** 后续语句为 `insert overwrite table dwd.user_profile select * from tmp_user`
+- **当** 脚本被解析
+- **那么** 后续语句可以复用前序 CTE 的来源映射
+- **并且** 最终表级血缘必须展开为从 `ods.user_base` 到 `dwd.user_profile`
+- **并且** 不得生成 `seele_tmp_db_<workflowId>_<taskId>.tmp_user` 临时表节点
+
 ### 需求：视图血缘展开
 
 解析器必须识别输入对象是否为 Hive 视图，并在配置允许时把视图血缘展开到真实上游对象。

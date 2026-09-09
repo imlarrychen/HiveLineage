@@ -409,8 +409,11 @@ CLI 结束时也会在终端打印：
 
 - `create temporary table tmp as select ...` 会记录在当前脚本会话中。
 - 临时表统一命名为 `seele_tmp_db_<workflowId>_<taskId>.<temporaryTableName>`，避免不同脚本 Session 中同名临时表冲突。
+- 即使创建临时表时写了库名，也不使用 SQL 中的库名，而是取表名部分放入统一临时库。例如 `create temporary table source_db.tmp_user as select ...` 解析为 `seele_tmp_db_123_456.tmp_user`。
 - 默认不返回临时表创建语句本身的结果，后续目标表血缘会穿透到临时表的真实来源表。
 - 开启 `includeTemporaryLineage` 后会返回临时表创建语句，并在后续目标表血缘中保留临时表中间节点。
+- `with tmp as (...) select ... from tmp` 中的 `tmp` 是 CTE，不按 `create temporary table` 处理，也不生成 `seele_tmp_db_<workflowId>_<taskId>.tmp` 临时表节点。解析器会在当前语句内展开 CTE 的真实上游物理表和字段。
+- 对兼容性场景，如果后续语句引用了前序纯查询中定义过的 CTE 名称，解析器可以复用该 CTE 的来源映射，但输出血缘仍应展开到真实物理表，不把 CTE 伪装成会话临时表。
 
 分区字段处理：
 
