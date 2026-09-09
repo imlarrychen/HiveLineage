@@ -1,0 +1,124 @@
+(1)hive的建表语句为：
+
+CREATE TABLE c_hjx002.v312_001971_02 (
+ field1 STRING,
+ field2 STRING,
+ field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001971_03 (
+ field1 STRING,
+ field2 STRING,
+ field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001971_04 (
+ field1 STRING,
+ field2 STRING,
+ field3 STRING
+)
+STORED AS ORC;
+
+解析的sql语句为：
+CREATE TEMPORARY TABLE IF NOT EXISTS c_hjx002.v312_001971_01
+AS
+SELECT DISTINCT a.* FROM c_hjx002.v312_001971_04 a
+left join c_hjx002.v312_001971_03 b on a.field1 = b.field1
+where a.field1 = '1';
+
+INSERT INTO c_hjx002.v312_001971_02
+select * from c_hjx002.v312_001971_01;
+
+对于上面临时表的血缘解析，报错信息为：Target columns and select items do not align
+
+
+(2)
+
+解析的hive语句为：
+WITH v312_tmp AS (
+    SELECT * FROM c_hjx002.v312_001970_02
+    UNION ALL
+    SELECT * FROM c_hjx002.v312_001970_03
+)
+SELECT *
+FROM v312_tmp;
+
+
+INSERT INTO c_hjx002.v312_001970_01
+select * from v312_tmp;
+
+
+hive的建表语句为：
+CREATE TABLE c_hjx002.v312_001970_01 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001970_02 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001970_03 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+对于上面的hive语句，临时表的血缘没有解析出来
+
+(3)
+（3）
+解析的hive语句为：
+use c_hjx002;
+
+CREATE TEMPORARY TABLE IF NOT EXISTS c_hjx001.v312_001965_01
+AS
+SELECT a.field1,b.field2,a.field3 FROM c_hjx002.v312_001965_04 a
+left join c_hjx002.v312_001965_03 b on a.field1 = b.field1
+where a.field1 = '1';
+
+INSERT INTO v312_001965_02
+select concat(a.field1,b.field1) as field1,b.field2,a.field3 from c_hjx001.v312_001965_01 a
+left join v312_001965_05 b 
+on a.field1=b.field1
+
+hive的建表语句为：
+CREATE TABLE c_hjx002.v312_001965_02 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+
+CREATE TABLE c_hjx002.v312_001965_03 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001965_04 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001965_05 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+解析结果中，缺c_hjx002.v312_001965_04.field1 到 临时表v312_001965_01.field1 的字段血缘
+缺临时表v312_001965_01.field1到c_hjx002.v312_001965_02.field1的字段血缘

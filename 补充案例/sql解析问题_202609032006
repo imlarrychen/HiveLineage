@@ -1,0 +1,96 @@
+（1）
+表结构如下：
+CREATE TABLE c_hjx002.v312_001925_01 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001925_02 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001925_03 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001925_04 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+
+解析的sql如下：
+INSERT INTO c_hjx002.v312_001925_02
+SELECT field1,
+(
+    SELECT a.field2 FROM 
+(
+SELECT count (field1) AS field2 FROM c_hjx002.v312_001925_01 
+) 
+a
+) as field2,
+(SELECT count(*) as field3 from c_hjx002.v312_001925_04) as field3
+FROM c_hjx002.v312_001925_03;
+
+
+解析报错如下：
+Database cannot be resolved for table a
+
+
+（2）
+表结构如下：
+CREATE TABLE c_hjx002.v312_001925_01 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001925_02 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001925_03 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001925_04 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+
+解析的sql如下：
+INSERT INTO c_hjx002.v312_001925_02
+SELECT field1,
+(
+    SELECT a.field2 FROM 
+(
+SELECT count (field1) AS field2 FROM c_hjx002.v312_001925_01 
+) 
+as a
+) as field2,
+(SELECT count(*) as field3 from c_hjx002.v312_001925_04) as field3
+FROM c_hjx002.v312_001925_03;
+
+
+解析结果中出现了不该有的血缘关系：
+c_hjx002.v312_001925_03.select -> c_hjx002.v312_001925_02.field2

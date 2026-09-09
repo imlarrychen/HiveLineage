@@ -1,0 +1,105 @@
+（3）
+表结构如下：
+CREATE TABLE c_hjx002.v312_001969_01 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001969_02 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001969_03 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+
+解析的sql如下：
+INSERT INTO c_hjx002.v312_001969_02
+select DISTINCT * from c_hjx002.v312_001969_01
+where field1 in (select DISTINCT field1 from c_hjx002.v312_001969_03)
+and EXISTS (select DISTINCT field1 from c_hjx002.v312_001969_03 where field1 != '1')
+and field1 NOT BETWEEN 1 AND 2
+or field1 IN (select DISTINCT field1 from c_hjx002.v312_001969_03)
+GROUP BY field1,field2,field3
+ORDER BY field2 DESC
+LIMIT 5 OFFSET 2
+
+
+解析出来的字段血缘有问题，解析出来是：c_hjx002.v312_001969_01.DISTINCT -> c_hjx002.v312_001969_02.field1
+未能正确且完整地解析出字段血缘
+
+（4）
+表结构如下：
+CREATE TABLE c_hjx002.v312_001950_01 (
+    `type` STRING,
+    `select` STRING,
+    field3 STRING,
+    `date` STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001950_02 (
+    `type` STRING,
+    `select` STRING,
+    field3 STRING,
+    `date` STRING
+)
+STORED AS ORC;
+
+
+解析的sql如下：
+INSERT INTO c_hjx002.v312_001950_02
+select type as `type`, `select` as 'select',field3 as `insert`,`date` 
+from c_hjx002.v312_001950_01
+ORDER BY type
+
+
+解析出来的字段血缘有问题，date这个字段的血缘没有映射上
+
+（5）
+表结构如下：
+CREATE TABLE c_hjx002.v312_001998_02 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001998_03 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001998_04 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+
+解析的sql如下：
+CREATE VIEW IF NOT EXISTS c_hjx002.v312_001998_01 (
+    field1 ,
+    field2 ,
+    field3 
+) as SELECT * from c_hjx002.v312_001998_04;
+
+INSERT INTO c_hjx002.v312_001998_02(field1,field3) 
+select a.field1,b.field3 from c_hjx002.v312_001998_01 a
+left join c_hjx002.v312_001998_03 b 
+on a.field1=b.field1;
+
+
+视图解析报错，提示字段个数不匹配：Target columns and select items do not align

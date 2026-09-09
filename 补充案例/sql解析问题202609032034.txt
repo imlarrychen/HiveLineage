@@ -1,0 +1,88 @@
+（6）
+解析的hive sql如下：
+CREATE TABLE IF NOT EXISTS c_hjx002.v312_001945_01
+AS
+WITH v312_tmp AS (
+    SELECT * FROM c_hjx002.v312_001945_03
+    UNION ALL
+    SELECT * FROM c_hjx002.v312_001945_04
+)
+SELECT *
+FROM v312_tmp;
+
+INSERT INTO c_hjx002.v312_001945_01
+select * from c_hjx002.v312_001945_02;
+
+INSERT INTO c_hjx002.v312_001945_05
+select * from c_hjx002.v312_001945_01;
+
+
+hive的建表语句：
+CREATE TABLE c_hjx002.v312_001945_02 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001945_03 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001945_04 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001945_05 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+字段血缘解析有问题，Union all解析不出来第二张表，v312_tmp的字段解析不出来
+
+（7）
+
+解析的sql语句：
+CREATE TEMPORARY TABLE IF NOT EXISTS c_hjx002.v312_001971_01
+AS
+SELECT a.field1,b.field2,a.field3 FROM c_hjx002.v312_001971_04 a
+left join c_hjx002.v312_001971_03 b on a.field1 = b.field1
+where a.field1 = '1';
+
+
+
+
+INSERT INTO c_hjx002.v312_001971_02
+select * from c_hjx002.v312_001971_01;
+
+建表语句：
+CREATE TABLE c_hjx002.v312_001971_02 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001971_03 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001971_04 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+解析问题：没用解析出c_hjx002.v312_001971_01 -> c_hjx002.v312_001971_02的表血缘

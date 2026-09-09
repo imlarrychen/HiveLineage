@@ -1,0 +1,28 @@
+ （4）
+解析的hive语句为：
+CREATE TABLE IF NOT EXISTS c_hjx002.v312_001945_01
+AS
+WITH v312_tmp AS (
+    SELECT * FROM c_hjx002.v312_001945_03
+    UNION ALL
+    SELECT * FROM c_hjx002.v312_001945_04
+)
+SELECT *
+FROM v312_tmp;
+
+hive的建表语句为：
+CREATE TABLE c_hjx002.v312_001945_03 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001945_04 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+解析结果中，c_hjx002.v312_001945_01的血缘链路中没有临时表v312_tmp

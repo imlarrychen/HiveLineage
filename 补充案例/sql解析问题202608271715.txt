@@ -1,0 +1,103 @@
+（1）如果用户的脚本中，在表名前面没有写库名，这个时候请使用LineageAnalyzeRequest请求中的defaultDatabase
+来作为默认库名，并基于此进行元数据的查询和血缘结果的生成，表的唯一标识必须是 库名.表名，字段的唯一标识必须是 库名.表名.字段名
+
+
+（2）针对以下场景，未能解析出完整的字段血缘
+whc_hive_01的表结构
+CREATE EXTERNAL TABLE `whc`.`whc_hive_01` (
+  id int,
+  name string,
+  age string
+)
+PARTITIONED BY (bz_date date)
+STORED AS ORC;
+
+whc_hive_02的表结构
+CREATE EXTERNAL TABLE `whc`.`whc_hive_02` (
+  id int,
+  name string,
+  sex string
+)
+PARTITIONED BY (bz_date date)
+STORED AS ORC;
+
+解析的sql语句：
+insert into whc.whc_hive_01 select * from whc.whc_hive_02
+未能正确解析出whc_hive_02.sex到whc_hive_01.age的字段血缘
+
+
+
+
+
+
+（3）表结构如下：
+表a的表结构：
+CREATE EXTERNAL TABLE `whc`.`a` (
+  id int,
+  field1 string
+)
+STORED AS ORC;
+
+表b的表结构：
+CREATE EXTERNAL TABLE `whc`.`b` (
+  id int,
+  name string,
+  value string
+)
+STORED AS ORC;
+
+表c的表结构：
+CREATE EXTERNAL TABLE `whc`.`c` (
+  field1 string,
+  id int,
+  name string,
+  value string
+)
+STORED AS ORC;
+
+解析的sql语句为：
+insert into whc.c(field1) select distinct field1 from whc.a
+最后解析出来的结果中，多了一条不该有的错误的字段血缘关系，即：whc.a.distinct -> whc.c.field1
+
+
+
+（4）表结构如下：
+表a的表结构：
+CREATE EXTERNAL TABLE `whc`.`a` (
+  id int,
+  field1 string
+)
+STORED AS ORC;
+
+表b的表结构：
+CREATE EXTERNAL TABLE `whc`.`b` (
+  id int,
+  name string,
+  value string
+)
+STORED AS ORC;
+
+表c的表结构：
+CREATE EXTERNAL TABLE `whc`.`c` (
+  field1 string,
+  id int,
+  name string,
+  value string
+)
+STORED AS ORC;
+
+表d的表结构：
+CREATE EXTERNAL TABLE `whc`.`d` (
+  field1 string,
+  id int,
+  name string,
+  value string
+)
+STORED AS ORC;
+
+解析的sql语句为：
+insert into whc.c(field1) 
+select t.field1 
+from (select a.field1 from whc.a LEFT join whc.b on a.id=b.id) as t  
+left join whc.d on t.field1=d.field1
+最后解析出来的结果中，多了一条不该有的错误的字段血缘关系，即：whc.a.select -> whc.c.field1

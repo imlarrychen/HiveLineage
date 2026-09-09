@@ -1,0 +1,26 @@
+数据库:whc
+表: a、b、c结构分别如下：
+
+CREATE EXTERNAL TABLE `a`(                          
+    `id` int,                                         
+    `field1` string)     
+
+
+
+  CREATE EXTERNAL TABLE `b`(                          
+    `id` int,                                         
+    `name` string,                                    
+    `value` string)                                   
+
+
+  CREATE EXTERNAL TABLE `c`(                          
+    `field1` string,                                  
+    `id` int,                                         
+    `name` string,                                    
+    `value` string)                                   
+
+
+sql语句如下：
+INSERT INTO whc.c 
+SELECT whc.a.field1, whc.b.* 
+FROM whc.a LEFT JOIN whc.b ON whc.a.id = whc.b.id;

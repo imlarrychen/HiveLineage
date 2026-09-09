@@ -1,0 +1,112 @@
+hive的建表语句为：
+
+CREATE TABLE c_hjx002.v312_001943_01 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001943_02 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+
+CREATE TABLE c_hjx002.v312_001943_03 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001943_04 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001943_05 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001943_06 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001943_07 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001943_08 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001943_09 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001943_10 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001943_11 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001943_12 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_001943_13 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+
+解析的sql语句为：
+use c_hjx002;
+INSERT INTO c_hjx002.v312_001943_08
+select concat(field1,(SELECT field1 FROM v312_001943_07 limit 1)) as f1,field2,field3  
+from v312_001943_06;
+
+INSERT INTO c_hjx002.v312_001943_13
+select concat(a.field1,b.field1) as f1,a.field2,a.field3  
+from c_hjx002.v312_001943_12 a
+left join c_hjx002.v312_001943_01 b
+on a.field1=b.field1
+UNION
+select * from c_hjx002.v312_001943_11
+UNION ALL 
+select '1' as field1,field2,field3 from c_hjx002.v312_001943_10;
+
+解析出来的字段血缘有问题
