@@ -56,17 +56,22 @@ final class HiveAstProjectionExtractor {
             || statementType == StatementType.ALTER_VIEW_AS_SELECT) {
             ASTNode selectNode = directSelectChild(mainInsert);
             List<String> inferred = resolveSelectAliases(selectNode);
-            if (!inferred.isEmpty() && !isSingleStar(inferred)) {
+            if (!inferred.isEmpty() && !isOnlyStarProjection(inferred)) {
                 return inferred;
             }
         }
-        return selectExpressions.isEmpty() || isSingleStar(selectExpressions)
+        return selectExpressions.isEmpty() || isOnlyStarProjection(selectExpressions)
             ? Collections.<String>emptyList()
             : new ArrayList<String>();
     }
 
-    private boolean isSingleStar(List<String> values) {
-        return values.size() == 1 && "*".equals(values.get(0));
+    private boolean isOnlyStarProjection(List<String> values) {
+        return values.size() == 1 && isStarProjection(values.get(0));
+    }
+
+    private boolean isStarProjection(String value) {
+        QualifiedColumnReference reference = QualifiedColumnReference.parse(value);
+        return reference != null && reference.isStar();
     }
 
     List<String> resolveSelectExpressions(ASTNode root, ASTNode mainInsert) {

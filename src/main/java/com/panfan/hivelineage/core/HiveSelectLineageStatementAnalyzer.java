@@ -165,7 +165,8 @@ final class HiveSelectLineageStatementAnalyzer {
         boolean starSelect = targetColumnResolver.isSingleStarSelect(work.analysisSelectItems);
         work.positionalSingleDirectSourceStar = isPositionalSingleDirectSourceStar(
             positionalStarCheck(operation, targetColumns, starSelect, work)
-        ) && targetColumnResolver.hasColumnMetadataWithoutWarning(
+        ) && !isScriptCteInput(context, work.originalInputObjects.get(0))
+            && targetColumnResolver.hasColumnMetadataWithoutWarning(
             context.getRequest(),
             work.originalInputObjects.get(0)
         );
@@ -278,11 +279,18 @@ final class HiveSelectLineageStatementAnalyzer {
         return databaseBinder.bind(
             parserAdapter.parse(sql),
             context.getStatementDatabase(),
-            context.getTemporaryTableSources().keySet(),
+            logicalTableNames(context),
             context.getTemporaryTableSources().keySet(),
             isCreateTemporaryTable(sql),
             HiveTemporaryTableNamer.temporaryDatabase(context.getRequest())
         );
+    }
+
+    private Set<String> logicalTableNames(StatementAnalysisContext context) {
+        Set<String> names = new LinkedHashSet<>();
+        names.addAll(context.getTemporaryTableSources().keySet());
+        names.addAll(context.getScriptCteSources().keySet());
+        return names;
     }
 
     private boolean isCreateTemporaryTable(String normalizedStatement) {
@@ -416,7 +424,12 @@ final class HiveSelectLineageStatementAnalyzer {
             targetColumnResolver.extractSourceAliases(analysisStatement),
             originalInputObjects
         );
-        mergeMissingSourceAliases(scope.sourceAliases, parsedStatement.getSourceAliases());
+        mergeParsedSourceAliases(
+            scope.sourceAliases,
+            parsedStatement.getSourceAliases(),
+            originalInputObjects,
+            context.getTemporaryTableColumns().keySet()
+        );
         scope.topLevelSourceAliases = databaseBinder.bindExtractedAliasTargets(
             targetColumnResolver.extractTopLevelSourceAliases(analysisStatement),
             originalInputObjects
@@ -431,12 +444,19 @@ final class HiveSelectLineageStatementAnalyzer {
             targetColumnResolver.extractExplicitSourceAliases(analysisStatement),
             originalInputObjects
         );
+        mergeParsedSourceAliases(
+            explicitSourceAliases,
+            parsedStatement.getSourceAliases(),
+            originalInputObjects,
+            context.getTemporaryTableColumns().keySet()
+        );
         scope.ownerResolver = new QualifiedOwnerResolver(originalInputObjects, explicitSourceAliases);
         scope.statementProjectionTables = projectionResolver.bindPhysicalProjectionSources(
             projectionResolver.extractStatementProjectionTables(analysisStatement),
             scope.sourceAliases,
             databaseBinder
         );
+        scope.statementProjectionTables.putAll(context.getScriptCteColumns());
         scope.throughTemporaryTable = expansionService.containsTemporaryTable(
             originalInputObjects,
             context.getTemporaryTableSources()
@@ -447,8 +467,12 @@ final class HiveSelectLineageStatementAnalyzer {
                 originalInputObjects,
                 context.getTemporaryTableSources()
             );
-        scope.columnReferenceInputObjects = expansionService.filterProjectionInputObjects(
+        List<DataObjectRef> expandedCteInputs = expansionService.expandInputObjects(
             expandedTemporaryInputs,
+            context.getScriptCteSources()
+        );
+        scope.columnReferenceInputObjects = expansionService.filterProjectionInputObjects(
+            expandedCteInputs,
             scope.statementProjectionTables
         );
         scope.columnLineageInputObjects = scope.columnReferenceInputObjects;
@@ -457,12 +481,48 @@ final class HiveSelectLineageStatementAnalyzer {
         return scope;
     }
 
-    private void mergeMissingSourceAliases(Map<String, String> aliases, Map<String, String> fallbackAliases) {
+    private void mergeParsedSourceAliases(
+        Map<String, String> aliases,
+        Map<String, String> fallbackAliases,
+        List<DataObjectRef> inputObjects,
+        Set<String> temporaryTables
+    ) {
         for (Map.Entry<String, String> fallbackAlias : fallbackAliases.entrySet()) {
-            if (!aliases.containsKey(fallbackAlias.getKey())) {
+            String existingTarget = aliases.get(fallbackAlias.getKey());
+            if ((existingTarget == null && !isSyntheticSimpleAlias(fallbackAlias.getKey(), fallbackAlias.getValue()))
+                || (existingTarget != null
+                && !isInputObject(existingTarget, inputObjects)
+                && isTemporaryTable(fallbackAlias.getValue(), temporaryTables))) {
                 aliases.put(fallbackAlias.getKey(), fallbackAlias.getValue());
             }
         }
+    }
+
+    private boolean isSyntheticSimpleAlias(String alias, String tableName) {
+        return tableName != null
+            && tableName.indexOf('.') >= 0
+            && HiveTemporaryTableNamer.simpleName(tableName).equalsIgnoreCase(alias);
+    }
+
+    private boolean isTemporaryTable(String tableName, Set<String> temporaryTables) {
+        if (temporaryTables == null) {
+            return false;
+        }
+        for (String temporaryTable : temporaryTables) {
+            if (temporaryTable.equalsIgnoreCase(tableName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isInputObject(String tableName, List<DataObjectRef> inputObjects) {
+        for (DataObjectRef inputObject : inputObjects) {
+            if (inputObject.getQualifiedName().equalsIgnoreCase(tableName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<TableLineage> buildTableLineages(
@@ -566,6 +626,12 @@ final class HiveSelectLineageStatementAnalyzer {
     private boolean hasSingleTopLevelInput(PositionalStarCheck check) {
         return targetColumnResolver.hasSingleTopLevelDirectSourceRelation(check.analysisStatement)
             && check.inputObjects.size() == 1;
+    }
+
+    private boolean isScriptCteInput(StatementAnalysisContext context, DataObjectRef inputObject) {
+        String qualifiedName = inputObject.getQualifiedName();
+        return context.getScriptCteSources().containsKey(qualifiedName)
+            || context.getScriptCteSources().containsKey(HiveTemporaryTableNamer.simpleName(qualifiedName));
     }
 
     private List<String> alignTargetColumnsForStaticPartitions(

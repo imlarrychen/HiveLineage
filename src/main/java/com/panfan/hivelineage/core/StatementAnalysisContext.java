@@ -61,6 +61,14 @@ final class StatementAnalysisContext {
         return scriptState.getTemporaryTableColumns();
     }
 
+    Map<String, List<DataObjectRef>> getScriptCteSources() {
+        return scriptState.getScriptCteSources();
+    }
+
+    Map<String, Map<String, ColumnLineageProjection>> getScriptCteColumns() {
+        return scriptState.getScriptCteColumns();
+    }
+
     Map<String, Map<String, ColumnLineageProjection>> getViewColumnLineageCache() {
         return scriptState.getViewColumnLineageCache();
     }

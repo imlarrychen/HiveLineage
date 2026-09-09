@@ -915,7 +915,7 @@ final class HiveProjectionLineageResolver {
             "array", "map", "struct", "uniontype"
         ).contains(token.toLowerCase(Locale.ROOT));
     }
-    private CteExtraction extractCtes(String sql) {
+    CteExtraction extractCtes(String sql) {
         String trimmed = sql.trim();
         if (!trimmed.toLowerCase(Locale.ROOT).startsWith("with ")) {
             return new CteExtraction(Collections.<CteBlock>emptyList(), trimmed);

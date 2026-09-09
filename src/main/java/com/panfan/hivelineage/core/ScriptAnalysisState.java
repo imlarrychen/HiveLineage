@@ -8,6 +8,8 @@ import java.util.Map;
 final class ScriptAnalysisState {
     private final Map<String, List<DataObjectRef>> temporaryTableSources = new HashMap<>();
     private final Map<String, Map<String, ColumnLineageProjection>> temporaryTableColumns = new HashMap<>();
+    private final Map<String, List<DataObjectRef>> scriptCteSources = new HashMap<>();
+    private final Map<String, Map<String, ColumnLineageProjection>> scriptCteColumns = new HashMap<>();
     private final Map<String, Map<String, ColumnLineageProjection>> viewColumnLineageCache = new HashMap<>();
     private final HivePhysicalNameResolver nameResolver;
     private String currentDatabase;
@@ -43,6 +45,14 @@ final class ScriptAnalysisState {
 
     Map<String, Map<String, ColumnLineageProjection>> getTemporaryTableColumns() {
         return temporaryTableColumns;
+    }
+
+    Map<String, List<DataObjectRef>> getScriptCteSources() {
+        return scriptCteSources;
+    }
+
+    Map<String, Map<String, ColumnLineageProjection>> getScriptCteColumns() {
+        return scriptCteColumns;
     }
 
     Map<String, Map<String, ColumnLineageProjection>> getViewColumnLineageCache() {

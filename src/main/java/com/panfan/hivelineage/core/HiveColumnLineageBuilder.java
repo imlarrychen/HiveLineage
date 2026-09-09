@@ -204,6 +204,8 @@ final class HiveColumnLineageBuilder {
                 input.ownerResolver
             );
         }
+        resolvedSourceColumns = expansionService.expandTemporarySourceColumns(input.context, resolvedSourceColumns);
+        resolvedSourceColumns = expansionService.expandScriptCteSourceColumns(input.context, resolvedSourceColumns);
         return resolvedSourceColumns;
     }
 

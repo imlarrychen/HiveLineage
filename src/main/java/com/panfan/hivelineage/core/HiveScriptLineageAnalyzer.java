@@ -12,9 +12,11 @@ import com.panfan.hivelineage.result.WarningCode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -162,6 +164,9 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 continue;
             }
             if (skipReason != null) {
+                if ("PURE_QUERY".equals(skipReason)) {
+                    registerStandaloneCtes(context);
+                }
                 if (request.getOptions().isParseJoinConditions()
                     && "PURE_QUERY".equals(skipReason)
                     && joinAnalyzer.hasJoinConditionCandidate(normalized)) {
@@ -304,10 +309,62 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
         return databaseBinder.bind(
             parsed,
             context.getStatementDatabase(),
-            context.getTemporaryTableSources().keySet(),
+            logicalTableNames(context),
             context.getTemporaryTableSources().keySet(),
             isCreateTemporaryTable(sql),
             HiveTemporaryTableNamer.temporaryDatabase(context.getRequest())
+        );
+    }
+
+    private Set<String> logicalTableNames(StatementAnalysisContext context) {
+        Set<String> names = new LinkedHashSet<>();
+        names.addAll(context.getTemporaryTableSources().keySet());
+        names.addAll(context.getScriptCteSources().keySet());
+        return names;
+    }
+
+    private void registerStandaloneCtes(StatementAnalysisContext context) {
+        if (!context.getNormalizedStatement().trim().toLowerCase(Locale.ROOT).startsWith("with ")) {
+            return;
+        }
+        CteExtraction cteExtraction = projectionResolver.extractCtes(context.getNormalizedStatement());
+        for (CteBlock cteBlock : cteExtraction.getCteBlocks()) {
+            try {
+                registerStandaloneCte(context, cteBlock);
+            } catch (RuntimeException ignored) {
+                // A pure query should stay ignorable even when CTE bookkeeping cannot be derived.
+            }
+        }
+    }
+
+    private void registerStandaloneCte(StatementAnalysisContext context, CteBlock cteBlock) {
+        ParsedHiveStatement parsed = parseAndBind(context, cteBlock.getSql());
+        if (parsed.getInputObjects().isEmpty()) {
+            return;
+        }
+        ColumnResolutionContext columnContext = new ColumnResolutionContext(
+            context.getRequest(),
+            context.getRequest().getOptions().getParseMode(),
+            context.getWarnings(),
+            context.getStatementIndex()
+        );
+        SetOperationExpansionResult expansion = new HiveSetOperationStarExpander(targetColumnResolver)
+            .expand(columnContext, cteBlock.getSql());
+        Map<String, Map<String, ColumnLineageProjection>> projectionsByTable =
+            projectionResolver.extractStatementProjectionTables(expansion.getSql());
+        Map<String, ColumnLineageProjection> projections =
+            projectionResolver.extractProjectionTable(expansion.getSql(), projectionsByTable);
+        projections = projectionResolver.bindPhysicalProjectionSources(
+            Collections.singletonMap(cteBlock.getName(), projections),
+            parsed.getSourceAliases(),
+            databaseBinder
+        ).get(cteBlock.getName());
+        expansionService.registerScriptCte(
+            cteBlock.getName(),
+            parsed.getInputObjects(),
+            projections,
+            context.getScriptCteSources(),
+            context.getScriptCteColumns()
         );
     }
 

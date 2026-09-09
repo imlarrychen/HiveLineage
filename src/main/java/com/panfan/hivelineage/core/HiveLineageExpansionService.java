@@ -55,6 +55,19 @@ final class HiveLineageExpansionService {
             temporaryTableColumns.put(simpleName, columnProjectionMap(temporaryStatement.getColumnLineages()));
         }
     }
+
+    void registerScriptCte(
+        String cteName,
+        List<DataObjectRef> sourceObjects,
+        Map<String, ColumnLineageProjection> columnProjections,
+        Map<String, List<DataObjectRef>> scriptCteSources,
+        Map<String, Map<String, ColumnLineageProjection>> scriptCteColumns
+    ) {
+        String normalizedName = HiveSqlTextUtils.normalizeIdentifier(cteName);
+        scriptCteSources.put(normalizedName, sourceObjects);
+        scriptCteColumns.put(normalizedName, columnProjections);
+    }
+
     Map<String, ColumnLineageProjection> columnProjectionMap(List<ColumnLineage> columnLineages) {
         Map<String, ColumnLineageProjection> projections = new HashMap<>();
         for (ColumnLineage columnLineage : columnLineages) {
@@ -88,16 +101,29 @@ final class HiveLineageExpansionService {
         List<DataObjectRef> inputObjects,
         Map<String, List<DataObjectRef>> temporaryTableSources
     ) {
+        return expandInputObjects(inputObjects, temporaryTableSources);
+    }
+
+    List<DataObjectRef> expandInputObjects(
+        List<DataObjectRef> inputObjects,
+        Map<String, List<DataObjectRef>> objectSources
+    ) {
+        if (objectSources.isEmpty()) {
+            return inputObjects;
+        }
         List<DataObjectRef> expanded = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         for (DataObjectRef inputObject : inputObjects) {
-            List<DataObjectRef> temporarySources = temporaryTableSources.get(inputObject.getQualifiedName());
-            if (temporarySources == null) {
+            List<DataObjectRef> sources = objectSources.get(inputObject.getQualifiedName());
+            if (sources == null) {
+                sources = objectSources.get(HiveTemporaryTableNamer.simpleName(inputObject.getQualifiedName()));
+            }
+            if (sources == null) {
                 addInputObject(expanded, seen, inputObject);
                 continue;
             }
-            for (DataObjectRef temporarySource : temporarySources) {
-                addInputObject(expanded, seen, temporarySource);
+            for (DataObjectRef source : sources) {
+                addInputObject(expanded, seen, source);
             }
         }
         return expanded;
@@ -565,6 +591,62 @@ final class HiveLineageExpansionService {
         }
     }
 
+    List<ColumnRef> expandTemporarySourceColumns(
+        StatementAnalysisContext context,
+        List<ColumnRef> sourceColumns
+    ) {
+        return expandProjectedSourceColumns(
+            context.getTemporaryTableColumns(),
+            sourceColumns,
+            context.getRequest().getOptions().isIncludeTemporaryLineage()
+        );
+    }
+
+    List<ColumnRef> expandScriptCteSourceColumns(
+        StatementAnalysisContext context,
+        List<ColumnRef> sourceColumns
+    ) {
+        return expandProjectedSourceColumns(context.getScriptCteColumns(), sourceColumns, false);
+    }
+
+    private List<ColumnRef> expandProjectedSourceColumns(
+        Map<String, Map<String, ColumnLineageProjection>> projectionsByTable,
+        List<ColumnRef> sourceColumns,
+        boolean keepBoundaryColumn
+    ) {
+        if (sourceColumns.isEmpty() || projectionsByTable.isEmpty()) {
+            return sourceColumns;
+        }
+        List<ColumnRef> expanded = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (ColumnRef sourceColumn : sourceColumns) {
+            ColumnLineageProjection projection = projectedColumn(sourceColumn, projectionsByTable);
+            if (projection == null || keepBoundaryColumn) {
+                addColumn(expanded, seen, sourceColumn);
+                continue;
+            }
+            for (ColumnRef projectedColumn : projection.getSourceColumns()) {
+                addColumn(expanded, seen, projectedColumn);
+            }
+        }
+        return expanded;
+    }
+
+    private ColumnLineageProjection projectedColumn(
+        ColumnRef sourceColumn,
+        Map<String, Map<String, ColumnLineageProjection>> projectionsByTable
+    ) {
+        String tableName = HiveSqlTextUtils.tableNameOfColumn(sourceColumn.getQualifiedName());
+        String columnName = HiveSqlTextUtils.columnNameOf(sourceColumn.getQualifiedName());
+        if (tableName == null || columnName == null) {
+            return null;
+        }
+        ColumnLineageProjection projection = projectionResolver.columnProjection(tableName, columnName, projectionsByTable);
+        return projection == null
+            ? projectionResolver.columnProjection(HiveTemporaryTableNamer.simpleName(tableName), columnName, projectionsByTable)
+            : projection;
+    }
+
     List<ColumnLineage> prependViewDefinitionColumnLineages(
         StatementAnalysisContext context,
         List<DataObjectRef> inputObjects,
@@ -754,7 +836,11 @@ final class HiveLineageExpansionService {
             }
             return temporaryProjection;
         }
-        return null;
+        return projectionResolver.columnProjection(
+            tableName,
+            directColumn.getColumn(),
+            context.getScriptCteColumns()
+        );
     }
 
     private ColumnLineageProjection temporaryColumnProjection(String tableName, String columnName) {

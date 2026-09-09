@@ -82,6 +82,19 @@ public class HiveParserAstAdapterTest {
     }
 
     @Test
+    public void hiveParserAstAdapterDoesNotInferQualifiedStarAsCreateTableColumn() {
+        HiveAstParserAdapter adapter = new HiveParserAstAdapter();
+
+        ParsedHiveStatement statement = adapter.parse(
+            "create temporary table dwd.user_tmp as select a.* from ods.user_base a"
+        );
+
+        TestSupport.assertEquals(StatementType.CREATE_TABLE_AS_SELECT, statement.getStatementType(), "ast ctas statement type");
+        TestSupport.assertEquals(Arrays.asList("a.*"), statement.getSelectExpressions(), "ast qualified star select expressions");
+        TestSupport.assertEquals(Arrays.asList(), statement.getTargetColumns(), "qualified star is not a target column");
+    }
+
+    @Test
     public void hiveParserAstAdapterParsesAlterViewAsSelectFromAst() {
         HiveAstParserAdapter adapter = new HiveParserAstAdapter();
 

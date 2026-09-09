@@ -367,12 +367,22 @@ final class HiveTargetColumnResolver {
 
     Map<String, String> extractSourceAliases(String normalizedStatement) {
         Map<String, String> aliases = new HashMap<>();
+        Map<String, Integer> simpleNameCounts = new HashMap<>();
         Matcher objectMatcher = SOURCE_OBJECT.matcher(normalizedStatement);
         while (objectMatcher.find()) {
             String tableName = HiveSqlTextUtils.normalizeIdentifier(objectMatcher.group(1));
             String simpleTableName = tableName.contains(".") ? tableName.substring(tableName.lastIndexOf('.') + 1) : tableName;
             aliases.put(tableName, tableName);
-            aliases.put(simpleTableName, tableName);
+            Integer count = simpleNameCounts.get(simpleTableName);
+            simpleNameCounts.put(simpleTableName, count == null ? 1 : count + 1);
+            if (!aliases.containsKey(simpleTableName)) {
+                aliases.put(simpleTableName, tableName);
+            }
+        }
+        for (Map.Entry<String, Integer> simpleNameCount : simpleNameCounts.entrySet()) {
+            if (simpleNameCount.getValue().intValue() > 1) {
+                aliases.remove(simpleNameCount.getKey());
+            }
         }
         Matcher aliasMatcher = SOURCE_ALIAS.matcher(normalizedStatement);
         while (aliasMatcher.find()) {
