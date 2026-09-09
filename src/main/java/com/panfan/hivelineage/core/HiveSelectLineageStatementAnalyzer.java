@@ -162,9 +162,10 @@ final class HiveSelectLineageStatementAnalyzer {
         List<String> targetColumns,
         SelectAnalysisWork work
     ) {
-        boolean starSelect = targetColumnResolver.isSingleStarSelect(work.analysisSelectItems);
+        boolean starSelect = isSingleStarProjection(work.analysisSelectItems);
+        boolean positionalStarSelect = targetColumnResolver.isSingleStarSelect(work.analysisSelectItems);
         work.positionalSingleDirectSourceStar = isPositionalSingleDirectSourceStar(
-            positionalStarCheck(operation, targetColumns, starSelect, work)
+            positionalStarCheck(operation, targetColumns, positionalStarSelect, work)
         ) && !isScriptCteInput(context, work.originalInputObjects.get(0))
             && targetColumnResolver.hasColumnMetadataWithoutWarning(
             context.getRequest(),
@@ -401,16 +402,37 @@ final class HiveSelectLineageStatementAnalyzer {
                 work.columnContext.getStatementIndex()
             );
         }
-        return starSelect
-            ? new ArrayList<>(work.expandedSelectItems)
-            : targetColumnResolver.resolveTargetColumns(
-                work.columnContext.getRequest(),
-                work.targetTable,
-                work.expandedSelectItems,
-                work.columnContext.getParseMode(),
-                work.columnContext.getWarnings(),
-                work.columnContext.getStatementIndex()
-            );
+        if (starSelect && !containsStarSelectItem(work.expandedSelectItems)) {
+            return inferStarTargetColumns(work.expandedSelectItems);
+        }
+        return targetColumnResolver.resolveTargetColumns(
+            work.columnContext.getRequest(),
+            work.targetTable,
+            work.expandedSelectItems,
+            work.columnContext.getParseMode(),
+            work.columnContext.getWarnings(),
+            work.columnContext.getStatementIndex()
+        );
+    }
+
+    private boolean isSingleStarProjection(List<String> selectItems) {
+        if (selectItems.size() != 1) {
+            return false;
+        }
+        QualifiedColumnReference reference = QualifiedColumnReference.parse(
+            HiveSqlTextUtils.stripAlias(selectItems.get(0))
+        );
+        return reference != null && reference.isStar();
+    }
+
+    private List<String> inferStarTargetColumns(List<String> expandedSelectItems) {
+        List<String> targetColumns = new ArrayList<>();
+        for (String selectItem : expandedSelectItems) {
+            String expression = HiveSqlTextUtils.stripAlias(selectItem);
+            QualifiedColumnReference reference = QualifiedColumnReference.parse(expression);
+            targetColumns.add(reference == null || reference.isStar() ? expression : reference.getColumn());
+        }
+        return targetColumns;
     }
 
     private AnalysisScope buildAnalysisScope(

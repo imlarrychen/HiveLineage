@@ -1,0 +1,155 @@
+
+CREATE TABLE c_hjx002.v312_002005_03 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_002005_04 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_002005_05 (
+    field1 STRING,
+    field2 STRING,
+    field3 STRING
+)
+STORED AS ORC;
+
+CREATE TABLE c_hjx002.v312_002005_02 (
+    id INT,
+    `date` STRING,
+    region STRING,
+    product STRING,
+    sales INT,
+    cost INT,
+    cumulative_sales INT,
+    cumulative_cost INT,
+    growth_rate FLOAT,
+    profit INT,
+    profit_margin FLOAT,
+    sales_rank INT,
+    moving_avg_sales FLOAT,
+    total_sales_by_region INT,
+    total_cost_by_region INT,
+    total_sales_by_product INT,
+    total_cost_by_product INT
+);
+CREATE TABLE c_hjx002.v312_002005_01 (
+    id INT,
+    `date` STRING,
+    region STRING,
+    product STRING,
+    sales INT,
+    cost INT
+)
+STORED AS PARQUET;
+
+WITH 
+cte1 AS (
+    SELECT 
+        a.id,
+        a.`date`,
+        b.field1 as region,
+        a.product,
+        a.sales,
+        a.cost,
+        SUM(a.sales) OVER (PARTITION BY a.region, a.product ORDER BY a.`date`) AS cumulative_sales,
+        SUM(a.cost) OVER (PARTITION BY a.region, a.product ORDER BY `date`) AS cumulative_cost,
+        (a.sales - LAG(a.sales, 1) OVER (PARTITION BY a.region, a.product ORDER BY `date`)) / 
+            LAG(a.sales, 1) OVER (PARTITION BY a.region, a.product ORDER BY a.`date`) AS growth_rate
+    FROM 
+        c_hjx002.v312_002005_01 a
+        left join c_hjx002.v312_002005_03 b on a.region != b.field1
+),
+cte2 AS (
+   SELECT 
+        id,
+        `date`,
+        region,
+        product,
+        sales,
+        cost,
+        cumulative_sales,
+        cumulative_cost,
+        growth_rate,
+        sales - cost AS profit,
+        (sales - cost) / sales AS profit_margin
+    FROM 
+        cte1
+),
+
+cte3 AS (
+    SELECT 
+        id,
+        `date`,
+        region,
+        product,
+        sales,
+        cost,
+        cumulative_sales,
+        cumulative_cost,
+        growth_rate,
+        profit,
+        profit_margin,
+        RANK() OVER (PARTITION BY region, product ORDER BY sales DESC) AS sales_rank,
+        AVG(sales) OVER (
+            PARTITION BY region 
+            ORDER BY `date` 
+            ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+        ) AS moving_avg_sales
+    FROM 
+        cte2
+),
+
+cte4 AS (
+    SELECT 
+        a.id,
+        a.`date`,
+        a.region,
+        b.field2 as product,
+        a.sales,
+        a.cost,
+        a.cumulative_sales,
+        a.cumulative_cost,
+        a.growth_rate,
+        a.profit,
+        a.profit_margin,
+        a.sales_rank,
+        a.moving_avg_sales,
+        SUM(a.sales) OVER (PARTITION BY a.region) AS total_sales_by_region,
+        SUM(a.cost) OVER (PARTITION BY a.region) AS total_cost_by_region,
+        SUM(a.sales) OVER (PARTITION BY a.product) AS total_sales_by_product,
+        SUM(a.cost) OVER (PARTITION BY a.product) AS total_cost_by_product
+    FROM 
+        cte3 a
+        left join c_hjx002.v312_002005_04 b on a.region != b.field1
+)
+INSERT INTO c_hjx002.v312_002005_02
+SELECT 
+    a.id,
+    a.`date`,
+    a.region,
+    a.product,
+    b.field3 as sales,
+    a.cost,
+    a.cumulative_sales,
+    a.cumulative_cost,
+    a.growth_rate,
+    a.profit,
+    a.profit_margin,
+    a.sales_rank,
+    a.moving_avg_sales,
+    a.total_sales_by_region,
+    a.total_cost_by_region,
+    a.total_sales_by_product,
+    a.total_cost_by_product
+FROM 
+    cte4 a
+    left join c_hjx002.v312_002005_05 b 
+    on a.region != b.field1;
+

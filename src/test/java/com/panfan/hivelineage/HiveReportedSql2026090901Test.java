@@ -30,6 +30,33 @@ public class HiveReportedSql2026090901Test {
     }
 
     @Test
+    public void includeTemporaryLineageUsesSyntheticDatabaseAndSimpleColumnsForQualifiedStarCreate() {
+        LineageAnalyzeResult result = analyze(caseOneSql(), metadata()
+            .addTable("c_hjx002.v312_001971_02", "field1", "field2", "field3")
+            .addTable("c_hjx002.v312_001971_03", "field1", "field2", "field3")
+            .addTable("c_hjx002.v312_001971_04", "field1", "field2", "field3"), true);
+
+        TestSupport.assertEquals(0, result.getFailedStatementCount(), "case 1 failed statement count");
+        TestSupport.assertEquals(2, result.getStatements().size(), "case 1 returned statement count");
+
+        StatementLineageResult temporary = result.getStatements().get(0);
+        TestSupport.assertEquals(
+            "seele_tmp_db_123_456.v312_001971_01",
+            temporary.getOutputObject().getQualifiedName(),
+            "case 1 temporary target"
+        );
+        assertColumnContains(
+            temporary,
+            "seele_tmp_db_123_456.v312_001971_01.field1",
+            "c_hjx002.v312_001971_04.field1"
+        );
+        assertNoTargetColumn(
+            temporary,
+            "seele_tmp_db_123_456.v312_001971_01.c_hjx002.v312_001971_04.field1"
+        );
+    }
+
+    @Test
     public void cteMustNotLeakAcrossStatementsAsTemporaryTable() {
         LineageAnalyzeResult result = analyze("c_hjx002", caseTwoSql(), metadata()
             .addTable("c_hjx002.v312_001970_01", "field1", "field2", "field3")
@@ -60,11 +87,11 @@ public class HiveReportedSql2026090901Test {
 
         assertColumnContains(
             temporary,
-            "seele_tmp_db_wf_reported_2026090901_task_reported_2026090901.v312_001965_01.field1",
+            "seele_tmp_db_123_456.v312_001965_01.field1",
             "c_hjx002.v312_001965_04.field1"
         );
         assertColumnContains(statement, "c_hjx002.v312_001965_02.field1",
-            "seele_tmp_db_wf_reported_2026090901_task_reported_2026090901.v312_001965_01.field1");
+            "seele_tmp_db_123_456.v312_001965_01.field1");
     }
 
     private LineageAnalyzeResult analyze(String sql, TestMetadataProvider metadata) {
@@ -86,8 +113,8 @@ public class HiveReportedSql2026090901Test {
         boolean includeTemporaryLineage
     ) {
         return new HiveScriptLineageAnalyzer().analyzeScript(LineageAnalyzeRequest.builder()
-            .workflowId("wf_reported_2026090901")
-            .taskId("task_reported_2026090901")
+            .workflowId("123")
+            .taskId("456")
             .taskVersion("V1")
             .defaultDatabase(defaultDatabase)
             .rawScript(sql)
@@ -118,6 +145,14 @@ public class HiveReportedSql2026090901Test {
         for (int i = 0; i < statement.getInputObjects().size(); i++) {
             if (qualifiedName.equals(statement.getInputObjects().get(i).getQualifiedName())) {
                 throw new AssertionError("Did not expect source object " + qualifiedName);
+            }
+        }
+    }
+
+    private void assertNoTargetColumn(StatementLineageResult statement, String targetColumn) {
+        for (ColumnLineage lineage : statement.getColumnLineages()) {
+            if (targetColumn.equals(lineage.getTargetColumn().getQualifiedName())) {
+                throw new AssertionError("Did not expect target column " + targetColumn);
             }
         }
     }
