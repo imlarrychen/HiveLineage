@@ -1,7 +1,5 @@
 package com.panfan.hivelineage.core;
 
-import com.panfan.hivelineage.result.LineageWarning;
-import com.panfan.hivelineage.result.WarningCode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -69,54 +67,45 @@ final class HiveScriptPreprocessor {
         return value;
     }
 
-    String resolveVariables(String statement, Map<String, String> sessionVariables, String fallbackVariableValue) {
-        return resolveVariables(
-            statement,
-            sessionVariables,
-            fallbackVariableValue,
-            new ArrayList<LineageWarning>(),
-            -1
-        );
-    }
-
     String resolveVariables(
         String statement,
         Map<String, String> sessionVariables,
-        String fallbackVariableValue,
-        List<LineageWarning> warnings,
-        int statementIndex
+        String fallbackVariableValue
     ) {
-        String resolved = statement;
-        for (Map.Entry<String, String> entry : sessionVariables.entrySet()) {
-            resolved = resolved.replace("${" + entry.getKey() + "}", entry.getValue());
-        }
+        String resolved = replaceSessionVariables(statement, sessionVariables);
         resolved = replaceUnresolvedVariables(
             resolved,
             HIVE_CONF_VARIABLE,
-            fallbackVariableValue,
-            warnings,
-            statementIndex
+            fallbackVariableValue
         );
         return replaceUnresolvedVariables(
             resolved,
             HIVE_VAR_VARIABLE,
-            fallbackVariableValue,
-            warnings,
-            statementIndex
+            fallbackVariableValue
         );
+    }
+
+    boolean hasFallbackVariable(String statement, Map<String, String> sessionVariables) {
+        String resolved = replaceSessionVariables(statement, sessionVariables);
+        return HIVE_CONF_VARIABLE.matcher(resolved).find() || HIVE_VAR_VARIABLE.matcher(resolved).find();
+    }
+
+    private String replaceSessionVariables(String statement, Map<String, String> sessionVariables) {
+        String resolved = statement;
+        for (Map.Entry<String, String> entry : sessionVariables.entrySet()) {
+            resolved = resolved.replace("${" + entry.getKey() + "}", entry.getValue());
+        }
+        return resolved;
     }
 
     private String replaceUnresolvedVariables(
         String statement,
         Pattern variablePattern,
-        String fallbackVariableValue,
-        List<LineageWarning> warnings,
-        int statementIndex
+        String fallbackVariableValue
     ) {
         Matcher matcher = variablePattern.matcher(statement);
         StringBuffer buffer = new StringBuffer();
         while (matcher.find()) {
-            addWarning(warnings, WarningCode.UNRESOLVED_VARIABLE, "Unresolved variable " + matcher.group(), statementIndex);
             matcher.appendReplacement(buffer, Matcher.quoteReplacement(fallbackVariableValue));
         }
         matcher.appendTail(buffer);
@@ -239,17 +228,4 @@ final class HiveScriptPreprocessor {
         }
     }
 
-    private void addWarning(List<LineageWarning> warnings, WarningCode warningCode, String message, int statementIndex) {
-        if (warnings == null) {
-            return;
-        }
-        for (LineageWarning warning : warnings) {
-            if (warning.getWarningCode() == warningCode
-                && warning.getStatementIndex() == statementIndex
-                && warning.getMessage().equals(message)) {
-                return;
-            }
-        }
-        warnings.add(new LineageWarning(warningCode, message, statementIndex));
-    }
 }

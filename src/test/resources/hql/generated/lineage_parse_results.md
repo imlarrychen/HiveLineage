@@ -77,9 +77,7 @@ where dt = '${hiveconf:bizdate}'
 
 #### Warnings
 
-| Code | Message |
-| --- | --- |
-| UNRESOLVED_VARIABLE | Unresolved variable @{run_env} |
+_None_
 
 ### Statement 3
 
@@ -544,9 +542,7 @@ where dt = '${bizdate}'
 
 #### Warnings
 
-| Code | Message |
-| --- | --- |
-| UNRESOLVED_VARIABLE | Unresolved variable @{run_env} |
+_None_
 
 ## lineage_case_04.sql
 
@@ -620,9 +616,7 @@ where dt = '${bizdate}'
 
 #### Warnings
 
-| Code | Message |
-| --- | --- |
-| UNRESOLVED_VARIABLE | Unresolved variable ${bizdate} |
+_None_
 
 ## lineage_case_05.sql
 
@@ -810,9 +804,7 @@ where u.dt = '${bizdate}'
 
 #### Warnings
 
-| Code | Message |
-| --- | --- |
-| UNRESOLVED_VARIABLE | Unresolved variable ${bizdate} |
+_None_
 
 ### Statement 1
 
@@ -858,9 +850,7 @@ from tmp_user_profile
 
 #### Warnings
 
-| Code | Message |
-| --- | --- |
-| UNRESOLVED_VARIABLE | Unresolved variable ${bizdate} |
+_None_
 
 ## lineage_case_07.sql
 
@@ -1118,9 +1108,7 @@ where dt = '${bizdate}'
 
 #### Warnings
 
-| Code | Message |
-| --- | --- |
-| UNRESOLVED_VARIABLE | Unresolved variable ${bizdate} |
+_None_
 
 ## lineage_case_09.sql
 
@@ -1198,9 +1186,7 @@ where dt = '${bizdate}'
 
 #### Warnings
 
-| Code | Message |
-| --- | --- |
-| UNRESOLVED_VARIABLE | Unresolved variable ${bizdate} |
+_None_
 
 ## lineage_case_10.sql
 
@@ -1377,9 +1363,7 @@ where dt = '${bizdate}'
 
 #### Warnings
 
-| Code | Message |
-| --- | --- |
-| UNRESOLVED_VARIABLE | Unresolved variable ${bizdate} |
+_None_
 
 ## lineage_case_12.sql
 
@@ -1446,7 +1430,6 @@ where dt = '${bizdate}'
 
 | Code | Message |
 | --- | --- |
-| UNRESOLVED_VARIABLE | Unresolved variable ${bizdate} |
 | METADATA_NOT_FOUND | Metadata not found for dwd.metadata_missing_target |
 
 ## lineage_case_13.sql
@@ -1522,9 +1505,7 @@ where dt = '${bizdate}'
 
 #### Warnings
 
-| Code | Message |
-| --- | --- |
-| UNRESOLVED_VARIABLE | Unresolved variable ${bizdate} |
+_None_
 
 ### Statement 1
 
@@ -1854,9 +1835,7 @@ and f.dt = '${bizdate}'
 
 #### Warnings
 
-| Code | Message |
-| --- | --- |
-| UNRESOLVED_VARIABLE | Unresolved variable ${bizdate} |
+_None_
 
 ## lineage_case_17.sql
 
@@ -1947,7 +1926,5 @@ where dt = '${bizdate}'
 
 #### Warnings
 
-| Code | Message |
-| --- | --- |
-| UNRESOLVED_VARIABLE | Unresolved variable ${bizdate} |
+_None_
 

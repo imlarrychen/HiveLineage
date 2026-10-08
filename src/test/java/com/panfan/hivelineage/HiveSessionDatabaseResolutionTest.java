@@ -10,7 +10,6 @@ import com.panfan.hivelineage.request.LineageAnalyzeRequest;
 import com.panfan.hivelineage.request.LineageParseMode;
 import com.panfan.hivelineage.result.LineageAnalyzeResult;
 import com.panfan.hivelineage.result.StatementLineageResult;
-import com.panfan.hivelineage.result.WarningCode;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -218,8 +217,7 @@ public class HiveSessionDatabaseResolutionTest {
         StatementLineageResult failedUse = result.getStatements().get(0);
         assertEquals("USE", failedUse.getStatementType());
         assertEquals("INVALID_USE_DATABASE", failedUse.getFailureCode());
-        assertTrue(failedUse.getWarnings().stream()
-            .anyMatch(warning -> warning.getWarningCode() == WarningCode.UNRESOLVED_VARIABLE));
+        assertTrue("fallback variable does not add a warning", failedUse.getWarnings().isEmpty());
         assertEquals("db1.out_t", result.getStatements().get(1).getOutputObject().getQualifiedName());
     }
 
