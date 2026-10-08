@@ -1,6 +1,7 @@
 # 2026-10-08 补充 SQL 解析报错小结
 
 - 案例来源：`补充案例/sql解析问题20261008.txt`（4 条 SQL）。
+- 补充来源：`补充案例/sql解析问题202610081918.txt`（2 条 SQL；其中 `sopr_tsk_dtl_lmt` 为案例 1 的重复反馈）。
 - 关联修复：`30e0881`。
 
 | 案例 | 原因 | 处理结果 |
@@ -13,3 +14,9 @@
 原文件中的 `UNSUPPORTED_STATEMENT` 是笼统警告，不能据此认定四条 SQL 都是不支持的语法。案例 1、2、4 是分析器误判；案例 3 是 SQL 本身缺少派生表别名。
 
 修复还把完整表依赖与主查询投影来源分开：`WHERE/EXISTS` 子查询仍计入表依赖，但不会被 `SELECT *` 当作主查询字段来源。回归测试覆盖主目标表、谓词子查询星号投影和无 `FROM` 的常量写入。合入后执行 `mvn test`，退出码为 0。
+
+## 后续补充案例
+
+| 案例 | 实际报错 | 原因分类与定位证据 | 处理结果 |
+| --- | --- | --- | --- |
+| `his_bbk_851.lj01_buq_eva_dta_t` | `Set operation branch columns do not align` | SQL 中 `UNION ALL` 左支为 `SELECT * FROM ods_data_851.lj01_buq_eva_dta_t`，右支为 `SELECT A.* FROM his_bbk_851.lj01_buq_eva_dta_t A`。字段血缘阶段按元数据展开两个 `*` 后得到不同的列数，触发集合操作分支宽度校验。若两张表实际有效字段数不同，则属于 SQL 本身不满足 `UNION ALL` 列数一致的规则；若 Hive 实际执行成功，则属于 `metadata_column_v2` 元数据缺失、过期或有效标识不一致。 | 待通过两表 `DESCRIBE` 结果及 `metadata_column_v2` 的有效字段记录确认。当前结论是“元数据展开后的字段数不一致”，尚不能仅凭解析报错断言为 SQL 缺陷。 |
