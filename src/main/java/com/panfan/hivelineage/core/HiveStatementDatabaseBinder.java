@@ -52,10 +52,17 @@ final class HiveStatementDatabaseBinder {
                 ? HiveTemporaryTableNamer.qualify(parsed.getOutputObject().getQualifiedName(), temporaryDatabase)
                 : nameResolver.qualifyTable(parsed.getOutputObject().getQualifiedName(), statementDatabase));
         Map<String, String> aliases = bindAliasTargets(parsed.getSourceAliases(), physicalNames);
+        List<DataObjectRef> projectionInputs = new ArrayList<>();
+        for (DataObjectRef input : parsed.getProjectionInputObjects()) {
+            String raw = input.getQualifiedName();
+            String bound = physicalNames.get(normalizeLogicalName(raw));
+            projectionInputs.add(new DataObjectRef(bound == null ? nameResolver.qualifyTable(raw, statementDatabase) : bound));
+        }
         return ParsedHiveStatement.builder()
             .statementType(parsed.getStatementType())
             .outputObject(output)
             .inputObjects(inputs)
+            .projectionInputObjects(projectionInputs)
             .targetColumns(parsed.getTargetColumns())
             .selectExpressions(parsed.getSelectExpressions())
             .sourceAliases(aliases)

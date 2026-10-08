@@ -445,8 +445,10 @@ final class HiveProjectionLineageResolver {
         if (start < 0) {
             return aliases;
         }
+        int where = HiveSqlTextUtils.topLevelKeywordIndex(sql, "where", start + 4);
+        int end = where < 0 ? sql.length() : where;
         int position = start;
-        while (position < sql.length()) {
+        while (position < end) {
             char ch = sql.charAt(position);
             if (quote != 0) {
                 if (ch == quote) {

@@ -376,7 +376,6 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
     private boolean hasLineageShape(ParsedHiveStatement parsedStatement) {
         return parsedStatement != null
             && parsedStatement.getOutputObject() != null
-            && !parsedStatement.getInputObjects().isEmpty()
             && !parsedStatement.getSelectExpressions().isEmpty();
     }
 

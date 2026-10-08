@@ -40,6 +40,24 @@ public class HiveParserAstAdapterTest {
     }
 
     @Test
+    public void hiveParserAstAdapterUsesMainInsertTargetWhenWhereSubqueryHasDestination() {
+        HiveAstParserAdapter adapter = new HiveParserAstAdapter();
+
+        ParsedHiveStatement statement = adapter.parse(
+            "insert into target_db.target_table partition(dt) select s.id, s.dt "
+                + "from source_db.source_table s "
+                + "where s.id in (select max(i.id) from source_db.inner_table i)"
+        );
+
+        TestSupport.assertTrue(statement.getOutputObject() != null, "main insert output object");
+        TestSupport.assertEquals(
+            "target_db.target_table",
+            statement.getOutputObject().getQualifiedName(),
+            "main insert target"
+        );
+    }
+
+    @Test
     public void hiveParserAstAdapterKeepsInsertOverwriteTarget() {
         HiveAstParserAdapter adapter = new HiveParserAstAdapter();
 

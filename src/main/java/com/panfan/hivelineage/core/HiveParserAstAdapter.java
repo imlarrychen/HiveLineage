@@ -33,6 +33,7 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
             StatementType statementType = resolveStatementType(root);
             Set<String> cteAliases = collectCteAliases(root);
             ASTNode mainInsert = findMainInsert(root, statementType);
+            ASTNode mainQuery = findQueryContainingInsert(root, mainInsert);
             ASTNode mainSetOperation = projectionExtractor.findMainSetOperation(root, mainInsert);
             List<String> selectExpressions = projectionExtractor.resolveSelectExpressions(root, mainInsert);
             List<String> targetColumns = projectionExtractor.resolveTargetColumns(root, mainInsert, statementType, selectExpressions);
@@ -47,6 +48,7 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
                 .statementType(statementType)
                 .outputObject(resolveOutputObject(root, mainInsert, statementType))
                 .inputObjects(projectionExtractor.resolveInputObjects(root, cteAliases))
+                .projectionInputObjects(resolveMainInputObjects(root, mainQuery, cteAliases))
                 .targetColumns(targetColumns)
                 .selectExpressions(selectExpressions)
                 .sourceAliases(projectionExtractor.resolveSourceAliases(root, cteAliases))
@@ -102,9 +104,9 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
     private DataObjectRef resolveOutputObject(ASTNode root, ASTNode mainInsert, StatementType statementType) {
         ASTNode tableName = null;
         if (statementType == StatementType.INSERT_SELECT) {
-            ASTNode destinationNode = astWalker.first(mainInsert, HiveParser.TOK_DESTINATION);
+            ASTNode destinationNode = astWalker.directChild(mainInsert, HiveParser.TOK_DESTINATION);
             if (destinationNode == null) {
-                destinationNode = astWalker.first(mainInsert, HiveParser.TOK_INSERT_INTO);
+                destinationNode = astWalker.directChild(mainInsert, HiveParser.TOK_INSERT_INTO);
             }
             ASTNode tabNode = astWalker.first(destinationNode, HiveParser.TOK_TAB);
             tableName = astWalker.first(tabNode, HiveParser.TOK_TABNAME);
@@ -148,6 +150,39 @@ public final class HiveParserAstAdapter implements HiveAstParserAdapter {
             queryNode = astWalker.first(root, HiveParser.TOK_QUERY);
         }
         return astWalker.directChild(queryNode, HiveParser.TOK_INSERT);
+    }
+
+    private ASTNode findQueryContainingInsert(ASTNode node, ASTNode mainInsert) {
+        if (node == null || mainInsert == null) {
+            return null;
+        }
+        if (node.getType() == HiveParser.TOK_QUERY
+            && astWalker.directChild(node, HiveParser.TOK_INSERT) == mainInsert) {
+            return node;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            ASTNode queryNode = findQueryContainingInsert((ASTNode) node.getChild(i), mainInsert);
+            if (queryNode != null) {
+                return queryNode;
+            }
+        }
+        return null;
+    }
+
+    private List<DataObjectRef> resolveMainInputObjects(ASTNode root, ASTNode mainQuery, Set<String> cteAliases) {
+        List<DataObjectRef> inputObjects = new ArrayList<>(projectionExtractor.resolveInputObjects(
+            astWalker.directChild(mainQuery, HiveParser.TOK_FROM),
+            cteAliases
+        ));
+        for (DataObjectRef cteSource : projectionExtractor.resolveInputObjects(
+            astWalker.first(root, HiveParser.TOK_CTE),
+            cteAliases
+        )) {
+            if (!inputObjects.contains(cteSource)) {
+                inputObjects.add(cteSource);
+            }
+        }
+        return inputObjects;
     }
 
     private Set<String> collectCteAliases(ASTNode root) {

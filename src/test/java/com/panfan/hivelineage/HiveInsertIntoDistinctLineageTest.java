@@ -49,6 +49,29 @@ public class HiveInsertIntoDistinctLineageTest {
         TestSupport.assertEquals(0, partitionLineage.getSourceColumns().size(), "static partition source count");
     }
 
+    @Test
+    public void insertIntoConstantSelectWithoutFromSucceeds() {
+        TestMetadataProvider metadata = new TestMetadataProvider()
+            .addTable("sum_cor_110.xc_dept", "dept_id", "dept_name", "dept_type", "parent_id", "root_id", "biz_date");
+
+        StatementLineageResult statement = analyze(
+            metadata,
+            "insert into sum_cor_110.xc_dept select '1100++','全部单位','D','1100++','1100++',udf_pek_date('20260921',0,1,0,0,-1)"
+        );
+
+        TestSupport.assertEquals(0, statement.getParseStatusCode(), "constant insert parse status=" + statement.getFailureMessage());
+        TestSupport.assertEquals("sum_cor_110.xc_dept", statement.getOutputObject().getQualifiedName(), "constant insert target");
+        TestSupport.assertEquals(0, statement.getInputObjects().size(), "constant insert source tables");
+        TestSupport.assertEquals(0, statement.getTableLineages().size(), "constant insert table lineage");
+        TestSupport.assertEquals(6, statement.getColumnLineages().size(), "constant insert column count");
+        for (int i = 0; i < statement.getColumnLineages().size(); i++) {
+            ColumnLineage column = statement.getColumnLineages().get(i);
+            TestSupport.assertEquals(i == 5 ? LineageType.DERIVED : LineageType.CONSTANT,
+                column.getLineageType(), "constant insert type " + column.getTargetColumn().getQualifiedName());
+            TestSupport.assertEquals(0, column.getSourceColumns().size(), "constant insert source columns");
+        }
+    }
+
     private StatementLineageResult analyze(TestMetadataProvider metadata, String sql) {
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
             .workflowId("wf_insert_into_distinct")

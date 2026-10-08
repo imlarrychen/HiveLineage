@@ -11,6 +11,7 @@ public final class ParsedHiveStatement {
     private final StatementType statementType;
     private final DataObjectRef outputObject;
     private final List<DataObjectRef> inputObjects;
+    private final List<DataObjectRef> projectionInputObjects;
     private final List<String> targetColumns;
     private final List<String> selectExpressions;
     private final Map<String, String> sourceAliases;
@@ -31,6 +32,7 @@ public final class ParsedHiveStatement {
         this.statementType = statementType;
         this.outputObject = outputObject;
         this.inputObjects = Collections.unmodifiableList(new ArrayList<>(inputObjects));
+        this.projectionInputObjects = this.inputObjects;
         this.targetColumns = Collections.emptyList();
         this.selectExpressions = Collections.emptyList();
         this.sourceAliases = Collections.emptyMap();
@@ -47,6 +49,7 @@ public final class ParsedHiveStatement {
         this.statementType = builder.statementType;
         this.outputObject = builder.outputObject;
         this.inputObjects = Collections.unmodifiableList(new ArrayList<>(builder.inputObjects));
+        this.projectionInputObjects = Collections.unmodifiableList(new ArrayList<>(builder.projectionInputObjects));
         this.targetColumns = Collections.unmodifiableList(new ArrayList<>(builder.targetColumns));
         this.selectExpressions = Collections.unmodifiableList(new ArrayList<>(builder.selectExpressions));
         this.sourceAliases = Collections.unmodifiableMap(new HashMap<>(builder.sourceAliases));
@@ -71,6 +74,7 @@ public final class ParsedHiveStatement {
         private StatementType statementType;
         private DataObjectRef outputObject;
         private List<DataObjectRef> inputObjects = Collections.emptyList();
+        private List<DataObjectRef> projectionInputObjects = Collections.emptyList();
         private List<String> targetColumns = Collections.emptyList();
         private List<String> selectExpressions = Collections.emptyList();
         private Map<String, String> sourceAliases = Collections.emptyMap();
@@ -94,6 +98,11 @@ public final class ParsedHiveStatement {
 
         Builder inputObjects(List<DataObjectRef> inputObjects) {
             this.inputObjects = inputObjects;
+            return this;
+        }
+
+        Builder projectionInputObjects(List<DataObjectRef> projectionInputObjects) {
+            this.projectionInputObjects = projectionInputObjects;
             return this;
         }
 
@@ -162,6 +171,10 @@ public final class ParsedHiveStatement {
 
     public List<DataObjectRef> getInputObjects() {
         return inputObjects;
+    }
+
+    public List<DataObjectRef> getProjectionInputObjects() {
+        return projectionInputObjects.isEmpty() ? inputObjects : projectionInputObjects;
     }
 
     public List<String> getTargetColumns() {

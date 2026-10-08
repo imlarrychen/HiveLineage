@@ -89,11 +89,8 @@ final class HiveSelectLineageStatementAnalyzer {
         work.targetTable = resolvedTargetTable(work.parsedStatement, targetTable);
         work.targetObject = new DataObjectRef(work.targetTable);
         work.originalInputObjects = filterOutputObjectFromInputs(work.parsedStatement, work.targetTable);
+        work.projectionInputObjects = work.parsedStatement.getProjectionInputObjects();
         work.analysisSelectItems = selectItems;
-        if (work.originalInputObjects.isEmpty()) {
-            work.failure = failedResult(context, "SQL_PARSE_ERROR", "No input object found");
-            return work;
-        }
         populateSetExpansion(context, work);
         if (work.failure != null) {
             return work;
@@ -102,7 +99,8 @@ final class HiveSelectLineageStatementAnalyzer {
             context,
             work.parsedStatement,
             work.analysisStatement,
-            work.originalInputObjects
+            work.originalInputObjects,
+            work.projectionInputObjects
         );
         populateSingleProjectionStarColumns(context, work);
         populateSelectItems(context, operation, targetColumns, work);
@@ -192,7 +190,7 @@ final class HiveSelectLineageStatementAnalyzer {
         );
         if (projectionTable == null) {
             projectionTable = singleLogicalTopLevelSource(work.scope.topLevelProjectionSourceAliases);
-            if (projectionTable == null || work.originalInputObjects.size() <= 1) {
+            if (projectionTable == null || work.projectionInputObjects.size() <= 1) {
                 return;
             }
             work.scope.statementProjectionTables.put(projectionTable, new LinkedHashMap<String, ColumnLineageProjection>());
@@ -201,9 +199,9 @@ final class HiveSelectLineageStatementAnalyzer {
         if (projections == null || !projections.isEmpty()) {
             return;
         }
-        List<String> columns = commonPhysicalInputColumns(context, work.originalInputObjects);
+        List<String> columns = commonPhysicalInputColumns(context, work.projectionInputObjects);
         for (String column : columns) {
-            projections.put(column.toLowerCase(Locale.ROOT), projectionFromPhysicalInputs(work.originalInputObjects, column));
+            projections.put(column.toLowerCase(Locale.ROOT), projectionFromPhysicalInputs(work.projectionInputObjects, column));
         }
     }
 
@@ -318,7 +316,7 @@ final class HiveSelectLineageStatementAnalyzer {
         if (!projectionColumns.isEmpty()) {
             return projectionColumns;
         }
-        List<DataObjectRef> starInputObjects = starExpansionInputObjects(work);
+        List<DataObjectRef> starInputObjects = work.projectionInputObjects;
         return targetColumnResolver.expandStarSelectItems(
             work.columnContext,
             work.targetTable,
@@ -439,7 +437,8 @@ final class HiveSelectLineageStatementAnalyzer {
         StatementAnalysisContext context,
         ParsedHiveStatement parsedStatement,
         String analysisStatement,
-        List<DataObjectRef> originalInputObjects
+        List<DataObjectRef> originalInputObjects,
+        List<DataObjectRef> projectionInputObjects
     ) {
         AnalysisScope scope = new AnalysisScope();
         scope.sourceAliases = databaseBinder.bindExtractedAliasTargets(
@@ -459,7 +458,7 @@ final class HiveSelectLineageStatementAnalyzer {
         targetColumnResolver.mergeTopLevelSourceAliases(scope.sourceAliases, scope.topLevelSourceAliases);
         scope.topLevelProjectionSourceAliases = databaseBinder.bindExtractedAliasTargets(
             projectionResolver.extractProjectionSourceAliases(analysisStatement),
-            originalInputObjects
+            projectionInputObjects
         );
         scope.sourceAliases.putAll(scope.topLevelProjectionSourceAliases);
         Map<String, String> explicitSourceAliases = databaseBinder.bindExtractedAliasTargets(
@@ -499,7 +498,9 @@ final class HiveSelectLineageStatementAnalyzer {
         );
         scope.columnLineageInputObjects = scope.columnReferenceInputObjects;
         scope.inputObjects = scope.columnReferenceInputObjects;
-        scope.defaultColumnSourceTable = scope.columnReferenceInputObjects.get(0).getQualifiedName();
+        scope.defaultColumnSourceTable = scope.columnReferenceInputObjects.isEmpty()
+            ? null
+            : scope.columnReferenceInputObjects.get(0).getQualifiedName();
         return scope;
     }
 
@@ -554,6 +555,9 @@ final class HiveSelectLineageStatementAnalyzer {
         SelectAnalysisWork work
     ) {
         if (parseMode != LineageParseMode.TABLE_ONLY && parseMode != LineageParseMode.TABLE_AND_COLUMN) {
+            return Collections.emptyList();
+        }
+        if (work.scope.inputObjects.isEmpty()) {
             return Collections.emptyList();
         }
         List<TableLineage> tableLineages = new ArrayList<>();
@@ -808,6 +812,7 @@ final class HiveSelectLineageStatementAnalyzer {
         private String targetTable;
         private DataObjectRef targetObject;
         private List<DataObjectRef> originalInputObjects;
+        private List<DataObjectRef> projectionInputObjects;
         private List<String> analysisSelectItems;
         private ColumnResolutionContext columnContext;
         private SetOperationExpansionResult setExpansion;
