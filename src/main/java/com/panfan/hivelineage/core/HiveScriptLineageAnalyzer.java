@@ -127,9 +127,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             String normalized = scriptPreprocessor.resolveVariables(
                 executableStatement,
                 sessionVariables,
-                request.getOptions().getFallbackVariableValue(),
-                statementWarnings,
-                i
+                request.getOptions().getFallbackVariableValue()
             );
             String skipReason = ignoredReason(normalized);
             StatementAnalysisContext context = new StatementAnalysisContext(
@@ -144,7 +142,7 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             if (scriptPreprocessor.isUseDatabaseCandidate(normalized)) {
                 UseDatabaseResolution useResolution = scriptPreprocessor.resolveUseDatabase(
                     normalized,
-                    hasUnresolvedVariable(statementWarnings)
+                    scriptPreprocessor.hasFallbackVariable(executableStatement, sessionVariables)
                 );
                 if (!useResolution.isValid()) {
                     results.add(failedResult(
@@ -469,15 +467,6 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             .columnLineages(Collections.<ColumnLineage>emptyList())
             .warnings(context.getWarnings())
             .build();
-    }
-
-    private boolean hasUnresolvedVariable(List<LineageWarning> warnings) {
-        for (LineageWarning warning : warnings) {
-            if (warning.getWarningCode() == WarningCode.UNRESOLVED_VARIABLE) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private void validateJoinPhysicalObjects(StatementAnalysisContext context) {

@@ -11,7 +11,6 @@ import com.panfan.hivelineage.result.WarningCode;
 import org.junit.Test;
 
 import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsSource;
-import static com.panfan.hivelineage.AnalyzerTestSupport.assertContainsWarning;
 import static com.panfan.hivelineage.AnalyzerTestSupport.readWorkspaceFile;
 
 public class HiveScriptProcessingTest {
@@ -152,7 +151,7 @@ public class HiveScriptProcessingTest {
     }
 
     @Test
-    public void unresolvedVariablesAreReplacedByFallbackConstant() {
+    public void unresolvedVariablesAreReplacedByFallbackConstantWithoutWarnings() {
         HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
 
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
@@ -171,7 +170,43 @@ public class HiveScriptProcessingTest {
         TestSupport.assertTrue(statement.getRawSql().contains("${missing_bizdate}"), "raw sql keeps unresolved variable");
         TestSupport.assertTrue(statement.getNormalizedSql().contains("19700101"), "normalized sql uses fallback constant");
         TestSupport.assertTrue(!statement.getNormalizedSql().contains("${"), "normalized sql has no unresolved marker");
-        assertContainsWarning(statement.getWarnings(), WarningCode.UNRESOLVED_VARIABLE);
+        TestSupport.assertTrue(
+            statement.getWarnings().stream().noneMatch(warning -> warning.getWarningCode() == WarningCode.UNRESOLVED_VARIABLE),
+            "fallback replacement does not warn"
+        );
+    }
+
+    @Test
+    public void fallbackVariableReplacementDoesNotProduceWarnings() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+
+        LineageAnalyzeRequest request = LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_fallback")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript(
+                "insert into test_a(a1) select b1 from test_b "
+                    + "where dt = '${missing_bizdate}' and env = '@{missing_env}';"
+            )
+            .options(LineageAnalyzeOptions.builder().fallbackVariableValue("fallback_value").build())
+            .build();
+
+        LineageAnalyzeResult result = analyzer.analyzeScript(request);
+        StatementLineageResult statement = result.getStatements().get(0);
+
+        TestSupport.assertEquals(0, result.getFailedStatementCount(), "valid fallback statement succeeds");
+        TestSupport.assertTrue(statement.getNormalizedSql().contains("fallback_value"), "fallback is normalized");
+        TestSupport.assertTrue(!statement.getNormalizedSql().contains("${"), "hive variable is removed");
+        TestSupport.assertTrue(!statement.getNormalizedSql().contains("@{"), "environment variable is removed");
+        TestSupport.assertTrue(
+            statement.getWarnings().stream().noneMatch(warning -> warning.getWarningCode() == WarningCode.UNRESOLVED_VARIABLE),
+            "statement has no fallback warning"
+        );
+        TestSupport.assertTrue(
+            result.getWarnings().stream().noneMatch(warning -> warning.getWarningCode() == WarningCode.UNRESOLVED_VARIABLE),
+            "aggregate has no fallback warning"
+        );
     }
 
     @Test
