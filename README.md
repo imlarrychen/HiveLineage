@@ -97,6 +97,14 @@ LineageAnalyzeResult result = analyzer.analyzeScript(LineageAnalyzeRequest.build
 - `maxViewExpandDepth`：视图递归展开最大深度，默认 `5`。
 - `fallbackVariableValue`：残留变量兜底替换值，默认 `__HIVE_LINEAGE_DEFAULT__`。
 
+### 无正式血缘的语句
+
+函数或资源会话命令（如 `CREATE/DROP FUNCTION`、`ADD JAR`）、无 `AS SELECT` 的结构或元数据 DDL（如 `CREATE/DROP TABLE`、`TRUNCATE TABLE`、`ALTER TABLE`、`MSCK`、`ANALYZE TABLE`）、元数据查看语句（`SHOW`、`DESCRIBE`）和权限语句（`GRANT`、`REVOKE`）不产生正式表/字段血缘。解析器将它们计为 `IGNORED`；只有开启 `includeIgnoredStatements` 才返回语句明细及其 `skipReason`。
+
+上述 DDL 即使语法不合法，也不会阻断血缘任务；开启忽略语句明细时，结果会带有 `INVALID_DDL` 告警。该语义只适用于已识别的无血缘 DDL 类别。
+
+`INSERT ... SELECT`、CTAS、`CREATE/ALTER VIEW AS SELECT`、`MERGE`、`UPDATE`、`DELETE`、`LOAD DATA`、`IMPORT`、`EXPORT` 可能读取、写入或转换数据，绝不会按无血缘语句忽略；当前不支持时仍返回解析失败，以避免遗漏数据血缘。
+
 ## 输出结果
 
 顶层结果是 `LineageAnalyzeResult`：
