@@ -489,4 +489,91 @@ public class HiveScriptProcessingTest {
         TestSupport.assertTrue(lineageStatement.getTableLineages().isEmpty(), "mixed column only table lineage");
         TestSupport.assertEquals(1, lineageStatement.getColumnLineages().size(), "mixed column only column lineage");
     }
+
+    @Test
+    public void nonLineageMaintenanceStatementsAreIgnoredWithExplicitReasons() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        String script = "create temporary function f as 'pkg.F' using jar 'hdfs:///f.jar';"
+            + "drop table tmp.old_t;"
+            + "truncate table dwd.snapshot_t;"
+            + "drop view dwd.old_v;"
+            + "create temporary table tmp.staging(dt string);"
+            + "create external table if not exists ods.empty_t(dt date);";
+
+        LineageAnalyzeResult result = analyzer.analyzeScript(LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_non_lineage")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript(script)
+            .options(LineageAnalyzeOptions.builder().includeIgnoredStatements(true).build())
+            .build());
+
+        TestSupport.assertEquals(0, result.getFailedStatementCount(), "non-lineage failed count");
+        TestSupport.assertEquals(6, result.getIgnoredStatementCount(), "non-lineage ignored count");
+        TestSupport.assertEquals(6, result.getStatements().size(), "non-lineage returned count");
+        String[] reasons = {
+            "CREATE_TEMPORARY_FUNCTION", "DROP_TABLE", "TRUNCATE_TABLE", "DROP_VIEW",
+            "CREATE_TEMPORARY_TABLE_DDL", "CREATE_EXTERNAL_TABLE_DDL"
+        };
+        for (int i = 0; i < reasons.length; i++) {
+            StatementLineageResult statement = result.getStatements().get(i);
+            TestSupport.assertEquals(3, statement.getParseStatusCode(), "ignored status " + i);
+            TestSupport.assertEquals(reasons[i], statement.getSkipReason(), "ignored reason " + i);
+            TestSupport.assertTrue(statement.getTableLineages().isEmpty(), "ignored table lineage " + i);
+            TestSupport.assertTrue(statement.getColumnLineages().isEmpty(), "ignored column lineage " + i);
+        }
+    }
+
+    @Test
+    public void malformedNonLineageDdlIsIgnoredWithDiagnosticWarning() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+
+        LineageAnalyzeResult result = analyzer.analyzeScript(LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_invalid_ddl")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript("alter table dwd.t set tblproperties（'comment'='bad';")
+            .options(LineageAnalyzeOptions.builder().includeIgnoredStatements(true).build())
+            .build());
+
+        TestSupport.assertEquals(0, result.getFailedStatementCount(), "invalid DDL failed count");
+        TestSupport.assertEquals(1, result.getStatements().size(), "invalid DDL returned count");
+        StatementLineageResult statement = result.getStatements().get(0);
+        TestSupport.assertEquals(3, statement.getParseStatusCode(), "invalid DDL ignored status");
+        TestSupport.assertEquals("ALTER_TABLE", statement.getSkipReason(), "invalid DDL ignored reason");
+        TestSupport.assertEquals(1, statement.getWarnings().size(), "invalid DDL warning count");
+        TestSupport.assertEquals(
+            WarningCode.valueOf("INVALID_DDL"),
+            statement.getWarnings().get(0).getWarningCode(),
+            "invalid DDL warning code"
+        );
+    }
+
+    @Test
+    public void dataBearingStatementsAreNotClassifiedAsNonLineage() {
+        HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+        String script = "insert into dwd.target_a(id) select id from ods.source_a;"
+            + "create table dwd.target_b as select id from ods.source_b;"
+            + "merge into dwd.target_c t using ods.source_c s on t.id = s.id when matched then update set id = s.id;";
+
+        LineageAnalyzeResult result = analyzer.analyzeScript(LineageAnalyzeRequest.builder()
+            .workflowId("wf_001")
+            .taskId("task_data_bearing")
+            .taskVersion("V1")
+            .defaultDatabase("default")
+            .rawScript(script)
+            .options(LineageAnalyzeOptions.builder().includeIgnoredStatements(true).build())
+            .build());
+
+        TestSupport.assertEquals(0, result.getStatements().get(0).getParseStatusCode(), "insert status");
+        TestSupport.assertTrue(result.getStatements().get(0).isFormalLineageProduced(), "insert lineage");
+        TestSupport.assertEquals(0, result.getStatements().get(1).getParseStatusCode(), "ctas status");
+        TestSupport.assertTrue(result.getStatements().get(1).isFormalLineageProduced(), "ctas lineage");
+        TestSupport.assertTrue(
+            result.getStatements().get(2).getParseStatusCode() != 3,
+            "merge must not be ignored"
+        );
+    }
 }

@@ -129,7 +129,6 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 sessionVariables,
                 request.getOptions().getFallbackVariableValue()
             );
-            String skipReason = ignoredReason(normalized);
             StatementAnalysisContext context = new StatementAnalysisContext(
                 request,
                 statement,
@@ -139,6 +138,22 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
                 scriptState.getCurrentDatabase(),
                 statementWarnings
             );
+            NonLineageStatementClassification nonLineageStatement = nonLineageStatement(normalized);
+            if (nonLineageStatement != null) {
+                if (nonLineageStatement.validateWithHiveParser) {
+                    validateIgnoredDdl(context);
+                }
+                ignored++;
+                if (request.getOptions().isIncludeIgnoredStatements()) {
+                    results.add(ignoredResult(
+                        context,
+                        nonLineageStatement.statementType,
+                        nonLineageStatement.skipReason
+                    ));
+                }
+                continue;
+            }
+            String skipReason = ignoredReason(normalized);
             if (scriptPreprocessor.isUseDatabaseCandidate(normalized)) {
                 UseDatabaseResolution useResolution = scriptPreprocessor.resolveUseDatabase(
                     normalized,
@@ -568,6 +583,113 @@ public final class HiveScriptLineageAnalyzer implements HiveLineageAnalyzer {
             return "INSERT_VALUES";
         }
         return null;
+    }
+
+    private NonLineageStatementClassification nonLineageStatement(String statement) {
+        String lower = statement.trim().toLowerCase(Locale.ROOT);
+        if (lower.startsWith("create temporary function ")) {
+            return new NonLineageStatementClassification(
+                "CREATE_TEMPORARY_FUNCTION", "CREATE_TEMPORARY_FUNCTION", false
+            );
+        }
+        if (lower.startsWith("create function ")) {
+            return new NonLineageStatementClassification("CREATE_FUNCTION", "CREATE_FUNCTION", false);
+        }
+        if (lower.startsWith("drop temporary function ")) {
+            return new NonLineageStatementClassification(
+                "DROP_TEMPORARY_FUNCTION", "DROP_TEMPORARY_FUNCTION", false
+            );
+        }
+        if (lower.startsWith("drop function ")) {
+            return new NonLineageStatementClassification("DROP_FUNCTION", "DROP_FUNCTION", true);
+        }
+        if (lower.startsWith("add jar ") || lower.startsWith("add file ") || lower.startsWith("add archive ")) {
+            return new NonLineageStatementClassification("ADD_RESOURCE", "ADD_RESOURCE", false);
+        }
+        if (AS_WITH_SELECT.matcher(lower).find()) {
+            return null;
+        }
+        if (lower.startsWith("create external table ")) {
+            return new NonLineageStatementClassification(
+                "CREATE_EXTERNAL_TABLE", "CREATE_EXTERNAL_TABLE_DDL", true
+            );
+        }
+        if (lower.startsWith("create temporary table ")) {
+            return new NonLineageStatementClassification(
+                "CREATE_TEMPORARY_TABLE", "CREATE_TEMPORARY_TABLE_DDL", true
+            );
+        }
+        if (lower.startsWith("create table ")) {
+            return new NonLineageStatementClassification("CREATE_TABLE", "CREATE_TABLE_DDL", true);
+        }
+        if (lower.startsWith("create database ") || lower.startsWith("create schema ")) {
+            return new NonLineageStatementClassification("CREATE_DATABASE", "CREATE_DATABASE_DDL", true);
+        }
+        if (lower.startsWith("create index ")) {
+            return new NonLineageStatementClassification("CREATE_INDEX", "CREATE_INDEX_DDL", true);
+        }
+        if (lower.startsWith("drop table ")) {
+            return new NonLineageStatementClassification("DROP_TABLE", "DROP_TABLE", true);
+        }
+        if (lower.startsWith("drop view ")) {
+            return new NonLineageStatementClassification("DROP_VIEW", "DROP_VIEW", true);
+        }
+        if (lower.startsWith("drop database ") || lower.startsWith("drop schema ")) {
+            return new NonLineageStatementClassification("DROP_DATABASE", "DROP_DATABASE", true);
+        }
+        if (lower.startsWith("truncate table ")) {
+            return new NonLineageStatementClassification("TRUNCATE_TABLE", "TRUNCATE_TABLE", true);
+        }
+        if (lower.startsWith("alter table ")) {
+            return new NonLineageStatementClassification("ALTER_TABLE", "ALTER_TABLE", true);
+        }
+        if (lower.startsWith("msck ")) {
+            return new NonLineageStatementClassification("MSCK", "MSCK", true);
+        }
+        if (lower.startsWith("analyze table ")) {
+            return new NonLineageStatementClassification("ANALYZE_TABLE", "ANALYZE_TABLE", true);
+        }
+        if (lower.startsWith("show ")) {
+            return new NonLineageStatementClassification("SHOW", "SHOW_METADATA", false);
+        }
+        if (lower.startsWith("describe ") || lower.startsWith("desc ")) {
+            return new NonLineageStatementClassification("DESCRIBE", "DESCRIBE_METADATA", false);
+        }
+        if (lower.startsWith("grant ")) {
+            return new NonLineageStatementClassification("GRANT", "GRANT_PRIVILEGE", false);
+        }
+        if (lower.startsWith("revoke ")) {
+            return new NonLineageStatementClassification("REVOKE", "REVOKE_PRIVILEGE", false);
+        }
+        return null;
+    }
+
+    private void validateIgnoredDdl(StatementAnalysisContext context) {
+        try {
+            new HiveParserAstAdapter().parse(context.getNormalizedStatement());
+        } catch (RuntimeException ex) {
+            context.getWarnings().add(new LineageWarning(
+                WarningCode.INVALID_DDL,
+                "Ignored DDL is syntactically invalid",
+                context.getStatementIndex()
+            ));
+        }
+    }
+
+    private static final class NonLineageStatementClassification {
+        private final String statementType;
+        private final String skipReason;
+        private final boolean validateWithHiveParser;
+
+        private NonLineageStatementClassification(
+            String statementType,
+            String skipReason,
+            boolean validateWithHiveParser
+        ) {
+            this.statementType = statementType;
+            this.skipReason = skipReason;
+            this.validateWithHiveParser = validateWithHiveParser;
+        }
     }
 
     private String ignoredStatementType(String skipReason) {
