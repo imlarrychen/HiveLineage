@@ -19,7 +19,6 @@
 1. 在常规 SQL 血缘解析之前执行受控的非血缘语句分类。
 2. 合法语句使 `ignoredStatementCount` 加一；只有 `includeIgnoredStatements=true` 时，返回状态为 `IGNORED` 的语句结果，且带精确的 `statementType` 和 `skipReason`。
 3. 被分类为 DDL 的语句通过 Hive 解析器做语法健康检查。解析失败时仍返回 `IGNORED`，并附带 `INVALID_DDL` 告警；不增加 `failedStatementCount`。
-4. `DROP TABLE` 命中当前脚本已注册的临时表时，移除对应临时表来源和字段映射。只有结构定义的临时表登记为空映射，以避免后续引用被错误识别为物理表。
 
 ## 实现边界
 
@@ -33,4 +32,3 @@
 - 默认隐藏和 `includeIgnoredStatements` 返回详情两种输出；
 - 非法 `ALTER TABLE` 产生 `INVALID_DDL` 告警但不失败；
 - `INSERT ... SELECT`、CTAS 与 `MERGE` 不会被分类器忽略；
-- `DROP` 已注册临时表后，其上下文映射被移除。
