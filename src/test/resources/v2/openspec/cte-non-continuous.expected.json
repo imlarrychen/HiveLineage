@@ -1,0 +1,97 @@
+{
+  "workflowId": "wf_001",
+  "taskId": "task_query_001",
+  "taskVersion": "V1",
+  "statementIndex": 1,
+  "statementId": "wf_001_task_query_001_V1_1",
+  "rawSql": "with x as (...) select * from x join y on x.id = y.id",
+  "formalLineageProduced": false,
+  "tableLineages": [],
+  "columnLineages": [],
+  "joinConditions": [
+    {
+      "workflowId": "wf_001",
+      "taskId": "task_query_001",
+      "taskVersion": "V1",
+      "statementIndex": 1,
+      "statementId": "wf_001_task_query_001_V1_1",
+      "joinIndex": 1,
+      "queryBlockPath": "cte.x",
+      "joinType": 1,
+      "joinTypeName": "INNER_JOIN",
+      "joinExpression": "a.id = b.id",
+      "directJoinObjects": [
+        "ods.a",
+        "ods.b"
+      ],
+      "directJoinColumns": [
+        "a.id",
+        "b.id"
+      ],
+      "joinTables": [
+        "ods.a",
+        "ods.b"
+      ],
+      "joinColumns": [
+        "ods.a.id",
+        "ods.b.id"
+      ]
+    },
+    {
+      "workflowId": "wf_001",
+      "taskId": "task_query_001",
+      "taskVersion": "V1",
+      "statementIndex": 1,
+      "statementId": "wf_001_task_query_001_V1_1",
+      "joinIndex": 2,
+      "queryBlockPath": "cte.y",
+      "joinType": 1,
+      "joinTypeName": "INNER_JOIN",
+      "joinExpression": "c.id = d.id",
+      "directJoinObjects": [
+        "ods.c",
+        "ods.d"
+      ],
+      "directJoinColumns": [
+        "c.id",
+        "d.id"
+      ],
+      "joinTables": [
+        "ods.c",
+        "ods.d"
+      ],
+      "joinColumns": [
+        "ods.c.id",
+        "ods.d.id"
+      ]
+    },
+    {
+      "workflowId": "wf_001",
+      "taskId": "task_query_001",
+      "taskVersion": "V1",
+      "statementIndex": 1,
+      "statementId": "wf_001_task_query_001_V1_1",
+      "joinIndex": 3,
+      "queryBlockPath": "root",
+      "joinType": 1,
+      "joinTypeName": "INNER_JOIN",
+      "joinExpression": "x.id = y.id",
+      "directJoinObjects": [
+        "x",
+        "y"
+      ],
+      "directJoinColumns": [
+        "x.id",
+        "y.id"
+      ],
+      "joinTables": [
+        "ods.a",
+        "ods.c"
+      ],
+      "joinColumns": [
+        "ods.a.id",
+        "ods.c.id"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "workflowId": "wf_001",
+  "taskId": "task_query_002",
+  "taskVersion": "V1",
+  "statementIndex": 1,
+  "statementId": "wf_001_task_query_002_V1_1",
+  "rawSql": "select * from ods.a a join ods.b b on a.id = b.id where exists (...)",
+  "formalLineageProduced": false,
+  "tableLineages": [],
+  "columnLineages": [],
+  "joinConditions": [
+    {
+      "workflowId": "wf_001",
+      "taskId": "task_query_002",
+      "taskVersion": "V1",
+      "statementIndex": 1,
+      "statementId": "wf_001_task_query_002_V1_1",
+      "joinIndex": 1,
+      "queryBlockPath": "root",
+      "joinType": 1,
+      "joinTypeName": "INNER_JOIN",
+      "joinExpression": "a.id = b.id",
+      "directJoinObjects": [
+        "ods.a",
+        "ods.b"
+      ],
+      "directJoinColumns": [
+        "a.id",
+        "b.id"
+      ],
+      "joinTables": [
+        "ods.a",
+        "ods.b"
+      ],
+      "joinColumns": [
+        "ods.a.id",
+        "ods.b.id"
+      ]
+    },
+    {
+      "workflowId": "wf_001",
+      "taskId": "task_query_002",
+      "taskVersion": "V1",
+      "statementIndex": 1,
+      "statementId": "wf_001_task_query_002_V1_1",
+      "joinIndex": 2,
+      "queryBlockPath": "root.where.exists[1]",
+      "joinType": 1,
+      "joinTypeName": "INNER_JOIN",
+      "joinExpression": "c.id = d.id",
+      "directJoinObjects": [
+        "ods.c",
+        "ods.d"
+      ],
+      "directJoinColumns": [
+        "c.id",
+        "d.id"
+      ],
+      "joinTables": [
+        "ods.c",
+        "ods.d"
+      ],
+      "joinColumns": [
+        "ods.c.id",
+        "ods.d.id"
+      ]
+    }
+  ]
+}

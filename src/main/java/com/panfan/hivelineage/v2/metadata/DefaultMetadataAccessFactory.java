@@ -1,0 +1,31 @@
+package com.panfan.hivelineage.v2.metadata;
+
+import java.util.Map;
+import java.util.WeakHashMap;
+
+/** One pinned read boundary per workflow object, with no task Session shared. */
+public final class DefaultMetadataAccessFactory implements MetadataAccessFactory {
+    private final Map<WorkflowContext, CapturedMetadataAccess> batches = new WeakHashMap<>();
+    private final long ttlMillis;
+
+    public DefaultMetadataAccessFactory() {
+        this(300_000L);
+    }
+
+    public DefaultMetadataAccessFactory(long ttlMillis) {
+        if (ttlMillis < 0L) {
+            throw new IllegalArgumentException("negative metadata ttl");
+        }
+        this.ttlMillis = ttlMillis;
+    }
+
+    @Override
+    public synchronized CapturedMetadataAccess create(WorkflowContext workflow) {
+        CapturedMetadataAccess access = batches.get(workflow);
+        if (access == null) {
+            access = new CapturedMetadataAccess(workflow, ttlMillis);
+            batches.put(workflow, access);
+        }
+        return access;
+    }
+}
