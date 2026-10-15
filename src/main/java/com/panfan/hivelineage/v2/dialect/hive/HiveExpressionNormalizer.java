@@ -42,13 +42,24 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Arrays;
+import java.util.IdentityHashMap;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
 
 final class HiveExpressionNormalizer {
     private static final Map<String, BinaryOperatorSyntax> BINARY = binaryOperators();
+    private static final Map<String, LiteralKind> LITERALS = literalKinds();
+    private static final Set<String> CAST_TYPES = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(
+            "TOK_BOOLEAN", "TOK_TINYINT", "TOK_SMALLINT", "TOK_INT", "TOK_BIGINT", "TOK_FLOAT", "TOK_DOUBLE",
+            "TOK_DECIMAL", "TOK_STRING", "TOK_CHAR", "TOK_VARCHAR", "TOK_BINARY", "TOK_DATE", "TOK_TIMESTAMP",
+            "TOK_TIMESTAMPLOCALTZ", "TOK_INTERVAL_YEAR_MONTH", "TOK_INTERVAL_DAY_TIME", "TOK_LIST", "TOK_MAP",
+            "TOK_STRUCT", "TOK_UNIONTYPE")));
     private final HiveAstSupport ast;
     private final HiveQueryNormalizer queries;
+    private final Map<ASTNode, SyntaxExpression> cache = new IdentityHashMap<ASTNode, SyntaxExpression>();
 
     HiveExpressionNormalizer(HiveAstSupport ast, HiveQueryNormalizer queries) {
         this.ast = ast;
@@ -56,6 +67,15 @@ final class HiveExpressionNormalizer {
     }
 
     SyntaxExpression expression(ASTNode node) {
+        SyntaxExpression cached = cache.get(node);
+        if (cached == null) {
+            cached = expressionUncached(node);
+            cache.put(node, cached);
+        }
+        return cached;
+    }
+
+    private SyntaxExpression expressionUncached(ASTNode node) {
         String kind = ast.kind(node);
         if (ast.recoveredExpression(node) || kind.startsWith("TOK_PARAMETER")) {
             return new UnknownExpressionSyntax(ast.id(node), ast.ref(node), "RECOVERED_PROJECTION",
@@ -74,18 +94,38 @@ final class HiveExpressionNormalizer {
         if ("TOK_ALLCOLREF".equals(kind) || "TOK_SETCOLREF".equals(kind)) {
             return new StarSyntax(ast.id(node), ast.ref(node), node.getChildCount() == 0 ? null : ast.name(ast.at(node, 0)));
         }
-        if ("DOT".equals(kind)) {
+        SyntaxExpression structure = structure(node, kind);
+        if (structure != null) {
+            return structure;
+        }
+        SyntaxExpression operator = operator(node, kind);
+        if (operator != null) {
+            return operator;
+        }
+        if (literalKind(node) != null) {
+            return literal(node);
+        }
+        return unknown(node, kind, knownChildren(node, 0));
+    }
+
+    private SyntaxExpression structure(ASTNode node, String kind) {
+        if ("DOT".equals(kind) && node.getChildCount() == 2) {
             return field(node);
         }
-        if ("LSQUARE".equals(kind)) {
+        if ("LSQUARE".equals(kind) && node.getChildCount() == 2) {
             return new SubscriptSyntax(ast.id(node), ast.ref(node), expression(ast.at(node, 0)), expression(ast.at(node, 1)));
         }
-        if (kind.startsWith("TOK_FUNCTION")) {
+        if (("TOK_FUNCTION".equals(kind) || "TOK_FUNCTIONDI".equals(kind) || "TOK_FUNCTIONSTAR".equals(kind))
+                && node.getChildCount() > 0) {
             return function(node);
         }
-        if ("TOK_SUBQUERY_EXPR".equals(kind)) {
+        if ("TOK_SUBQUERY_EXPR".equals(kind) && node.getChildCount() >= 2) {
             return subquery(node);
         }
+        return null;
+    }
+
+    private SyntaxExpression operator(ASTNode node, String kind) {
         if (BINARY.containsKey(kind) && node.getChildCount() == 2) {
             return new BinarySyntax(ast.id(node), ast.ref(node), BINARY.get(kind),
                     expression(ast.at(node, 0)), expression(ast.at(node, 1)));
@@ -97,11 +137,13 @@ final class HiveExpressionNormalizer {
                             ? UnaryOperatorSyntax.BITWISE_NOT : UnaryOperatorSyntax.PLUS;
             return new UnarySyntax(ast.id(node), ast.ref(node), operator, expression(ast.at(node, 0)));
         }
-        if (node.getChildCount() == 0 || kind.endsWith("LITERAL") || "TOK_NULL".equals(kind)) {
-            return literal(node);
-        }
-        return new UnknownExpressionSyntax(ast.id(node), ast.ref(node), "UNSUPPORTED_NATIVE_EXPRESSION:" + kind,
-                expressions(node, 0));
+        return null;
+    }
+
+    private UnknownExpressionSyntax unknown(ASTNode node, String kind, List<SyntaxExpression> children) {
+        String reason = "UNSUPPORTED_NATIVE_EXPRESSION:" + kind;
+        ast.unsupported(node, reason);
+        return new UnknownExpressionSyntax(ast.id(node), ast.ref(node), reason, children);
     }
 
     private SyntaxExpression field(ASTNode node) {
@@ -116,23 +158,8 @@ final class HiveExpressionNormalizer {
     }
 
     private SyntaxExpression literal(ASTNode node) {
-        String kind = ast.kind(node).toUpperCase(Locale.ROOT);
         String spelling = node.getText();
-        LiteralKind literalKind = LiteralKind.NUMBER;
-        if (kind.contains("STRINGLITERAL")) {
-            literalKind = LiteralKind.STRING;
-        } else if (kind.contains("NULL")) {
-            literalKind = LiteralKind.NULL;
-        } else if ("KW_TRUE".equals(kind) || "KW_FALSE".equals(kind)) {
-            literalKind = LiteralKind.BOOLEAN;
-        } else if (node.getType() == HiveParser.TOK_DATELITERAL || kind.contains("DATE")) {
-            literalKind = LiteralKind.DATE;
-        } else if (node.getType() == HiveParser.TOK_TIMESTAMPLITERAL
-                || node.getType() == HiveParser.TOK_TIMESTAMPLOCALTZLITERAL || kind.contains("TIMESTAMP")) {
-            literalKind = LiteralKind.TIMESTAMP;
-        } else if (kind.contains("INTERVAL")) {
-            literalKind = LiteralKind.INTERVAL;
-        }
+        LiteralKind literalKind = literalKind(node);
         if (node.getChildCount() > 0) {
             spelling = ast.source(node);
         }
@@ -140,26 +167,62 @@ final class HiveExpressionNormalizer {
                 literalKind == LiteralKind.NULL ? null : HiveAstSupport.unquote(spelling));
     }
 
+    private LiteralKind literalKind(ASTNode node) {
+        switch (node.getType()) {
+            case HiveParser.TOK_DATELITERAL:
+                return LiteralKind.DATE;
+            case HiveParser.TOK_TIMESTAMPLITERAL:
+            case HiveParser.TOK_TIMESTAMPLOCALTZLITERAL:
+                return LiteralKind.TIMESTAMP;
+            case HiveParser.TOK_INTERVAL_YEAR_MONTH_LITERAL:
+            case HiveParser.TOK_INTERVAL_DAY_TIME_LITERAL:
+            case HiveParser.TOK_INTERVAL_YEAR_LITERAL:
+            case HiveParser.TOK_INTERVAL_MONTH_LITERAL:
+            case HiveParser.TOK_INTERVAL_DAY_LITERAL:
+            case HiveParser.TOK_INTERVAL_HOUR_LITERAL:
+            case HiveParser.TOK_INTERVAL_MINUTE_LITERAL:
+            case HiveParser.TOK_INTERVAL_SECOND_LITERAL:
+                return LiteralKind.INTERVAL;
+            default:
+                return LITERALS.get(ast.kind(node));
+        }
+    }
+
     private SyntaxExpression function(ASTNode node) {
         ASTNode nameNode = ast.at(node, 0);
         String name = HiveAstSupport.unquote(nameNode.getText()).toLowerCase(Locale.ROOT);
         if ("when".equals(name) || "case".equals(name)) {
+            if (node.getChildCount() < ("case".equals(name) ? 4 : 3)) {
+                return unknown(node, "TOK_FUNCTION:" + name, knownChildren(node, 1));
+            }
             return caseExpression(node, "case".equals(name));
         }
         if ("between".equals(name)) {
+            if (!validBetween(node)) {
+                return unknown(node, "TOK_FUNCTION:between", knownChildren(node, 1));
+            }
             boolean negated = "KW_TRUE".equals(ast.kind(ast.at(node, 1)));
             return new BetweenSyntax(ast.id(node), ast.ref(node), expression(ast.at(node, 2)),
                     expression(ast.at(node, 3)), expression(ast.at(node, 4)), negated);
         }
         if ("in".equals(name)) {
+            if (node.getChildCount() < 3) {
+                return unknown(node, "TOK_FUNCTION:in", knownChildren(node, 1));
+            }
             return new InListSyntax(ast.id(node), ast.ref(node), expression(ast.at(node, 1)), expressions(node, 2), false);
         }
         if ("isnull".equals(name) || "isnotnull".equals(name)) {
+            if (node.getChildCount() != 2) {
+                return unknown(node, "TOK_FUNCTION:" + name, knownChildren(node, 1));
+            }
             return new UnarySyntax(ast.id(node), ast.ref(node), "isnull".equals(name)
                     ? UnaryOperatorSyntax.IS_NULL : UnaryOperatorSyntax.IS_NOT_NULL, expression(ast.at(node, 1)));
         }
-        if (ast.kind(nameNode).startsWith("TOK_") && node.getChildCount() > 1) {
+        if (CAST_TYPES.contains(ast.kind(nameNode)) && node.getChildCount() == 2) {
             return new CastSyntax(ast.id(node), ast.ref(node), expression(ast.at(node, 1)), type(nameNode));
+        }
+        if (ast.kind(nameNode).startsWith("TOK_")) {
+            return unknown(node, "TOK_FUNCTION:" + ast.kind(nameNode), knownChildren(node, 1));
         }
         List<SyntaxExpression> arguments = expressions(node, 1);
         if ("TOK_FUNCTIONSTAR".equals(ast.kind(node))) {
@@ -170,6 +233,38 @@ final class HiveExpressionNormalizer {
                 new CallArgumentsSyntax(arguments, quantifier, null));
         ASTNode window = ast.child(node, "TOK_WINDOWSPEC");
         return window == null ? call : new WindowCallSyntax(ast.id(node, "window"), ast.ref(node), call, window(window));
+    }
+
+    private boolean validBetween(ASTNode node) {
+        return node.getChildCount() == 5 && ("KW_TRUE".equals(ast.kind(ast.at(node, 1)))
+                || "KW_FALSE".equals(ast.kind(ast.at(node, 1))));
+    }
+
+    private List<SyntaxExpression> knownChildren(ASTNode parent, int start) {
+        List<SyntaxExpression> children = new ArrayList<SyntaxExpression>();
+        for (int index = start; index < parent.getChildCount(); index++) {
+            ASTNode child = ast.at(parent, index);
+            if ("TOK_WINDOWSPEC".equals(ast.kind(child))) {
+                WindowSpecificationSyntax specification = window(child);
+                children.addAll(specification.getPartitionBy());
+                for (SortItemSyntax sort : specification.getOrderBy()) {
+                    children.add(sort.getExpression());
+                }
+                if (specification.getFrame() != null) {
+                    addOffset(children, specification.getFrame().getStart());
+                    addOffset(children, specification.getFrame().getEnd());
+                }
+            } else {
+                children.add(expression(child));
+            }
+        }
+        return children;
+    }
+
+    private void addOffset(List<SyntaxExpression> children, FrameBoundarySyntax boundary) {
+        if (boundary != null && boundary.getOffset() != null) {
+            children.add(boundary.getOffset());
+        }
     }
 
     List<SyntaxExpression> expressions(ASTNode parent, int start) {
@@ -293,5 +388,25 @@ final class HiveExpressionNormalizer {
             operators.put(names[index], values[index]);
         }
         return Collections.unmodifiableMap(operators);
+    }
+
+    private static Map<String, LiteralKind> literalKinds() {
+        Map<String, LiteralKind> kinds = new LinkedHashMap<String, LiteralKind>();
+        for (String kind : Arrays.asList("Number", "NumberLiteral", "IntegralLiteral", "ByteLengthLiteral")) {
+            kinds.put(kind, LiteralKind.NUMBER);
+        }
+        kinds.put("StringLiteral", LiteralKind.STRING);
+        kinds.put("TOK_NULL", LiteralKind.NULL);
+        kinds.put("KW_TRUE", LiteralKind.BOOLEAN);
+        kinds.put("KW_FALSE", LiteralKind.BOOLEAN);
+        kinds.put("TOK_DATELITERAL", LiteralKind.DATE);
+        kinds.put("TOK_TIMESTAMPLITERAL", LiteralKind.TIMESTAMP);
+        kinds.put("TOK_TIMESTAMPLOCALTZLITERAL", LiteralKind.TIMESTAMP);
+        for (String kind : Arrays.asList("TOK_INTERVAL_YEAR_MONTH_LITERAL", "TOK_INTERVAL_DAY_TIME_LITERAL",
+                "TOK_INTERVAL_YEAR_LITERAL", "TOK_INTERVAL_MONTH_LITERAL", "TOK_INTERVAL_DAY_LITERAL",
+                "TOK_INTERVAL_HOUR_LITERAL", "TOK_INTERVAL_MINUTE_LITERAL", "TOK_INTERVAL_SECOND_LITERAL")) {
+            kinds.put(kind, LiteralKind.INTERVAL);
+        }
+        return Collections.unmodifiableMap(kinds);
     }
 }

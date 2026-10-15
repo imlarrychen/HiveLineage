@@ -1,6 +1,7 @@
 package com.panfan.hivelineage.v2.api;
 
 import com.panfan.hivelineage.v2.common.Diagnostic;
+import com.panfan.hivelineage.v2.common.DiagnosticBag;
 import com.panfan.hivelineage.v2.dialect.DialectFactory;
 import com.panfan.hivelineage.v2.dialect.DialectProfile;
 import com.panfan.hivelineage.v2.frontend.ExpandedUnit;
@@ -29,16 +30,27 @@ public final class DialectSyntaxFrontend<P> implements SyntaxFrontend {
         LexResult lexed = factory.createLexer().tokenize(unit, new LexicalOptions(dialect, true));
         List<Diagnostic> diagnostics = new ArrayList<>(lexed.getDiagnostics());
         if (lexed.getUnit() == null || lexed.getOutcome() == StageOutcome.FAILED) {
-            return new SyntaxResult(null, diagnostics, StageOutcome.FAILED);
+            return new SyntaxResult(null, DiagnosticBag.distinct(diagnostics), StageOutcome.FAILED);
         }
         SyntaxOptions options = new SyntaxOptions(dialect, true);
         ParseResult<P> parsed = factory.createParser().parse(lexed.getUnit(), options);
         diagnostics.addAll(parsed.getDiagnostics());
         if (parsed.getArtifact() == null || parsed.getOutcome() == StageOutcome.FAILED) {
-            return new SyntaxResult(null, diagnostics, StageOutcome.FAILED);
+            return new SyntaxResult(null, DiagnosticBag.distinct(diagnostics), StageOutcome.FAILED);
         }
         SyntaxResult normalized = factory.createNormalizer().normalize(parsed.getArtifact(), options);
         diagnostics.addAll(normalized.getDiagnostics());
-        return new SyntaxResult(normalized.getStatement(), diagnostics, normalized.getOutcome());
+        return new SyntaxResult(normalized.getStatement(), DiagnosticBag.distinct(diagnostics),
+                combinedOutcome(lexed.getOutcome(), parsed.getOutcome(), normalized.getOutcome()));
+    }
+
+    private StageOutcome combinedOutcome(StageOutcome lexical, StageOutcome parsed, StageOutcome normalized) {
+        if (normalized == StageOutcome.FAILED) {
+            return StageOutcome.FAILED;
+        }
+        if (lexical == StageOutcome.PARTIAL || parsed == StageOutcome.PARTIAL || normalized == StageOutcome.PARTIAL) {
+            return StageOutcome.PARTIAL;
+        }
+        return StageOutcome.SUCCESS;
     }
 }

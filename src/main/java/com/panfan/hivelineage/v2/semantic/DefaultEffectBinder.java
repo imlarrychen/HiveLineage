@@ -19,7 +19,6 @@ import com.panfan.hivelineage.v2.ir.statement.VersionRef;
 import com.panfan.hivelineage.v2.metadata.LookupStatus;
 import com.panfan.hivelineage.v2.metadata.ObjectDescriptor;
 import com.panfan.hivelineage.v2.session.CatalogEntry;
-import com.panfan.hivelineage.v2.session.OverlayEntry;
 import com.panfan.hivelineage.v2.syntax.ColumnDefinitionSyntax;
 import com.panfan.hivelineage.v2.syntax.CommandStatementSyntax;
 import com.panfan.hivelineage.v2.syntax.DefinitionBodySyntax;
@@ -68,16 +67,21 @@ public final class DefaultEffectBinder implements EffectBinder {
             && context.getContract().getCapabilities().getCapabilities().contains(AnalysisCapability.CATALOG_SIMULATION)) {
             DefinitionBodySyntax body = ((DefinitionStatementSyntax) statement).getDefinition();
             if (body.getQuery() == null) {
-                QualifiedName name = SemanticNames.qualify(body.getName(), context, body.getOptions().isTemporary());
                 boolean creation = body.getKind() == DefinitionKindSyntax.CREATE_TABLE || body.getKind() == DefinitionKindSyntax.CREATE_VIEW;
-                CatalogEntry local = creation ? null : local(body, name, context);
-                if (local != null) {
-                    name = local.getObject().getName();
-                }
-                ObjectId object = new ObjectId(context.getMetadataContext().getSourceId() + ":" + context.getMetadataContext().getClusterName()
-                    + ":" + name.getDisplayName());
-                if (local != null) {
-                    object = local.getObject().getObjectId();
+                boolean view = body.getKind() == DefinitionKindSyntax.DROP_VIEW || body.getKind() == DefinitionKindSyntax.ALTER_VIEW;
+                CatalogObjectResolver resolver = new CatalogObjectResolver(context);
+                QualifiedName name;
+                CatalogEntry local;
+                ObjectId object;
+                if (creation) {
+                    name = SemanticNames.qualify(body.getName(), context, body.getOptions().isTemporary());
+                    object = resolver.identity(name);
+                    local = null;
+                } else {
+                    CatalogObjectResolver.Resolution resolved = resolver.resolve(body.getName(), context.getSession().getCurrentDatabase(), !view);
+                    name = resolved.name;
+                    object = resolved.object;
+                    local = resolved.local;
                 }
                 Effects.ObjectKind kind = body.getOptions().isTemporary() ? Effects.ObjectKind.TEMPORARY_TABLE
                     : body.getKind() == DefinitionKindSyntax.CREATE_VIEW || body.getKind() == DefinitionKindSyntax.DROP_VIEW
@@ -143,17 +147,4 @@ public final class DefaultEffectBinder implements EffectBinder {
         return new EffectBindingResult(effects, new DiagnosticBag(diagnostics));
     }
 
-    private CatalogEntry local(DefinitionBodySyntax body, QualifiedName name, BindingContext context) {
-        boolean view = body.getKind() == DefinitionKindSyntax.DROP_VIEW || body.getKind() == DefinitionKindSyntax.ALTER_VIEW;
-        if (!view) {
-            QualifiedName requested = SemanticNames.name(body.getName());
-            for (CatalogEntry entry : context.getSession().getTemporaryCatalog().values()) {
-                if (entry.getLookupNames().contains(requested) || entry.getLookupNames().contains(name)) {
-                    return entry;
-                }
-            }
-        }
-        OverlayEntry overlay = context.getSession().getPersistentOverlay().get(name);
-        return overlay == null ? null : overlay.getEntry().orElse(null);
-    }
 }

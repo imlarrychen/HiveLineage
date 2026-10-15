@@ -1,6 +1,7 @@
 package com.panfan.hivelineage.v2.export;
 
 import com.panfan.hivelineage.v2.analysis.ColumnEndpoint;
+import com.panfan.hivelineage.v2.analysis.SlotProvenanceIndex;
 import com.panfan.hivelineage.v2.ir.IrTraversal;
 import com.panfan.hivelineage.v2.ir.expression.BoundExpression;
 import com.panfan.hivelineage.v2.ir.expression.Expressions;
@@ -9,15 +10,12 @@ import com.panfan.hivelineage.v2.ir.expression.QualifiedFieldHandle;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
 import com.panfan.hivelineage.v2.ir.identity.SlotId;
 import com.panfan.hivelineage.v2.ir.relation.BoundRelation;
-import com.panfan.hivelineage.v2.ir.relation.OutputAssignment;
 import com.panfan.hivelineage.v2.ir.relation.OutputSlot;
 import com.panfan.hivelineage.v2.ir.relation.Relations;
-import com.panfan.hivelineage.v2.ir.relation.SlotMapping;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -30,12 +28,12 @@ public final class BoundExpressionFormatter {
     private final SourceRenderer renderer;
     private final BoundNameIndex names;
     private final Predicate<ObjectId> displayBoundary;
-    private final Map<SlotId, BoundExpression> assignments = new LinkedHashMap<SlotId, BoundExpression>();
-    private final Map<SlotId, SlotId> mappings = new LinkedHashMap<SlotId, SlotId>();
-    private final Map<SlotId, Relations.SetOutputMapping> sets = new LinkedHashMap<SlotId, Relations.SetOutputMapping>();
-    private final Map<SlotId, String> setNames = new LinkedHashMap<SlotId, String>();
-    private final Map<SlotId, Relations.Generate> generators = new LinkedHashMap<SlotId, Relations.Generate>();
-    private final Map<SlotId, Relations.WindowComputation> windows = new LinkedHashMap<SlotId, Relations.WindowComputation>();
+    private final Map<SlotId, BoundExpression> assignments;
+    private final Map<SlotId, SlotId> mappings;
+    private final Map<SlotId, Relations.SetOutputMapping> sets;
+    private final Map<SlotId, String> setNames;
+    private final Map<SlotId, Relations.Generate> generators;
+    private final Map<SlotId, Relations.WindowComputation> windows;
 
     public BoundExpressionFormatter(BoundAnalysisUnit unit, BoundNameIndex names, SourceRenderer renderer) {
         this(unit, names, renderer, object -> false);
@@ -43,70 +41,20 @@ public final class BoundExpressionFormatter {
 
     public BoundExpressionFormatter(BoundAnalysisUnit unit, BoundNameIndex names, SourceRenderer renderer,
                                     Predicate<ObjectId> displayBoundary) {
+        this(new SlotProvenanceIndex(unit), names, renderer, displayBoundary);
+    }
+
+    public BoundExpressionFormatter(SlotProvenanceIndex provenance, BoundNameIndex names, SourceRenderer renderer,
+                                    Predicate<ObjectId> displayBoundary) {
         this.renderer = renderer;
         this.names = names;
         this.displayBoundary = displayBoundary;
-        for (BoundRelation relation : unit.getRelations()) {
-            register(relation);
-        }
-    }
-
-    private void register(BoundRelation relation) {
-        if (relation instanceof Relations.Project) {
-            assignments(((Relations.Project) relation).getAssignments());
-        } else if (relation instanceof Relations.Aggregate) {
-            assignments(((Relations.Aggregate) relation).getAssignments());
-        } else if (relation instanceof Relations.Window) {
-            for (Relations.WindowComputation computation : ((Relations.Window) relation).getComputations()) {
-                assignments.put(computation.getAssignment().getOutput(), computation.getAssignment().getExpression());
-                windows.put(computation.getAssignment().getOutput(), computation);
-            }
-            mappings(((Relations.Window) relation).getRetainedSlots());
-        } else if (relation instanceof Relations.SetOp) {
-            Relations.SetOp set = (Relations.SetOp) relation;
-            String operation = set.getOperator().name().toLowerCase(java.util.Locale.ROOT);
-            if (set.getOperator() == Relations.SetOperator.UNION) {
-                operation += set.getDuplicatePolicy() == Relations.DuplicatePolicy.ALL ? "_all" : "_distinct";
-            } else if (set.getDuplicatePolicy() == Relations.DuplicatePolicy.ALL) {
-                operation += "_all";
-            }
-            for (Relations.SetOutputMapping mapping : set.getMappings()) {
-                sets.put(mapping.getOutput(), mapping);
-                setNames.put(mapping.getOutput(), operation);
-            }
-        } else if (relation instanceof Relations.Filter) {
-            mappings(((Relations.Filter) relation).getMappings());
-        } else if (relation instanceof Relations.Join) {
-            mappings(((Relations.Join) relation).getMappings());
-        } else if (relation instanceof Relations.DefinitionInstance) {
-            mappings(((Relations.DefinitionInstance) relation).getMappings());
-        } else if (relation instanceof Relations.Sort) {
-            mappings(((Relations.Sort) relation).getMappings());
-        } else if (relation instanceof Relations.Limit) {
-            mappings(((Relations.Limit) relation).getMappings());
-        } else if (relation instanceof Relations.Distinct) {
-            mappings(((Relations.Distinct) relation).getMappings());
-        } else if (relation instanceof Relations.Generate) {
-            Relations.Generate generate = (Relations.Generate) relation;
-            mappings(generate.getRetainedSlots());
-            for (SlotId slot : generate.getGeneratedSlots()) {
-                generators.put(slot, generate);
-            }
-        }
-    }
-
-    private void assignments(List<OutputAssignment> values) {
-        for (OutputAssignment assignment : values) {
-            assignments.put(assignment.getOutput(), assignment.getExpression());
-        }
-    }
-
-    private void mappings(List<SlotMapping> values) {
-        for (SlotMapping mapping : values) {
-            if (!mapping.getOutput().equals(mapping.getInput())) {
-                mappings.put(mapping.getOutput(), mapping.getInput());
-            }
-        }
+        this.assignments = provenance.assignments();
+        this.mappings = provenance.mappings();
+        this.sets = provenance.sets();
+        this.setNames = provenance.setNames();
+        this.generators = provenance.generators();
+        this.windows = provenance.windows();
     }
 
     public Optional<String> format(BoundExpression expression) {

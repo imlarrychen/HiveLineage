@@ -5,7 +5,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 
-/** Immutable explicit extensions; typed built-in rules remain the engine's default. */
+/** Immutable extensions override the built-in rules in the same registry. */
 public final class DefaultLineageRuleRegistry implements LineageRuleRegistry {
     private final Map<RuleKey, ExpressionLineageRule> expressions;
     private final Map<RuleKey, RelationLineageRule> relations;
@@ -24,8 +24,8 @@ public final class DefaultLineageRuleRegistry implements LineageRuleRegistry {
         if (expressions.containsKey(key)) {
             return Optional.of(expressions.get(key));
         }
-        if ("1".equals(key.getVersion()) && ("function".equals(key.getNamespace()) && key.getOperation().startsWith("operator.")
-                || "ir".equals(key.getNamespace()) && "Cast".equals(key.getOperation()))) {
+        if (LineageRuleIdentity.VERSION.equals(key.getVersion()) && (LineageRuleIdentity.FUNCTION_NAMESPACE.equals(key.getNamespace()) && key.getOperation().startsWith("operator.")
+                || LineageRuleIdentity.IR_NAMESPACE.equals(key.getNamespace()) && "Cast".equals(key.getOperation()))) {
             return Optional.of(new CompositionalExpressionRule(key.getOperation()));
         }
         return Optional.empty();
@@ -36,12 +36,6 @@ public final class DefaultLineageRuleRegistry implements LineageRuleRegistry {
         if (relations.containsKey(key)) {
             return Optional.of(relations.get(key));
         }
-        if ("ir".equals(key.getNamespace()) && "ExternalDatasetRelation".equals(key.getOperation()) && "1".equals(key.getVersion())) {
-            return Optional.of(new ExternalDatasetLineageRule());
-        }
-        if ("ir".equals(key.getNamespace()) && "Project".equals(key.getOperation()) && "1".equals(key.getVersion())) {
-            return Optional.of(new CompositionalProjectRule());
-        }
-        return Optional.empty();
+        return BuiltInRelationRules.lookup(key);
     }
 }

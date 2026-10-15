@@ -189,21 +189,27 @@ public final class DefaultStructuralVerifier implements StructuralVerifier {
             order(id, relations, orderedIds, ordered);
         }
         for (BoundRelation relation : ordered) {
+            // Build once for the operator, rather than once for every repeated output.
+            Set<SlotId> transparentReuse = new HashSet<>();
+            for (SlotMapping mapping : VerificationSupport.mappings(relation)) {
+                if (mapping.getInput().equals(mapping.getOutput())) {
+                    transparentReuse.add(mapping.getOutput());
+                }
+            }
+            Set<NodeId> ancestors = null;
             Set<SlotId> local = new HashSet<SlotId>();
             for (OutputSlot slot : IrTraversal.knownSlots(relation.getOutputSchema())) {
                 if (!local.add(slot.getId())) {
                     error(diagnostics, "IR_DUPLICATE_OUTPUT_SLOT", "One output repeats a slot identity");
                 }
                 if (declarations.containsKey(slot.getId())) {
-                    Set<NodeId> ancestors = new LinkedHashSet<NodeId>();
-                    for (NodeId input : relation.getInputIds()) {
-                        ancestors.addAll(VerificationSupport.reachable(input, relations));
+                    if (ancestors == null) {
+                        ancestors = new LinkedHashSet<>();
+                        for (NodeId input : relation.getInputIds()) {
+                            ancestors.addAll(VerificationSupport.reachable(input, relations));
+                        }
                     }
-                    boolean mapped = false;
-                    for (SlotMapping mapping : VerificationSupport.mappings(relation)) {
-                        mapped |= mapping.getInput().equals(slot.getId()) && mapping.getOutput().equals(slot.getId());
-                    }
-                    if (!mapped || !ancestors.contains(declarations.get(slot.getId()).getId())) {
+                    if (!transparentReuse.contains(slot.getId()) || !ancestors.contains(declarations.get(slot.getId()).getId())) {
                         error(diagnostics, "IR_DUPLICATE_SLOT_DEFINITION", "Output slot is redeclared without transparent reuse");
                     }
                 } else {
@@ -310,6 +316,9 @@ public final class DefaultStructuralVerifier implements StructuralVerifier {
             error(diagnostics, "IR_SET_BRANCH_COUNT", "Set operation needs at least two branches");
         }
         List<OutputSlot> outputs = IrTraversal.knownSlots(set.getOutputSchema());
+        Map<NodeId, List<OutputSlot>> branchSlots = new LinkedHashMap<>();
+        Map<NodeId, Set<SlotId>> branchOutputs = new LinkedHashMap<>();
+        indexSetBranches(set, relations, branchSlots, branchOutputs);
         for (int position = 0; position < set.getMappings().size(); position++) {
             Relations.SetOutputMapping mapping = set.getMappings().get(position);
             if (!output.contains(mapping.getOutput()) || !produced.add(mapping.getOutput())
@@ -324,13 +333,26 @@ public final class DefaultStructuralVerifier implements StructuralVerifier {
                 BoundRelation branch = relations.get(set.getBranches().get(branchIndex));
                 if (branch != null && mapping.getBranchSlots().get(branchIndex).getSlot().isPresent()) {
                     SlotId slot = mapping.getBranchSlots().get(branchIndex).getSlot().get();
-                    List<OutputSlot> slots = IrTraversal.knownSlots(branch.getOutputSchema());
-                    if (!VerificationSupport.outputs(branch).contains(slot)
+                    List<OutputSlot> slots = branchSlots.get(branch.getId());
+                    if (!branchOutputs.get(branch.getId()).contains(slot)
                             || branch.getOutputSchema().getState() == SchemaState.KNOWN
                             && (position >= slots.size() || !slots.get(position).getId().equals(slot))) {
                         error(diagnostics, "IR_SET_POSITION_INVALID", "Branch slot does not match positional mapping");
                     }
                 }
+            }
+        }
+    }
+
+    private void indexSetBranches(Relations.SetOp set, Map<NodeId, BoundRelation> relations,
+            Map<NodeId, List<OutputSlot>> branchSlots, Map<NodeId, Set<SlotId>> branchOutputs) {
+        for (NodeId id : set.getBranches()) {
+            if (relations.containsKey(id)) {
+                List<OutputSlot> slots = IrTraversal.knownSlots(relations.get(id).getOutputSchema());
+                branchSlots.put(id, slots);
+                Set<SlotId> ids = new HashSet<>();
+                slots.forEach(slot -> ids.add(slot.getId()));
+                branchOutputs.put(id, ids);
             }
         }
     }

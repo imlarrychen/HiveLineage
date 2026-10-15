@@ -25,7 +25,6 @@ import com.panfan.hivelineage.v2.syntax.ValuesRowSyntax;
 import com.panfan.hivelineage.v2.common.AnalysisStage;
 import com.panfan.hivelineage.v2.common.Diagnostic;
 import com.panfan.hivelineage.v2.frontend.StageOutcome;
-import com.panfan.hivelineage.v2.lexical.LexToken;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -35,10 +34,17 @@ public final class HiveSyntaxNormalizer implements SyntaxNormalizer<HiveParseArt
     @Override
     public SyntaxResult normalize(HiveParseArtifact artifact, SyntaxOptions options) {
         if (artifact.command() != null) {
-            return new SyntaxResult(artifact.command(), artifact.diagnostics(),
+            return new SyntaxResult(artifact.command(), Collections.<Diagnostic>emptyList(),
                     artifact.diagnostics().isEmpty() ? StageOutcome.SUCCESS : StageOutcome.PARTIAL);
         }
-        HiveAstSupport ast = new HiveAstSupport(artifact);
+        final HiveAstSupport ast;
+        try {
+            ast = new HiveAstSupport(artifact, options);
+        } catch (HiveAstSupport.NormalizationLimit limit) {
+            return new SyntaxResult(null, Collections.singletonList(new Diagnostic(AnalysisStage.NORMALIZATION,
+                    limit.code(), limit.getMessage(), artifact.unit().getExpandedUnit().getOriginalUnit().getSourceRef())),
+                    StageOutcome.FAILED);
+        }
         HiveQueryNormalizer queries = new HiveQueryNormalizer(ast);
         ASTNode root = artifact.tree();
         while (root.getType() == 0 && root.getChildCount() > 0) {
@@ -46,12 +52,15 @@ public final class HiveSyntaxNormalizer implements SyntaxNormalizer<HiveParseArt
         }
         try {
             SyntaxStatement statement = statement(root, ast, queries, artifact);
-            return new SyntaxResult(statement, artifact.diagnostics(),
-                    artifact.diagnostics().isEmpty() ? StageOutcome.SUCCESS : StageOutcome.PARTIAL);
+            return new SyntaxResult(statement, ast.diagnostics(),
+                    artifact.diagnostics().isEmpty() && ast.diagnostics().isEmpty() ? StageOutcome.SUCCESS : StageOutcome.PARTIAL);
         } catch (IllegalArgumentException error) {
             return failure(ast, root, error.getMessage());
         } catch (IndexOutOfBoundsException error) {
             return failure(ast, root, "Incomplete Hive syntax structure for " + ast.kind(root));
+        } catch (StackOverflowError error) {
+            return new SyntaxResult(null, Collections.singletonList(new Diagnostic(AnalysisStage.NORMALIZATION,
+                    "NORMALIZATION_DEPTH_LIMIT", "Native AST conversion exhausted its stack", ast.ref(root))), StageOutcome.FAILED);
         }
     }
 
@@ -82,7 +91,8 @@ public final class HiveSyntaxNormalizer implements SyntaxNormalizer<HiveParseArt
         if ("TOK_CREATEFUNCTION".equals(kind) || "TOK_DROPFUNCTION".equals(kind)) {
             return function(root, ast);
         }
-        return new OtherStatementSyntax(ast.id(root, "statement"), ast.ref(root), kind, null);
+        return new OtherStatementSyntax(ast.id(root, "statement"), ast.ref(root), HiveStatementClassification.semantic(kind), null,
+                HiveStatementClassification.dataChanging(kind));
     }
 
     private SyntaxStatement function(ASTNode root, HiveAstSupport ast) {
@@ -112,7 +122,7 @@ public final class HiveSyntaxNormalizer implements SyntaxNormalizer<HiveParseArt
             if (ast.first(destination, "TOK_TMP_FILE") != null) {
                 continue;
             }
-            InsertModeSyntax mode = mode(insert, destination, artifact, ast);
+            InsertModeSyntax mode = mode(insert, destination, ast);
             InsertSourceSyntax source = values(insert, ast, queries);
             if (source == null) {
                 source = new QueryInsertSourceSyntax(queries.select(root, insert));
@@ -128,25 +138,10 @@ public final class HiveSyntaxNormalizer implements SyntaxNormalizer<HiveParseArt
                 from == null ? null : queries.from(ast.at(from, 0)), branches);
     }
 
-    private InsertModeSyntax mode(ASTNode insert, ASTNode destination, HiveParseArtifact artifact, HiveAstSupport ast) {
+    private InsertModeSyntax mode(ASTNode insert, ASTNode destination, HiveAstSupport ast) {
         ASTNode target = ast.first(destination, "TOK_TABNAME");
         int end = target == null ? ast.ref(insert).getSpan().getEnd() : ast.ref(target).getSpan().getStart();
-        boolean afterInsert = false;
-        InsertModeSyntax original = null;
-        for (LexToken token : artifact.unit().getTokens()) {
-            if (token.getSourceRef().getSpan().getStart() >= end) {
-                continue;
-            }
-            if ("insert".equalsIgnoreCase(token.getLexeme())) {
-                afterInsert = true;
-            } else if (afterInsert && "overwrite".equalsIgnoreCase(token.getLexeme())) {
-                original = InsertModeSyntax.OVERWRITE;
-                afterInsert = false;
-            } else if (afterInsert && "into".equalsIgnoreCase(token.getLexeme())) {
-                original = InsertModeSyntax.INTO;
-                afterInsert = false;
-            }
-        }
+        InsertModeSyntax original = ast.insertModeBefore(end);
         if (original != null) {
             return original;
         }

@@ -145,8 +145,11 @@ final class StatementBinder {
             ((LiteralSyntax) body.getPath()).getDecodedValue(), body.isLocal()
                 ? ExternalDatasetRelation.SourceKind.LOCAL_PATH : ExternalDatasetRelation.SourceKind.DISTRIBUTED_PATH);
         work.put(input);
-        QualifiedName name = SemanticNames.qualify(body.getTarget(), work.context, false);
-        ObjectId object = work.objectId(name);
+        CatalogObjectResolver.Resolution resolved = new CatalogObjectResolver(work.context).resolve(
+            body.getTarget(), work.context.getSession().getCurrentDatabase(), true);
+        resolved.requireAvailable();
+        QualifiedName name = resolved.name;
+        ObjectId object = resolved.object;
         NodeId writeId = new NodeId(statement.getNodeId().getValue() + "/write");
         OutputSchema schema = targetSchema(name, object, writeId, Collections.<IdentifierPart>emptyList(), null);
         ReferenceScope scope = new ReferenceScope(work, null, new ScopeId(statement.getNodeId().getValue() + "/load-scope"),
@@ -177,8 +180,11 @@ final class StatementBinder {
             }
             BoundRelation query = new QueryBinder(work).query(((QueryInsertSourceSyntax) branch.getSource()).getQuery(), ctes,
                 work.requested(BindingRequirement.OUTPUT_SCHEMA), QueryResult.Role.MAIN, "", statement.getSharedFrom());
-            QualifiedName name = SemanticNames.qualify(branch.getTarget().getTableName(), work.context, false);
-            ObjectId object = work.objectId(name);
+            CatalogObjectResolver.Resolution resolved = new CatalogObjectResolver(work.context).resolve(
+                branch.getTarget().getTableName(), ctes.database, true);
+            resolved.requireAvailable();
+            QualifiedName name = resolved.name;
+            ObjectId object = resolved.object;
             NodeId writeId = new NodeId(branch.getNodeId().getValue() + "/write");
             OutputSchema schema = targetSchema(name, object, writeId, branch.getTarget().getTargetColumns(), null);
             PartitionScope partition = partitions(branch.getTarget(), object, query, ctes);
@@ -267,8 +273,10 @@ final class StatementBinder {
 
     private OutputSchema targetSchema(QualifiedName name, ObjectId object, NodeId writeId,
                                       List<IdentifierPart> declared, OutputSchema derived) {
+        CatalogObjectResolver resolver = new CatalogObjectResolver(work.context);
+        CatalogObjectResolver.Resolution resolved = resolver.canonical(name, object);
         if (!work.requested(BindingRequirement.SINK_MAPPING)) {
-            work.declare(object, name, BoundObjectReference.ObjectKind.TABLE, SchemaState.NOT_REQUESTED,
+            work.declare(object, name, resolved.kind(), SchemaState.NOT_REQUESTED,
                 Collections.<FieldIdentity>emptyList(), null);
             return OutputSchema.notRequested();
         }
@@ -286,33 +294,24 @@ final class StatementBinder {
                 slots.add(new OutputSlot(new SlotId(writeId.getValue() + "/target-" + position++), field.getDisplayName(), input.getType(), field));
             }
             if (derived.getState() != SchemaState.KNOWN) {
-                work.declare(object, name, BoundObjectReference.ObjectKind.TABLE, SchemaState.UNKNOWN,
+                work.declare(object, name, resolved.kind(), SchemaState.UNKNOWN,
                     fields(slots), null);
                 return BindingWork.partialSchema(slots, new NodeId(writeId.getValue() + "/target-width"), "TARGET_SCHEMA_UNKNOWN");
             }
         } else {
-            com.panfan.hivelineage.v2.session.OverlayEntry overlay = work.context.getSession().getPersistentOverlay().get(name);
-            if (overlay != null && overlay.getState() == com.panfan.hivelineage.v2.session.OverlayEntry.State.DELETED) {
-                throw new BindingFailure("OBJECT_NOT_FOUND", "Sink was dropped earlier in this script");
-            }
-            if ((overlay != null && overlay.getState() == com.panfan.hivelineage.v2.session.OverlayEntry.State.UNKNOWN)
-                || work.context.getSession().getUncertainty().getObjects().contains(object)
-                || work.context.getSession().getUncertainty().isCatalogUncertain()) {
+            resolved.requireAvailable();
+            if (resolved.uncertain) {
                 work.warn("SESSION_OBJECT_UNCERTAIN", "Sink schema was invalidated by a prior uncertain effect", null);
-                work.declare(object, name, BoundObjectReference.ObjectKind.TABLE, SchemaState.UNKNOWN,
+                work.declare(object, name, resolved.kind(), SchemaState.UNKNOWN,
                     Collections.<FieldIdentity>emptyList(), null);
                 return BindingWork.unknown(new NodeId(writeId.getValue() + "/target-width"), "SESSION_OBJECT_UNCERTAIN");
             }
-            com.panfan.hivelineage.v2.session.CatalogEntry local = overlay != null && overlay.getEntry().isPresent() ? overlay.getEntry().get() : null;
-            RelationSchema loaded = local != null && local.getSchema().isPresent() ? local.getSchema().get() : null;
-            if (loaded == null) {
-                LookupResult<RelationSchema> metadata = work.context.getMetadata().lookupSchema(name, work.context.getMetadataContext());
-                work.diagnostics.addAll(metadata.getDiagnostics().getDiagnostics());
-                loaded = metadata.getStatus() == LookupStatus.FOUND ? metadata.getValue().get() : null;
-            }
+            LookupResult<RelationSchema> metadata = resolver.schema(resolved);
+            work.diagnostics.addAll(metadata.getDiagnostics().getDiagnostics());
+            RelationSchema loaded = metadata.getStatus() == LookupStatus.FOUND ? metadata.getValue().get() : null;
             if (loaded == null || loaded.getState() != SchemaState.KNOWN) {
                 work.warn("METADATA_NOT_FOUND", "Sink schema is unavailable for " + name.getDisplayName(), null);
-                work.declare(object, name, BoundObjectReference.ObjectKind.TABLE, SchemaState.UNKNOWN,
+                work.declare(object, name, resolved.kind(), SchemaState.UNKNOWN,
                     Collections.<FieldIdentity>emptyList(), null);
                 return BindingWork.unknown(new NodeId(writeId.getValue() + "/target-width"), "TARGET_SCHEMA_UNKNOWN");
             }
@@ -321,7 +320,7 @@ final class StatementBinder {
                 slots.add(new OutputSlot(new SlotId(writeId.getValue() + "/target-" + column.getPosition()), field.getDisplayName(), column.getType(), field));
             }
         }
-        work.declare(object, name, BoundObjectReference.ObjectKind.TABLE, SchemaState.KNOWN, fields(slots), null);
+        work.declare(object, name, resolved.kind(), SchemaState.KNOWN, fields(slots), null);
         return OutputSchema.known(slots);
     }
 

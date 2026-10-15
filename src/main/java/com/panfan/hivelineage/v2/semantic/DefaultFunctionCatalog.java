@@ -49,13 +49,40 @@ public final class DefaultFunctionCatalog implements FunctionCatalog {
             QualifiedName qualified = new QualifiedName(Collections.singletonList(name));
             ResolvedFunctionSymbol symbol = new ResolvedFunctionSymbol(qualified, kind, "hive." + name);
             FunctionSignature signature = new FunctionSignature(Collections.<TypeRef>emptyList(), true,
-                Collections.singletonList(TypeRef.unknown()));
+                Collections.singletonList(resultType(name)));
             FunctionOutputDependency dependency = new FunctionOutputDependency(0, Collections.<Integer>emptySet(),
                 kind == FunctionSymbol.FunctionKind.AGGREGATE || kind == FunctionSymbol.FunctionKind.WINDOW,
                 kind == FunctionSymbol.FunctionKind.WINDOW);
             entries.put(name, new FunctionDescriptor(symbol, Arrays.asList(signature), Arrays.asList(dependency),
                 Collections.<String>emptyList(), false));
         }
+    }
+
+    private static final Map<String, TypeRef> RESULT_TYPES = resultTypes();
+
+    private static Map<String, TypeRef> resultTypes() {
+        Map<String, TypeRef> types = new LinkedHashMap<>();
+        returns(types, TypeRef.Kind.INTEGER, "count", "row_number", "rank", "dense_rank", "ntile", "size", "length",
+            "instr", "datediff", "unix_timestamp", "to_unix_timestamp", "year", "month", "day", "dayofmonth",
+            "hour", "minute", "second", "hash");
+        returns(types, TypeRef.Kind.DECIMAL, "avg", "percent_rank", "cume_dist", "stddev", "variance");
+        returns(types, TypeRef.Kind.STRING, "upper", "lower", "concat", "concat_ws", "substring", "substr",
+            "regexp_replace", "regexp_extract", "date_format", "trim", "ltrim", "rtrim", "get_json_object",
+            "parse_url", "md5", "sha1", "sha2", "reverse", "replace", "format_number", "from_unixtime");
+        returns(types, TypeRef.Kind.BOOLEAN, "isnull", "isnotnull");
+        returns(types, TypeRef.Kind.DATE, "to_date", "current_date", "date_add", "date_sub", "add_months");
+        returns(types, TypeRef.Kind.TIMESTAMP, "current_timestamp");
+        return Collections.unmodifiableMap(types);
+    }
+
+    private static void returns(Map<String, TypeRef> types, TypeRef.Kind kind, String... names) {
+        for (String name : names) {
+            types.put(name, SemanticTypes.type(kind));
+        }
+    }
+
+    private static TypeRef resultType(String name) {
+        return RESULT_TYPES.getOrDefault(name, TypeRef.unknown());
     }
 
     @Override

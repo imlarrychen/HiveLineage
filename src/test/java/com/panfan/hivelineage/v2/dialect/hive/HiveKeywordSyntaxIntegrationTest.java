@@ -109,7 +109,10 @@ public class HiveKeywordSyntaxIntegrationTest {
     }
 
     public static java.util.Map<String, Set<Integer>> expectedFrontendPartial() {
-        return Collections.singletonMap(PREFIX + "session_queries_quoted_use_resource_kinds.sql", Collections.singleton(13));
+        java.util.Map<String, Set<Integer>> partial = new java.util.LinkedHashMap<>();
+        partial.put(PREFIX + "session_queries_quoted_use_resource_kinds.sql", Collections.singleton(13));
+        partial.put(PREFIX + "join_using_partial_boundary.sql", Collections.singleton(0));
+        return partial;
     }
 
     @Parameterized.Parameters(name = "{0}: {1}")
@@ -134,8 +137,10 @@ public class HiveKeywordSyntaxIntegrationTest {
             assertNoFailed(result);
         }
         assertEquals(file, syntax.size(), result.getCounts().getTotal());
-        if (!suffix.equals("session_queries_quoted_use_resource_kinds")) {
-            syntax.forEach(value -> assertEquals(file + ": " + value.getDiagnostics(), StageOutcome.SUCCESS, value.getOutcome()));
+        for (int index = 0; index < syntax.size(); index++) {
+            StageOutcome expected = expectedFrontendPartial().getOrDefault(file, Collections.emptySet()).contains(index)
+                    ? StageOutcome.PARTIAL : StageOutcome.SUCCESS;
+            assertEquals(file + ": " + syntax.get(index).getDiagnostics(), expected, syntax.get(index).getOutcome());
         }
         if (suffix.startsWith("nested_")) {
             clauseSubquery(result);
@@ -325,13 +330,14 @@ public class HiveKeywordSyntaxIntegrationTest {
     private void usingBoundary(ScriptAnalysisResult result, List<SyntaxResult> syntax) {
         assertEquals(StatementStatus.PARTIAL_SUCCESS, result.getStatements().get(0).getStatus());
         diagnostic(result, "UNSUPPORTED_EXPRESSION");
-        diagnostic(result, "OUTPUT_SCHEMA_UNKNOWN");
+        diagnostic(result, "UNSUPPORTED_NATIVE_EXPRESSION");
         assertInputs(statement(result, 0), "ods.users", "ods.users_archive");
         assertTableSources(statement(result, 0), "dwd.result", "ods.users", "ods.users_archive");
         assertColumnSources(statement(result, 0), "dwd.result.id", "ods.users.id");
         JoinFromSyntax from = (JoinFromSyntax) select(syntax, 0).getBody().getFrom();
         assertTrue(from.getCondition().getOn() instanceof UnknownExpressionSyntax);
         assertEquals("UNSUPPORTED_NATIVE_EXPRESSION:TOK_TABCOLNAME", ((UnknownExpressionSyntax) from.getCondition().getOn()).getReason());
+        assertEquals(1, ((UnknownExpressionSyntax) from.getCondition().getOn()).getKnownChildren().size());
     }
 
     private void commands(ScriptAnalysisResult result, List<SyntaxResult> syntax) {

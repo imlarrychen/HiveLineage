@@ -26,19 +26,20 @@ public final class HiveSqlSyntaxParser implements SqlSyntaxParser<HiveParseArtif
         if (limit.isPresent()) {
             return new ParseResult<HiveParseArtifact>(null, Collections.singletonList(limit.get()), StageOutcome.FAILED);
         }
-        SyntaxStatement command = new HiveCommandParser().parse(unit);
+        HiveTokenIndex tokens = new HiveTokenIndex(unit);
+        SyntaxStatement command = new HiveCommandParser().parse(unit, tokens);
         if (command != null) {
             if (command instanceof OtherStatementSyntax
                     && "INVALID_USE_DATABASE".equals(((OtherStatementSyntax) command).getUnsupportedReason())) {
                 List<Diagnostic> diagnostics = Collections.singletonList(new Diagnostic(AnalysisStage.SYNTAX,
                         "INVALID_USE_DATABASE", "USE requires one unquoted or backtick-quoted database identifier", command.getSourceRef()));
-                return new ParseResult<HiveParseArtifact>(new HiveParseArtifact(unit, null, command, diagnostics),
+                return new ParseResult<HiveParseArtifact>(new HiveParseArtifact(unit, null, command, diagnostics, tokens),
                         diagnostics, StageOutcome.PARTIAL);
             }
-            return new ParseResult<HiveParseArtifact>(new HiveParseArtifact(unit, null, command),
+            return new ParseResult<HiveParseArtifact>(new HiveParseArtifact(unit, null, command, Collections.<Diagnostic>emptyList(), tokens),
                     Collections.<Diagnostic>emptyList(), StageOutcome.SUCCESS);
         }
-        CapturingParser parser = new CapturingParser(new CommonTokenStream(new HiveTokenBridge(unit, options.isRecoveryEnabled())));
+        CapturingParser parser = new CapturingParser(new CommonTokenStream(new HiveTokenBridge(unit, options.isRecoveryEnabled(), tokens)));
         parser.setTreeAdaptor(ParseDriver.adaptor);
         try {
             ASTNode tree = (ASTNode) parser.statement().getTree();
@@ -47,12 +48,12 @@ public final class HiveSqlSyntaxParser implements SqlSyntaxParser<HiveParseArtif
             }
             tree.setUnknownTokenBoundaries();
             List<Diagnostic> diagnostics = Collections.emptyList();
-            if (options.isRecoveryEnabled() && !HiveGrammarExtensions.unknownProjectionTokens(unit).isEmpty()) {
+            if (options.isRecoveryEnabled() && !tokens.recoveredProjectionTokens().isEmpty()) {
                 diagnostics = Collections.singletonList(new Diagnostic(AnalysisStage.SYNTAX, "RECOVERED_PROJECTION",
                         "Opaque projection syntax was preserved while parsing the remaining query structure",
                         unit.getExpandedUnit().getOriginalUnit().getSourceRef()));
             }
-            return new ParseResult<HiveParseArtifact>(new HiveParseArtifact(unit, tree, null, diagnostics),
+            return new ParseResult<HiveParseArtifact>(new HiveParseArtifact(unit, tree, null, diagnostics, tokens),
                     diagnostics, diagnostics.isEmpty() ? StageOutcome.SUCCESS : StageOutcome.PARTIAL);
         } catch (RecognitionException error) {
             return failure(unit, parser.getErrorMessage(error, HiveParser.tokenNames));

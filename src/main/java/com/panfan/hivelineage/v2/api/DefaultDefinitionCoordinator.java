@@ -93,7 +93,7 @@ public final class DefaultDefinitionCoordinator implements DefinitionCoordinator
         DialectProfile dialect = new DialectProfile(definition.getDefinitionContext().getDialectId(),
             definition.getDefinitionContext().getParserVersion(), definition.getDefinitionContext().getRuleVersion(), Collections.<String>emptySet());
         String digest = UUID.nameUUIDFromBytes(document.getText().getBytes(StandardCharsets.UTF_8)).toString();
-        ScriptPreprocessResult script = preprocessor.preprocess(document.getSourceId(), document.getText(), new ScriptOptions(";", true, 100_000));
+        ScriptPreprocessResult script = preprocessor.preprocess(document.getSourceId(), document.getText(), ScriptOptions.defaults());
         if (script.getUnits().size() != 1 || script.getOutcome() == StageOutcome.FAILED) {
             List<Diagnostic> diagnostics = new ArrayList<Diagnostic>(read.getDiagnostics().getDiagnostics());
             diagnostics.addAll(script.getDiagnostics());
@@ -162,14 +162,7 @@ public final class DefaultDefinitionCoordinator implements DefinitionCoordinator
     }
 
     private static List<Diagnostic> distinct(List<Diagnostic> diagnostics) {
-        Map<String, Diagnostic> distinct = new LinkedHashMap<String, Diagnostic>();
-        for (Diagnostic diagnostic : diagnostics) {
-            SourceRef source = diagnostic.getSourceRef();
-            String location = source == null ? "" : source.getSourceId() + ":" + source.getSpan().getStart() + ":" + source.getSpan().getEnd();
-            String key = diagnostic.getStage() + ":" + diagnostic.getCode() + ":" + diagnostic.getMessage() + ":" + location;
-            distinct.putIfAbsent(key, diagnostic);
-        }
-        return new ArrayList<Diagnostic>(distinct.values());
+        return DiagnosticBag.distinct(diagnostics);
     }
 
     private static LookupResult<PreparedDefinition> failed(String code, String message, SourceRef source) {

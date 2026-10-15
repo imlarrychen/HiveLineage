@@ -15,7 +15,7 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 /** Serializes only reads in a batch. Payloads, failures and negative results are pinned. */
-public final class CapturedMetadataAccess implements MetadataAccess {
+public final class CapturedMetadataAccess implements WorkflowMetadataAccess {
     private final MetadataReadContext context;
     private final MetadataCache cache;
     private final Optional<MetadataProvider> provider;

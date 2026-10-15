@@ -73,13 +73,15 @@ public final class DefaultLineageEngine implements LineageEngine {
             }
             RowSetEndpoint writeRows = new RowSetEndpoint(new RelationInstanceId("write:" + write.getId().getValue()));
             dependencies.addAll(engine.support().retarget(rows, writeRows, write.getId(), "write.rows", null, java.util.Optional.empty()));
+            List<Dependency> conditionDependencies = write.getCondition()
+                    .map(condition -> engine.expression(condition, slots, rows).getDependencies()).orElse(Collections.emptyList());
             for (WriteAssignment assignment : write.getAssignments()) {
                 ColumnEndpoint target = new ColumnEndpoint(write.getTargetObject(), assignment.getTargetField().getId(), Collections.emptyList());
                 ExpressionFacts facts = engine.expression(assignment.getExpression(), slots, rows);
                 dependencies.addAll(engine.support().retarget(facts.getDependencies(), target, write.getId(), "write.value", null, assignment.getExpression().getSourceRef()));
                 if (write.getCondition().isPresent()) {
                     BoundExpression condition = write.getCondition().get();
-                    dependencies.addAll(engine.support().retarget(engine.expression(condition, slots, rows).getDependencies(), target,
+                    dependencies.addAll(engine.support().retarget(conditionDependencies, target,
                             write.getId(), "write.condition", DependencyRole.CONDITION, condition.getSourceRef()));
                 }
             }

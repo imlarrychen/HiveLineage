@@ -69,6 +69,24 @@ public class DefaultFrontendTest {
     }
 
     @Test
+    public void expansionStopsAtTheFirstOversizedAppendBeforeInspectingLaterVariables() {
+        char[] characters = new char[1024 * 1024];
+        java.util.Arrays.fill(characters, 'x');
+        VariableContext context = new VariableContext(Collections.singletonMap("unqualified",
+                Collections.singletonMap("large", new String(characters))));
+        ExpansionResult repeated = new DefaultVariableResolver().expand(unit("${large}${large}${missing}", 0), context,
+                new VariableOptions(VariableResolutionPolicy.PRESERVE_AND_WARN, null, 1500000));
+        Assert.assertNull(repeated.getUnit());
+        Assert.assertEquals(StageOutcome.FAILED, repeated.getOutcome());
+        Assert.assertEquals(1, repeated.getDiagnostics().size());
+        Assert.assertEquals("EXPANSION_SIZE_LIMIT", repeated.getDiagnostics().get(0).getCode());
+        ExpansionResult unchanged = new DefaultVariableResolver().expand(unit("123456${missing}", 0), context,
+                new VariableOptions(VariableResolutionPolicy.PRESERVE_AND_WARN, null, 5));
+        Assert.assertEquals(1, unchanged.getDiagnostics().size());
+        Assert.assertEquals("EXPANSION_SIZE_LIMIT", unchanged.getDiagnostics().get(0).getCode());
+    }
+
+    @Test
     public void sessionSetValuesOverrideRuntimeAndLegacyTemplatesRetainFallbackEvidence() {
         Map<String, Map<String, String>> variables = new LinkedHashMap<String, Map<String, String>>();
         variables.put("runtime", Collections.singletonMap("day", "runtime"));

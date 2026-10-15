@@ -67,7 +67,7 @@ final class DefinitionLineageRecordExporter {
 
     List<ColumnLineageRecord> columns() {
         List<ColumnLineageRecord> records = new ArrayList<ColumnLineageRecord>();
-        Set<String> seen = new LinkedHashSet<String>();
+        Set<ColumnAddress> seen = new LinkedHashSet<ColumnAddress>();
         for (BoundRelation relation : statement.getBoundUnit().get().getRelations()) {
             if (!(relation instanceof Relations.DefinitionInstance)) {
                 continue;
@@ -88,7 +88,7 @@ final class DefinitionLineageRecordExporter {
                 }
                 QualifiedName object = names.declaredObject(definition.getPhysicalObject().get()).get();
                 ColumnAddress target = new ColumnAddress(object, Collections.singletonList(output.get().getDisplayName()));
-                if (seen.add(object.getDisplayName() + "." + output.get().getDisplayName())) {
+                if (seen.add(target)) {
                     records.add(column(definition, mapping, target, dependencies));
                 }
             }
@@ -98,7 +98,7 @@ final class DefinitionLineageRecordExporter {
 
     private ColumnLineageRecord column(Relations.DefinitionInstance definition, SlotMapping mapping,
                                        ColumnAddress target, ExpressionFacts facts) {
-        Map<String, ColumnAddress> sources = new LinkedHashMap<String, ColumnAddress>();
+        Map<ColumnAddress, ColumnAddress> sources = new LinkedHashMap<ColumnAddress, ColumnAddress>();
         for (Dependency dependency : facts.getDependencies()) {
             if (dependency.getSource() instanceof ColumnEndpoint && dependency.getRole() != DependencyRole.ROWSET
                     && dependency.getRole() != DependencyRole.DEFINITION) {
@@ -109,8 +109,8 @@ final class DefinitionLineageRecordExporter {
                     List<String> path = new ArrayList<String>();
                     path.add(field.get());
                     path.addAll(endpoint.getFieldPath());
-                    sources.putIfAbsent(object.get().getDisplayName() + "." + String.join(".", path),
-                            new ColumnAddress(object.get(), path));
+                    ColumnAddress source = new ColumnAddress(object.get(), path);
+                    sources.putIfAbsent(source, source);
                 }
             }
         }
@@ -123,10 +123,10 @@ final class DefinitionLineageRecordExporter {
     }
 
     private List<QualifiedName> objects(List<Dependency> dependencies) {
-        Map<String, QualifiedName> sources = new LinkedHashMap<String, QualifiedName>();
+        Map<QualifiedName, QualifiedName> sources = new LinkedHashMap<QualifiedName, QualifiedName>();
         for (Dependency dependency : dependencies) {
             names.endpointName(dependency.getSource())
-                    .ifPresent(object -> sources.putIfAbsent(object.getDisplayName(), object));
+                    .ifPresent(object -> sources.putIfAbsent(object, object));
         }
         return new ArrayList<QualifiedName>(sources.values());
     }

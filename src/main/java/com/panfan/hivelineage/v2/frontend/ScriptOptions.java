@@ -3,9 +3,14 @@ package com.panfan.hivelineage.v2.frontend;
 import java.util.Objects;
 
 public final class ScriptOptions {
+    public static final int DEFAULT_MAXIMUM_UNIT_COUNT = 100_000;
     private final String delimiter;
     private final boolean preserveComments;
     private final int maximumUnitCount;
+
+    public static ScriptOptions defaults() {
+        return new ScriptOptions(";", true, DEFAULT_MAXIMUM_UNIT_COUNT);
+    }
 
     public ScriptOptions(String delimiter, boolean preserveComments, int maximumUnitCount) {
         if (delimiter == null || delimiter.isEmpty()) {

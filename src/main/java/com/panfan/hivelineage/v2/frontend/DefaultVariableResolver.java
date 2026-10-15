@@ -25,7 +25,9 @@ public final class DefaultVariableResolver implements VariableResolver {
         int originalPosition = 0;
         boolean unresolved = false;
         while (matcher.find()) {
-            appendUnchanged(unit, expandedId, text, mappings, originalPosition, matcher.start());
+            if (!appendUnchanged(unit, expandedId, text, mappings, originalPosition, matcher.start(), options)) {
+                return expansionLimit(unit, diagnostics);
+            }
             boolean template = "@".equals(matcher.group(1));
             String namespace = matcher.group(2) == null ? (template ? "environment" : "unqualified") : matcher.group(2);
             String name = matcher.group(3);
@@ -34,9 +36,7 @@ public final class DefaultVariableResolver implements VariableResolver {
                     ? null : lookup(context, namespace, name);
             VariableResolutionKind kind = value == null ? VariableResolutionKind.UNRESOLVED : VariableResolutionKind.RESOLVED;
             SourceRef reference = originalRef(unit, matcher.start(), matcher.end());
-            boolean fallback = options.getPolicy() == VariableResolutionPolicy.LEGACY_FALLBACK
-                    || options.getPolicy() == VariableResolutionPolicy.SPEC_VARIABLES
-                            && (template || options.getBuiltinFallbackVariables().contains(name));
+            boolean fallback = fallbackAllowed(template, name, options);
             if (value == null && fallback) {
                 value = options.getFallbackValue();
                 kind = value == null ? VariableResolutionKind.UNRESOLVED : VariableResolutionKind.FALLBACK;
@@ -47,6 +47,9 @@ public final class DefaultVariableResolver implements VariableResolver {
                         "No value is available for " + namespace + ":" + name, reference));
             }
             String replacement = value == null ? matcher.group() : value;
+            if (exceedsLimit(text.length(), replacement.length(), options)) {
+                return expansionLimit(unit, diagnostics);
+            }
             int expandedStart = text.length();
             text.append(replacement);
             mappings.add(new SourceMapEntry(reference.getSpan(), new SourceSpan(expandedId, expandedStart, text.length()),
@@ -54,11 +57,8 @@ public final class DefaultVariableResolver implements VariableResolver {
             evidence.add(new VariableEvidence(namespace, name, value, kind, reference));
             originalPosition = matcher.end();
         }
-        appendUnchanged(unit, expandedId, text, mappings, originalPosition, unit.getRawText().length());
-        if (options.getMaximumExpandedLength() > 0 && text.length() > options.getMaximumExpandedLength()) {
-            diagnostics.add(new Diagnostic(AnalysisStage.FRONTEND, "EXPANSION_SIZE_LIMIT",
-                    "Expanded unit exceeds the configured character limit", unit.getSourceRef()));
-            return new ExpansionResult(null, diagnostics, StageOutcome.FAILED);
+        if (!appendUnchanged(unit, expandedId, text, mappings, originalPosition, unit.getRawText().length(), options)) {
+            return expansionLimit(unit, diagnostics);
         }
         ExpandedUnit expanded = new ExpandedUnit(unit, expandedId, text.toString(),
                 new SourceMap(unit.getSourceId(), expandedId, mappings), evidence);
@@ -67,6 +67,12 @@ public final class DefaultVariableResolver implements VariableResolver {
             outcome = StageOutcome.FAILED;
         }
         return new ExpansionResult(expanded, diagnostics, outcome);
+    }
+
+    private boolean fallbackAllowed(boolean template, String name, VariableOptions options) {
+        return options.getPolicy() == VariableResolutionPolicy.LEGACY_FALLBACK
+                || options.getPolicy() == VariableResolutionPolicy.SPEC_VARIABLES
+                        && (template || options.getBuiltinFallbackVariables().contains(name));
     }
 
     private String lookup(VariableContext context, String namespace, String name) {
@@ -95,15 +101,31 @@ public final class DefaultVariableResolver implements VariableResolver {
         return values == null ? context.getNamespaces().get(namespace.toUpperCase(Locale.ROOT)) : values;
     }
 
-    private void appendUnchanged(ScriptUnit unit, String expandedId, StringBuilder text,
-                                 List<SourceMapEntry> mappings, int start, int end) {
+    private boolean appendUnchanged(ScriptUnit unit, String expandedId, StringBuilder text,
+                                    List<SourceMapEntry> mappings, int start, int end, VariableOptions options) {
         if (start == end) {
-            return;
+            return true;
+        }
+        if (exceedsLimit(text.length(), end - start, options)) {
+            return false;
         }
         int expandedStart = text.length();
         text.append(unit.getRawText(), start, end);
         mappings.add(new SourceMapEntry(originalRef(unit, start, end).getSpan(),
                 new SourceSpan(expandedId, expandedStart, text.length()), SourceMappingKind.UNCHANGED));
+        return true;
+    }
+
+    private boolean exceedsLimit(int current, int appended, VariableOptions options) {
+        long projected = (long) current + appended;
+        return projected > Integer.MAX_VALUE || options.getMaximumExpandedLength() > 0
+                && projected > options.getMaximumExpandedLength();
+    }
+
+    private ExpansionResult expansionLimit(ScriptUnit unit, List<Diagnostic> diagnostics) {
+        diagnostics.add(new Diagnostic(AnalysisStage.FRONTEND, "EXPANSION_SIZE_LIMIT",
+                "Expanded unit exceeds the configured character limit", unit.getSourceRef()));
+        return new ExpansionResult(null, diagnostics, StageOutcome.FAILED);
     }
 
     private SourceRef originalRef(ScriptUnit unit, int start, int end) {

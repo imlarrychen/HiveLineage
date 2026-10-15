@@ -306,22 +306,22 @@ public class HiveDdlSyntaxIntegrationTest {
 
     @Test
     public void macrosAndFunctionReloadAreAuditOnly() {
-        assertOtherAudit("v2_ddl_syntax_macros_reload_functions_audit.sql", "TOK_CREATEMACRO", "TOK_DROPMACRO", "TOK_RELOADFUNCTIONS");
+        assertOtherAudit("v2_ddl_syntax_macros_reload_functions_audit.sql", "CREATE_TEMPORARY_MACRO", "DROP_TEMPORARY_MACRO", "RELOADFUNCTIONS");
     }
 
     @Test
     public void databaseAndSchemaLifecycleDoesNotSimulateNamespacesOrPermissions() {
-        assertOtherAudit("v2_ddl_syntax_database_schema_lifecycle_audit.sql", "TOK_CREATEDATABASE", "TOK_CREATEDATABASE",
-            "TOK_ALTERDATABASE_PROPERTIES", "TOK_ALTERDATABASE_OWNER", "TOK_ALTERDATABASE_LOCATION", "TOK_DROPDATABASE", "TOK_DROPDATABASE");
+        assertOtherAudit("v2_ddl_syntax_database_schema_lifecycle_audit.sql", "CREATE_DATABASE", "CREATE_DATABASE",
+            "ALTERDATABASE_PROPERTIES", "ALTERDATABASE_OWNER", "ALTERDATABASE_LOCATION", "DROP_DATABASE", "DROP_DATABASE");
     }
 
     @Test
     public void materializedViewWritesFailExplicitlyWhileDropRemainsAuditOnly() {
         String file = "v2_ddl_syntax_materialized_view_lifecycle_audit.sql";
         List<SyntaxResult> parsed = normalized(file);
-        assertEquals("TOK_CREATE_MATERIALIZED_VIEW", ((OtherStatementSyntax) parsed.get(0).getStatement()).getClassification());
-        assertEquals("TOK_ALTER_MATERIALIZED_VIEW_REBUILD", ((OtherStatementSyntax) parsed.get(1).getStatement()).getClassification());
-        assertEquals("TOK_DROP_MATERIALIZED_VIEW", ((OtherStatementSyntax) parsed.get(2).getStatement()).getClassification());
+        assertEquals("CREATE_MATERIALIZED_VIEW", ((OtherStatementSyntax) parsed.get(0).getStatement()).getClassification());
+        assertEquals("ALTER_MATERIALIZED_VIEW_REBUILD", ((OtherStatementSyntax) parsed.get(1).getStatement()).getClassification());
+        assertEquals("DROP_MATERIALIZED_VIEW", ((OtherStatementSyntax) parsed.get(2).getStatement()).getClassification());
         ScriptAnalysisResult result = analyzeWithCatalog(file, mode);
         assertEquals(3, result.getStatements().size());
         assertUnsupportedWithoutEffects(result.getStatements().get(0));
@@ -335,8 +335,8 @@ public class HiveDdlSyntaxIntegrationTest {
     public void importExportFailExplicitlyAndLaterOrdinaryInsertContinues() {
         String file = "v2_ddl_syntax_import_export_unsupported_boundary.sql";
         List<SyntaxResult> parsed = normalized(file);
-        assertEquals("TOK_IMPORT", ((OtherStatementSyntax) parsed.get(0).getStatement()).getClassification());
-        assertEquals("TOK_EXPORT", ((OtherStatementSyntax) parsed.get(1).getStatement()).getClassification());
+        assertEquals("IMPORT", ((OtherStatementSyntax) parsed.get(0).getStatement()).getClassification());
+        assertEquals("EXPORT", ((OtherStatementSyntax) parsed.get(1).getStatement()).getClassification());
         ScriptAnalysisResult result = analyzeWithCatalog(file, mode);
         assertEquals(3, result.getStatements().size());
         assertUnsupportedWithoutEffects(result.getStatements().get(0));
@@ -347,13 +347,13 @@ public class HiveDdlSyntaxIntegrationTest {
 
     @Test
     public void statisticsAndMetastoreRepairAreAuditedWithoutExecution() {
-        assertOtherAudit("v2_ddl_syntax_statistics_msck_audit.sql", "TOK_ANALYZE", "TOK_ANALYZE", "TOK_MSCK");
+        assertOtherAudit("v2_ddl_syntax_statistics_msck_audit.sql", "ANALYZE", "ANALYZE", "MSCK");
     }
 
     @Test
     public void showDescribeAndExplainDoNotPublishPlanQueriesAsWrites() {
-        assertOtherAudit("v2_ddl_syntax_show_describe_explain_audit.sql", "TOK_SHOWDATABASES", "TOK_SHOWTABLES", "TOK_SHOWVIEWS",
-            "TOK_SHOWFUNCTIONS", "TOK_SHOWPARTITIONS", "TOK_SHOW_TBLPROPERTIES", "TOK_SHOW_CREATETABLE", "TOK_DESCTABLE", "TOK_DESCDATABASE", "TOK_DESCFUNCTION", "TOK_EXPLAIN");
+        assertOtherAudit("v2_ddl_syntax_show_describe_explain_audit.sql", "SHOWDATABASES", "SHOWTABLES", "SHOWVIEWS",
+            "SHOWFUNCTIONS", "SHOWPARTITIONS", "SHOW_TBLPROPERTIES", "SHOW_CREATETABLE", "DESCTABLE", "DESCDATABASE", "DESCFUNCTION", "EXPLAIN");
     }
 
     @Test

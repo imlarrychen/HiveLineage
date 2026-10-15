@@ -12,7 +12,10 @@ import java.util.Set;
 /** Token-level grammar extensions preserve the original immutable token buffer. */
 final class HiveGrammarExtensions {
     static Set<Integer> cteColumnTokens(LexedUnit unit) {
-        List<LexToken> tokens = visible(unit);
+        return cteColumnTokens(visible(unit));
+    }
+
+    static Set<Integer> cteColumnTokens(List<LexToken> tokens) {
         Set<Integer> hidden = new HashSet<Integer>();
         for (int index = 0; index < tokens.size(); index++) {
             if ("with".equalsIgnoreCase(tokens.get(index).getLexeme())) {
@@ -78,10 +81,14 @@ final class HiveGrammarExtensions {
     }
 
     static Set<Integer> unknownProjectionTokens(LexedUnit unit) {
+        return unknownProjectionTokens(visible(unit));
+    }
+
+    static Set<Integer> unknownProjectionTokens(List<LexToken> tokens) {
         Set<Integer> unknown = new HashSet<Integer>();
         Set<Integer> projectionDepths = new HashSet<Integer>();
         int depth = 0;
-        for (LexToken token : visible(unit)) {
+        for (LexToken token : tokens) {
             String value = token.getLexeme();
             if ("(".equals(value)) {
                 depth++;
@@ -99,11 +106,15 @@ final class HiveGrammarExtensions {
     }
 
     static Set<Integer> quotedSelectAliases(LexedUnit unit) {
+        return quotedSelectAliases(visible(unit));
+    }
+
+    static Set<Integer> quotedSelectAliases(List<LexToken> tokens) {
         Set<Integer> aliases = new HashSet<Integer>();
         Set<Integer> projections = new HashSet<Integer>();
         int depth = 0;
         String previous = "";
-        for (LexToken token : visible(unit)) {
+        for (LexToken token : tokens) {
             String text = token.getLexeme();
             if ("(".equals(text)) {
                 depth++;

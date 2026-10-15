@@ -14,16 +14,22 @@ public final class HiveParseArtifact {
     private final ASTNode tree;
     private final SyntaxStatement command;
     private final List<Diagnostic> diagnostics;
+    private final HiveTokenIndex tokens;
 
     HiveParseArtifact(LexedUnit unit, ASTNode tree, SyntaxStatement command) {
         this(unit, tree, command, Collections.<Diagnostic>emptyList());
     }
 
     HiveParseArtifact(LexedUnit unit, ASTNode tree, SyntaxStatement command, List<Diagnostic> diagnostics) {
+        this(unit, tree, command, diagnostics, new HiveTokenIndex(unit));
+    }
+
+    HiveParseArtifact(LexedUnit unit, ASTNode tree, SyntaxStatement command, List<Diagnostic> diagnostics, HiveTokenIndex tokens) {
         this.diagnostics = ModelCollections.immutableList(diagnostics);
         this.unit = unit;
         this.tree = tree;
         this.command = command;
+        this.tokens = tokens;
     }
 
     List<Diagnostic> diagnostics() {
@@ -40,5 +46,9 @@ public final class HiveParseArtifact {
 
     SyntaxStatement command() {
         return command;
+    }
+
+    HiveTokenIndex tokens() {
+        return tokens;
     }
 }

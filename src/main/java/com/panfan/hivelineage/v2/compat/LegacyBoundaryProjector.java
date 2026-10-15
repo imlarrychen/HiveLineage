@@ -40,14 +40,19 @@ final class LegacyBoundaryProjector {
     private final BoundNameIndex names;
     private final BoundExpressionFormatter expressions;
     private final boolean includeTemporary;
+    private final LegacyColumnSourceSelector selector;
+    private final BoundInputObjectProjector inputs;
     private final Map<NodeId, RelationFacts> facts = new LinkedHashMap<NodeId, RelationFacts>();
 
     LegacyBoundaryProjector(StatementAnalysisResult statement, BoundNameIndex names,
-                            BoundExpressionFormatter expressions, boolean includeTemporary) {
+                            BoundExpressionFormatter expressions, boolean includeTemporary,
+                            LegacyColumnSourceSelector selector, BoundInputObjectProjector inputs) {
         this.statement = statement;
         this.names = names;
         this.expressions = expressions;
         this.includeTemporary = includeTemporary;
+        this.selector = selector;
+        this.inputs = inputs;
         for (RelationFacts relation : statement.getLineage().get().getRelations()) {
             facts.put(relation.getRelationId(), relation);
         }
@@ -65,8 +70,7 @@ final class LegacyBoundaryProjector {
             RelationFacts source = facts.get(definition.getInput());
             if (source != null && seen.add(object)) {
                 List<DataObjectRef> inputs = new ArrayList<DataObjectRef>();
-                new BoundInputObjectProjector(statement.getBoundUnit().get(), names, includeTemporary)
-                        .inputsForRoot(definition.getInput()).forEach(input -> inputs.add(new DataObjectRef(input.getDisplayName())));
+                this.inputs.inputsForRoot(definition.getInput()).forEach(input -> inputs.add(new DataObjectRef(input.getDisplayName())));
                 result.add(new TableLineage(new DataObjectRef(names.object(object).get()), inputs,
                         "VIEW_DEFINITION", statement.getIdentity().getStatementIndex(), false));
             }
@@ -108,8 +112,7 @@ final class LegacyBoundaryProjector {
         NodeId expressionId = new NodeId(definition.getId().getValue() + ":export:" + mapping.getInput().getValue());
         Expressions.SlotRef expression = new Expressions.SlotRef(expressionId,
                 TypeRef.unknown(), null, mapping.getInput(), Collections.emptyList());
-        List<Dependency> selected = new LegacyColumnSourceSelector(statement.getBoundUnit().get(), names, includeTemporary)
-                .select(dependencies.getDependencies(), expression, definition.getInput());
+        List<Dependency> selected = selector.select(dependencies.getDependencies(), expression, definition.getInput());
         for (Dependency dependency : selected) {
             boolean hiddenTemporary = dependency.getRole() == DependencyRole.DEFINITION
                     && names.temporary(dependency.getSource()) && !includeTemporary;

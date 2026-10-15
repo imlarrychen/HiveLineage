@@ -409,6 +409,128 @@ public class DefaultSemanticBinderTest {
         assertEquals(2, writes.get(2).getAssignments().size());
     }
 
+    @Test
+    public void caseElseOwnerProducesAnImplicitJoinFact() {
+        String sql = "select a.id from db.a a, db.b b where case when a.flag=1 then a.id else b.id end > 0";
+        SyntaxStatement syntax = parse(sql);
+        AnalysisContract contract = contract(false, AnalysisCapability.COLUMN_LINEAGE, AnalysisCapability.JOIN_CONDITION);
+        BindingDemand demand = new DefaultAnalysisDemandPlanner().plan(syntax, contract);
+        BindingResult result = new DefaultSemanticBinder().bind(syntax,
+            context(new TestMetadata().table("db.a", "id", "flag").table("db.b", "id"), contract,
+                Collections.<DefinitionId, DiagnosticBag>emptyMap()), demand);
+        VerificationResult verified = new DefaultIrVerifier().verify(result.getUnit().get(), demand);
+        assertEquals(VerificationOutcome.ACCEPTED, verified.getOutcome());
+        com.panfan.hivelineage.v2.analysis.JoinFacts facts = new com.panfan.hivelineage.v2.analysis.DefaultJoinConditionAnalysis()
+            .analyze(verified.getVerifiedUnit().get());
+        assertEquals(1, facts.getJoins().size());
+        assertEquals(com.panfan.hivelineage.v2.analysis.JoinKind.IMPLICIT, facts.getJoins().get(0).getKind());
+        assertEquals(3, facts.getJoins().get(0).getPhysicalReferences().size());
+    }
+
+    @Test
+    public void unknownExpressionRetainsFieldsSubqueryAndReason() {
+        com.panfan.hivelineage.v2.syntax.SelectQuerySyntax query =
+            (com.panfan.hivelineage.v2.syntax.SelectQuerySyntax) ((com.panfan.hivelineage.v2.syntax.QueryStatementSyntax)
+                parse("select a.id, (select max(b.id) from db.b b) from db.a a")).getQuery();
+        AnalysisContract contract = contract(false, AnalysisCapability.COLUMN_LINEAGE);
+        BindingWork work = new BindingWork(context(new TestMetadata(), contract,
+            Collections.<DefinitionId, DiagnosticBag>emptyMap()),
+            new BindingDemand(EnumSet.allOf(com.panfan.hivelineage.v2.ir.quality.BindingRequirement.class),
+                Collections.<com.panfan.hivelineage.v2.ir.identity.NodeId>emptySet()), new DefaultTypeAnalyzer());
+        ReferenceScope scope = new ReferenceScope(work, null, new com.panfan.hivelineage.v2.ir.identity.ScopeId("test"),
+            query.getQueryBlockId(), "", Collections.<com.panfan.hivelineage.v2.syntax.CteSyntax>emptyList());
+        new QueryBinder(work).from(query.getBody().getFrom(), scope, true);
+        List<com.panfan.hivelineage.v2.syntax.SyntaxExpression> children = new ArrayList<>();
+        query.getBody().getSelectItems().forEach(item -> children.add(item.getExpression()));
+        com.panfan.hivelineage.v2.syntax.UnknownExpressionSyntax unknown = new com.panfan.hivelineage.v2.syntax.UnknownExpressionSyntax(
+            new com.panfan.hivelineage.v2.ir.identity.NodeId("unknown"), query.getSourceRef(), "FUTURE_OPERATOR", children);
+        Expressions.UnknownExpression bound = (Expressions.UnknownExpression) new ExpressionBinder(work).bind(unknown, scope);
+        assertEquals("FUTURE_OPERATOR", bound.getDiagnosticCode());
+        assertEquals(2, bound.getKnownChildren().size());
+        assertTrue(bound.getKnownChildren().get(1) instanceof Expressions.ScalarSubquery);
+        assertEquals(2, work.objects.size());
+        assertTrue(work.partial);
+    }
+
+    @Test
+    public void negatedRangeAndMembershipHaveBooleanOutputs() {
+        BindingResult result = bindDetailed("select 1 not between 2 and 3 as range_flag, 1 not in (2,3) as member_flag",
+            new TestMetadata());
+        List<com.panfan.hivelineage.v2.ir.relation.OutputSlot> slots =
+            BindingWork.slots(result.getUnit().get().getQueryResults().get(0).getOutputSchema());
+        assertEquals(2, slots.size());
+        for (com.panfan.hivelineage.v2.ir.relation.OutputSlot slot : slots) {
+            assertEquals(TypeRef.Kind.BOOLEAN, slot.getType().getKind());
+        }
+    }
+
+    @Test
+    public void temporarySourceSinkAndDdlUseTheSameIdentityAcrossDatabases() {
+        TestMetadata metadata = new TestMetadata().table("other.t", "permanent_only");
+        AnalysisContract contract = contract(false, AnalysisCapability.COLUMN_LINEAGE, AnalysisCapability.CATALOG_SIMULATION);
+        BindingContext original = context(metadata, contract, Collections.<DefinitionId, DiagnosticBag>emptyMap());
+        ObjectId tempId = new ObjectId("temporary-object");
+        QualifiedName tempName = name("temporary_namespace", "t");
+        RelationSchema tempSchema = new RelationSchema(SchemaState.KNOWN, Arrays.asList(new ColumnMetadata("id", 0,
+            SemanticTypes.type(TypeRef.Kind.INTEGER), ColumnMetadata.Role.DATA, ColumnMetadata.Nullability.UNKNOWN)),
+            provenance(), MetadataVersion.unknown());
+        com.panfan.hivelineage.v2.session.CatalogEntry temp = new com.panfan.hivelineage.v2.session.CatalogEntry(
+            new ObjectDescriptor(tempId, tempName, ObjectDescriptor.Kind.TEMPORARY_TABLE, Optional.<DefinitionRef>empty(),
+                provenance(), MetadataVersion.unknown()), Arrays.asList(tempName, name("t"), name("original", "t")),
+            Optional.of(tempSchema), Optional.<com.panfan.hivelineage.v2.session.LogicalDefinition>empty());
+        SessionSnapshot session = new SessionSnapshot(original.getSession().getInitialContext(), Optional.of(name("other")),
+            original.getSession().getVariables(), Collections.singletonMap(tempName, temp),
+            original.getSession().getPersistentOverlay(), original.getSession().getScriptDefinitions(),
+            original.getSession().getDatasetVersions(), original.getSession().getUncertainty(), 1);
+        BindingContext context = new BindingContext(session, metadata, readContext(), original.getDefinitions(),
+            original.getFunctions(), original.getDialect(), contract, original.getFailedDefinitions());
+        for (String target : Arrays.asList("t", "original.t")) {
+            SyntaxStatement syntax = parse("insert into " + target + " select * from " + target);
+            BindingResult result = new DefaultSemanticBinder().bind(syntax, context,
+                new DefaultAnalysisDemandPlanner().plan(syntax, contract));
+            assertEquals(BindingOutcome.COMPLETE, result.getOutcome());
+            assertEquals(tempId, result.getUnit().get().getWrites().get(0).getTargetObject());
+            Relations.Scan scan = (Relations.Scan) result.getUnit().get().getRelations().stream()
+                .filter(relation -> relation instanceof Relations.Scan).findFirst().get();
+            assertEquals(tempId, scan.getObjectId());
+            assertEquals(com.panfan.hivelineage.v2.ir.statement.BoundObjectReference.ObjectKind.TEMPORARY,
+                result.getUnit().get().getObjects().get(tempId).getKind());
+        }
+        SyntaxStatement alter = parse("alter table t add columns (added int)");
+        BindingResult altered = new DefaultSemanticBinder().bind(alter, context,
+            new DefaultAnalysisDemandPlanner().plan(alter, contract));
+        Effects.AlterObject effect = (Effects.AlterObject) altered.getUnit().get().getEffects().get(0);
+        assertEquals(tempId, effect.getReplacement().getObjectId());
+        assertEquals(2, BindingWork.slots(effect.getReplacement().getSchema()).size());
+        assertEquals(0, metadata.schemaReads);
+    }
+
+    @Test
+    public void starJoinGroupingHavingWindowAndOrderingCompleteSourceSchemasBeforeAssembly() {
+        BindingResult result = bindDetailed("select a.*, sum(b.score) as total, row_number() over(order by a.id) as rn "
+            + "from db.a a join db.b b on a.id=b.id group by a.id having total>0 order by total",
+            new TestMetadata().table("db.a", "id").table("db.b", "id", "score"));
+        assertNotEquals(BindingOutcome.FAILED, result.getOutcome());
+        assertTrue(result.getUnit().get().getRelations().stream().anyMatch(relation -> relation instanceof Relations.Window));
+        assertTrue(result.getUnit().get().getRelations().stream().anyMatch(relation -> relation instanceof Relations.Aggregate));
+        assertTrue(result.getUnit().get().getRelations().stream().anyMatch(relation -> relation instanceof Relations.Sort));
+        assertEquals(3, BindingWork.slots(result.getUnit().get().getQueryResults().get(0).getOutputSchema()).size());
+    }
+
+    private BindingResult bindDetailed(String sql, TestMetadata metadata) {
+        SyntaxStatement syntax = parse(sql);
+        AnalysisContract contract = new AnalysisContract(new AnalysisCapabilities(EnumSet.of(AnalysisCapability.COLUMN_LINEAGE)),
+            VariablePolicy.CURRENT_API_FALLBACK, DefinitionPolicy.CURRENT_API_CTE_REUSE, StarMappingPolicy.POSITIONAL_EXACT,
+            StatementPublicationPolicy.DETAILED, false, false, false, 5, false, "fallback");
+        BindingDemand demand = new DefaultAnalysisDemandPlanner().plan(syntax, contract);
+        BindingResult result = new DefaultSemanticBinder().bind(syntax,
+            context(metadata, contract, Collections.<DefinitionId, DiagnosticBag>emptyMap()), demand);
+        assertEquals(BindingOutcome.COMPLETE, result.getOutcome());
+        VerificationResult verification = new DefaultIrVerifier().verify(result.getUnit().get(), demand);
+        assertEquals(VerificationOutcome.ACCEPTED, verification.getOutcome());
+        return result;
+    }
+
     private BindingResult bind(String sql, TestMetadata metadata, AnalysisCapability... capabilities) {
         return bindInSession(sql, metadata, "session", capabilities);
     }

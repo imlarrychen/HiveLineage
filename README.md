@@ -527,6 +527,8 @@ CLI 结束时也会在终端打印：
 
 ## 测试
 
+v2 的职责拆分、资源边界、回归依据与预期行为差异见 [2026-10-15 审查重构记录](docs/bugfixes/2026-10-15-v2-review-refactor.md)。`python3 scripts/check-v2-quality.py` 使用构建 JDK 执行离线 AST 复杂度门禁；同一检查已纳入架构测试。
+
 包含 v2 扩展语法的完整回归使用独立验证入口：
 
 ```bash

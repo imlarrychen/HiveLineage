@@ -27,12 +27,16 @@ final class HiveTokenBridge implements TokenSource {
     }
 
     HiveTokenBridge(LexedUnit unit, boolean recovery) {
+        this(unit, recovery, new HiveTokenIndex(unit));
+    }
+
+    HiveTokenBridge(LexedUnit unit, boolean recovery, HiveTokenIndex index) {
         this.unit = unit;
-        this.hiddenColumns = HiveGrammarExtensions.cteColumnTokens(unit);
-        this.recoveredExpressions = recovery ? HiveGrammarExtensions.unknownProjectionTokens(unit)
+        this.hiddenColumns = index.cteColumnTokens();
+        this.recoveredExpressions = recovery ? index.recoveredProjectionTokens()
                 : java.util.Collections.<Integer>emptySet();
-        this.overwriteExtensions = HiveCompatibilityTokens.overwriteColumnExtensions(unit);
-        this.quotedAliases = HiveGrammarExtensions.quotedSelectAliases(unit);
+        this.overwriteExtensions = index.overwriteColumnExtensions();
+        this.quotedAliases = index.quotedSelectAliases();
     }
 
     @Override

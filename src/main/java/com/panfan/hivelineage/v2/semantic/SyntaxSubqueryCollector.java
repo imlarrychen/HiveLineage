@@ -103,9 +103,9 @@ final class SyntaxSubqueryCollector {
     }
 
     void collectClauses(QueryClausesSyntax clauses, ReferenceScope scope, List<NodeId> roots, boolean includeBoundClauses) {
-        String previous = scope.clauseLocation;
+        ClauseLocation previous = scope.clauseLocation;
         if (includeBoundClauses) {
-            scope.clauseLocation = "group_by";
+            scope.clauseLocation = ClauseLocation.GROUP_BY;
             if (clauses.getGrouping() != null) {
                 for (List<SyntaxExpression> group : clauses.getGrouping().getSets()) {
                     for (SyntaxExpression expression : group) {
@@ -113,20 +113,20 @@ final class SyntaxSubqueryCollector {
                     }
                 }
             }
-            scope.clauseLocation = "order_by";
+            scope.clauseLocation = ClauseLocation.ORDER_BY;
             for (SortItemSyntax order : clauses.getTail().getOrderBy()) {
                 collect(order.getExpression(), scope, roots);
             }
-            scope.clauseLocation = "sort_by";
+            scope.clauseLocation = ClauseLocation.SORT_BY;
             for (SortItemSyntax order : clauses.getTail().getSortBy()) {
                 collect(order.getExpression(), scope, roots);
             }
         }
-        scope.clauseLocation = "distribute_by";
+        scope.clauseLocation = ClauseLocation.DISTRIBUTE_BY;
         for (SyntaxExpression expression : clauses.getTail().getDistributeBy()) {
             collect(expression, scope, roots);
         }
-        scope.clauseLocation = "cluster_by";
+        scope.clauseLocation = ClauseLocation.CLUSTER_BY;
         for (SyntaxExpression expression : clauses.getTail().getClusterBy()) {
             collect(expression, scope, roots);
         }

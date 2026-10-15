@@ -37,7 +37,6 @@ import com.panfan.hivelineage.v2.metadata.ObjectDescriptor;
 import com.panfan.hivelineage.v2.session.CatalogEntry;
 import com.panfan.hivelineage.v2.session.DefinitionRequest;
 import com.panfan.hivelineage.v2.session.LogicalDefinition;
-import com.panfan.hivelineage.v2.session.OverlayEntry;
 import com.panfan.hivelineage.v2.syntax.BinaryOperatorSyntax;
 import com.panfan.hivelineage.v2.syntax.BinarySyntax;
 import com.panfan.hivelineage.v2.syntax.CommaFromSyntax;
@@ -121,6 +120,19 @@ final class QueryBinder {
     }
 
     private BoundRelation select(SelectQuerySyntax syntax, ReferenceScope scope, boolean outputs, FromSyntax fallbackFrom) {
+        BoundSources sources = bindSources(syntax, scope, outputs, fallbackFrom);
+        if (!outputs) {
+            return bindObjectProjection(syntax, scope, sources);
+        }
+        BoundProjection projection = bindProjection(syntax, scope);
+        scope.setOutputAliases(projection.schema);
+        PostProjectionClauses post = bindPostProjection(syntax, scope, projection);
+        // All source-field discovery has finished before constructing operators that copy its schema.
+        BoundRelation input = completeSources(sources);
+        return assembleSelect(syntax, scope, input, projection, post);
+    }
+
+    private BoundSources bindSources(SelectQuerySyntax syntax, ReferenceScope scope, boolean outputs, FromSyntax fallbackFrom) {
         SelectBodySyntax body = syntax.getBody();
         QueryClausesSyntax clauses = body.getClauses();
         for (NamedWindowSyntax window : clauses.getWindows()) {
@@ -136,7 +148,7 @@ final class QueryBinder {
             input = from(from, scope, outputs);
         }
         if (clauses.getWhere() != null) {
-            scope.clauseLocation = "where";
+            scope.clauseLocation = ClauseLocation.WHERE;
             BoundExpression predicate = null;
             if (outputs || work.requested(BindingRequirement.CONDITION_FIELDS)) {
                 predicate = expressions.bind(clauses.getWhere(), scope);
@@ -151,38 +163,52 @@ final class QueryBinder {
                     order(syntax), clauses.getWhere().getSourceRef(), input.getId(), predicate, BindingWork.mappings(input.getOutputSchema()));
                 work.put(input);
             }
-            scope.clauseLocation = "select";
+            scope.clauseLocation = ClauseLocation.SELECT;
         }
-        if (!outputs) {
+        return new BoundSources(input);
+    }
+
+    private BoundRelation completeSources(BoundSources sources) {
+        return refresh(sources.input.getId(), new LinkedHashSet<NodeId>());
+    }
+
+    private BoundRelation bindObjectProjection(SelectQuerySyntax syntax, ReferenceScope scope, BoundSources sources) {
+        SelectBodySyntax body = syntax.getBody();
+        QueryClausesSyntax clauses = body.getClauses();
+        BoundRelation input = sources.input;
+        input = refresh(input.getId(), new LinkedHashSet<NodeId>());
+        List<NodeId> projectionQueries = new ArrayList<>();
+        for (SelectItemSyntax item : body.getSelectItems()) {
+            collectSubqueryRoots(item.getExpression(), scope, projectionQueries);
+        }
+        new SyntaxSubqueryCollector(work, this).collectClauses(clauses, scope, projectionQueries, true);
+        if (!projectionQueries.isEmpty()) {
+            BoundExpression dependency = new Expressions.NotRequestedExpression(work.id(syntax, scope, "select-not-requested"),
+                TypeRef.unknown(), syntax.getSourceRef(), BindingRequirement.OUTPUT_SCHEMA, projectionQueries);
+            input = new Relations.Filter(work.id(syntax, scope, "select-dependencies"), input.getOutputSchema(), scope.block,
+                order(syntax), syntax.getSourceRef(), input.getId(), dependency, BindingWork.mappings(input.getOutputSchema()));
+            work.put(input);
+        }
+        if (clauses.getHaving() != null) {
+            scope.clauseLocation = ClauseLocation.HAVING;
+            BoundExpression having = work.requested(BindingRequirement.CONDITION_FIELDS)
+                ? expressions.bind(clauses.getHaving(), scope)
+                : objectPredicate(clauses.getHaving(), scope, BindingRequirement.CONDITION_FIELDS);
             input = refresh(input.getId(), new LinkedHashSet<NodeId>());
-            List<NodeId> projectionQueries = new ArrayList<>();
-            for (SelectItemSyntax item : body.getSelectItems()) {
-                collectSubqueryRoots(item.getExpression(), scope, projectionQueries);
-            }
-            new SyntaxSubqueryCollector(work, this).collectClauses(clauses, scope, projectionQueries, true);
-            if (!projectionQueries.isEmpty()) {
-                BoundExpression dependency = new Expressions.NotRequestedExpression(work.id(syntax, scope, "select-not-requested"),
-                    TypeRef.unknown(), syntax.getSourceRef(), BindingRequirement.OUTPUT_SCHEMA, projectionQueries);
-                input = new Relations.Filter(work.id(syntax, scope, "select-dependencies"), input.getOutputSchema(), scope.block,
-                    order(syntax), syntax.getSourceRef(), input.getId(), dependency, BindingWork.mappings(input.getOutputSchema()));
-                work.put(input);
-            }
-            if (clauses.getHaving() != null) {
-                scope.clauseLocation = "having";
-                BoundExpression having = work.requested(BindingRequirement.CONDITION_FIELDS)
-                    ? expressions.bind(clauses.getHaving(), scope)
-                    : objectPredicate(clauses.getHaving(), scope, BindingRequirement.CONDITION_FIELDS);
-                input = refresh(input.getId(), new LinkedHashSet<NodeId>());
-                input = new Relations.Filter(work.id(syntax, scope, "having"), input.getOutputSchema(), scope.block, order(syntax),
-                    clauses.getHaving().getSourceRef(), input.getId(), having, BindingWork.mappings(input.getOutputSchema()));
-                work.put(input);
-                scope.clauseLocation = "select";
-            }
-            BoundRelation projection = new Relations.Project(work.id(syntax, scope, "project"), OutputSchema.notRequested(),
-                scope.block, order(syntax), syntax.getSourceRef(), input.getId(), Collections.<OutputAssignment>emptyList());
-            work.put(projection);
-            return projection;
+            input = new Relations.Filter(work.id(syntax, scope, "having"), input.getOutputSchema(), scope.block, order(syntax),
+                clauses.getHaving().getSourceRef(), input.getId(), having, BindingWork.mappings(input.getOutputSchema()));
+            work.put(input);
+            scope.clauseLocation = ClauseLocation.SELECT;
         }
+        BoundRelation projection = new Relations.Project(work.id(syntax, scope, "project"), OutputSchema.notRequested(),
+            scope.block, order(syntax), syntax.getSourceRef(), input.getId(), Collections.<OutputAssignment>emptyList());
+        work.put(projection);
+        return projection;
+    }
+
+    private BoundProjection bindProjection(SelectQuerySyntax syntax, ReferenceScope scope) {
+        SelectBodySyntax body = syntax.getBody();
+        QueryClausesSyntax clauses = body.getClauses();
         List<OutputSegment> segments = new ArrayList<>();
         List<OutputAssignment> assignments = new ArrayList<>();
         int position = 0;
@@ -215,12 +241,11 @@ final class QueryBinder {
                 BoundExpression expression = expressions.bind(item.getExpression(), scope);
                 String name = outputName(item, position);
                 OutputSlot output = new OutputSlot(new SlotId(work.id(item.getExpression(), scope, "output-" + position++).getValue()),
-                    name, work.types.analyze(expression, work.context.getFunctions()).getType(), null);
+                    name, work.analyzeType(expression), null);
                 segments.add(new KnownOutputSegment(Collections.singletonList(output)));
                 assignments.add(new OutputAssignment(output.getId(), expression));
             }
         }
-        input = refresh(input.getId(), new LinkedHashSet<NodeId>());
         SchemaState state = SchemaState.KNOWN;
         for (OutputSegment segment : segments) {
             if (segment instanceof UnknownOutputSegment) {
@@ -230,15 +255,21 @@ final class QueryBinder {
         OutputSchema schema = new OutputSchema(state, segments);
         List<BoundExpression> groupings = new ArrayList<>();
         if (clauses.getGrouping() != null) {
-            scope.clauseLocation = "group_by";
+            scope.clauseLocation = ClauseLocation.GROUP_BY;
             for (List<SyntaxExpression> group : clauses.getGrouping().getSets()) {
                 for (SyntaxExpression expression : group) {
                     groupings.add(expressions.bind(expression, scope));
                 }
             }
-            scope.clauseLocation = "select";
+            scope.clauseLocation = ClauseLocation.SELECT;
         }
-        scope.queryOutputs.addAll(BindingWork.slots(schema));
+        return new BoundProjection(schema, assignments, groupings);
+    }
+
+    private PostProjectionClauses bindPostProjection(SelectQuerySyntax syntax, ReferenceScope scope, BoundProjection projection) {
+        QueryClausesSyntax clauses = syntax.getBody().getClauses();
+        List<OutputAssignment> assignments = new ArrayList<>(projection.assignments);
+        List<BoundExpression> groupings = projection.groupings;
         boolean aggregate = !groupings.isEmpty();
         for (OutputAssignment assignment : assignments) {
             aggregate |= aggregate(assignment.getExpression());
@@ -253,12 +284,12 @@ final class QueryBinder {
         distributionOutputs(syntax, clauses.getTail(), scope, outputExpressions, assignments, hiddenSlots);
         BoundExpression having = null;
         if (clauses.getHaving() != null) {
-            scope.clauseLocation = "having";
+            scope.clauseLocation = ClauseLocation.HAVING;
             BoundExpression predicate = OutputAliasExpander.expand(expressions.bind(clauses.getHaving(), scope), outputExpressions);
             aggregate |= aggregate(predicate);
             SlotId slot = hiddenOutput(syntax, scope, "having", predicate, assignments, hiddenSlots);
             having = hiddenReference(syntax, scope, "having", predicate, slot);
-            scope.clauseLocation = "select";
+            scope.clauseLocation = ClauseLocation.SELECT;
         }
         List<Relations.OrderKey> orderKeys = new ArrayList<>();
         List<Relations.OrderKey> boundOrderKeys = clauseOrders(clauses.getTail(), scope);
@@ -270,11 +301,25 @@ final class QueryBinder {
             orderKeys.add(new Relations.OrderKey(hiddenReference(syntax, scope, role, expression, slot),
                 key.getDirection(), key.getNullOrder()));
         }
+        return new PostProjectionClauses(assignments, hiddenSlots, having, orderKeys, aggregate);
+    }
+
+    private BoundRelation assembleSelect(SelectQuerySyntax syntax, ReferenceScope scope, BoundRelation input,
+                                         BoundProjection bound, PostProjectionClauses post) {
+        SelectBodySyntax body = syntax.getBody();
+        QueryClausesSyntax clauses = body.getClauses();
+        OutputSchema schema = bound.schema;
+        SchemaState state = schema.getState();
+        List<OutputSlot> hiddenSlots = post.hiddenSlots;
+        List<OutputAssignment> assignments = post.assignments;
+        List<BoundExpression> groupings = bound.groupings;
+        BoundExpression having = post.having;
+        List<Relations.OrderKey> orderKeys = post.orderKeys;
+        boolean aggregate = post.aggregate;
         // HAVING and ORDER BY can refer to fields that SELECT does not expose.
         // Evaluate them with the projection/aggregate, then use their output slots.
         OutputSchema operatorSchema = hiddenSlots.isEmpty() ? schema
             : BindingWork.combined(schema, OutputSchema.known(hiddenSlots), true);
-        input = refresh(input.getId(), new LinkedHashSet<NodeId>());
         if (!scope.windowComputations.isEmpty()) {
             OutputSchema windowSchema = BindingWork.combined(input.getOutputSchema(), OutputSchema.known(scope.windowSlots), true);
             BoundRelation window = new Relations.Window(work.id(syntax, scope, "window"), windowSchema, scope.block,
@@ -322,13 +367,46 @@ final class QueryBinder {
                 }
             }
             OutputSchema visibleSchema = new OutputSchema(state, visibleSegments);
-            scope.queryOutputs.clear();
-            scope.queryOutputs.addAll(BindingWork.slots(visibleSchema));
+            scope.setOutputAliases(visibleSchema);
             projection = new Relations.Project(work.id(syntax, scope, "visible-project"), visibleSchema, scope.block,
                 order(syntax), syntax.getSourceRef(), projection.getId(), visible);
             work.put(projection);
         }
         return projection;
+    }
+
+    private static final class BoundSources {
+        final BoundRelation input;
+        BoundSources(BoundRelation input) {
+            this.input = input;
+        }
+    }
+
+    private static final class BoundProjection {
+        final OutputSchema schema;
+        final List<OutputAssignment> assignments;
+        final List<BoundExpression> groupings;
+        BoundProjection(OutputSchema schema, List<OutputAssignment> assignments, List<BoundExpression> groupings) {
+            this.schema = schema;
+            this.assignments = Collections.unmodifiableList(new ArrayList<>(assignments));
+            this.groupings = Collections.unmodifiableList(new ArrayList<>(groupings));
+        }
+    }
+
+    private static final class PostProjectionClauses {
+        final List<OutputAssignment> assignments;
+        final List<OutputSlot> hiddenSlots;
+        final BoundExpression having;
+        final List<Relations.OrderKey> orderKeys;
+        final boolean aggregate;
+        PostProjectionClauses(List<OutputAssignment> assignments, List<OutputSlot> hiddenSlots,
+                              BoundExpression having, List<Relations.OrderKey> orderKeys, boolean aggregate) {
+            this.assignments = Collections.unmodifiableList(new ArrayList<>(assignments));
+            this.hiddenSlots = Collections.unmodifiableList(new ArrayList<>(hiddenSlots));
+            this.having = having;
+            this.orderKeys = Collections.unmodifiableList(new ArrayList<>(orderKeys));
+            this.aggregate = aggregate;
+        }
     }
 
     private BoundRelation set(SetQuerySyntax syntax, ReferenceScope scope, boolean outputs) {
@@ -381,6 +459,7 @@ final class QueryBinder {
             syntax.getSourceRef(), ids, Relations.SetOperator.valueOf(syntax.getBody().getOperator().name()),
             syntax.getBody().getQuantifier() == QuantifierSyntax.ALL ? Relations.DuplicatePolicy.ALL : Relations.DuplicatePolicy.DISTINCT, mappings);
         work.put(result);
+        scope.setOutputAliases(schema);
         return outputs ? tail(result, syntax.getBody().getTail(), syntax, scope) : result;
     }
 
@@ -433,7 +512,7 @@ final class QueryBinder {
             BoundRelation left = from(join.getOperands().getLeft(), scope, outputs);
             int leftSources = scope.sources.size();
             BoundRelation right = from(join.getOperands().getRight(), scope, outputs);
-            scope.clauseLocation = "on";
+            scope.clauseLocation = ClauseLocation.ON;
             BoundExpression condition = join.getCondition().getOn() == null ? null
                 : !outputs && !work.requested(BindingRequirement.CONDITION_FIELDS)
                     ? objectPredicate(join.getCondition().getOn(), scope, BindingRequirement.CONDITION_FIELDS)
@@ -442,7 +521,7 @@ final class QueryBinder {
                 ? Collections.<Relations.JoinPredicate>emptyList()
                 : Collections.singletonList(new Relations.JoinPredicate(condition, Relations.PredicateOrigin.ON,
                     expressions.owners(condition, scope), join.getCondition().getOn().getSourceRef().getSpan().getStart()));
-            scope.clauseLocation = "select";
+            scope.clauseLocation = ClauseLocation.SELECT;
             Relations.JoinType type = Relations.JoinType.valueOf(join.getJoinType().name().replace("_OUTER", ""));
             boolean leftOnly = leftOnly(type);
             Relations.Join relation = new Relations.Join(work.id(syntax, scope, "join"),
@@ -487,18 +566,10 @@ final class QueryBinder {
             return instance(syntax, child, new DefinitionId(cte.getNodeId().getValue() + "/definition"),
                 new QualifiedName(Collections.singletonList(alias)), cte.getColumnAliases(), null, scope);
         }
-        CatalogEntry local = local(parts, simple, scope.database);
-        QualifiedName name;
-        if (local != null) {
-            name = local.getObject().getName();
-        } else {
-            if (parts.size() == 1) {
-                if (!scope.database.isPresent() || work.context.getSession().getUncertainty().isDatabaseUncertain()) {
-                    throw new BindingFailure("DATABASE_NOT_RESOLVED", "Unqualified source requires a current database");
-                }
-            }
-            name = SemanticNames.qualify(parts, scope.database);
-        }
+        CatalogObjectResolver.Resolution resolved = new CatalogObjectResolver(work.context).resolve(syntax.getName(), scope.database, true);
+        resolved.requireAvailable();
+        CatalogEntry local = resolved.local;
+        QualifiedName name = resolved.name;
         LogicalDefinition logical = null;
         if (parts.size() == 1 && work.context.getContract().getDefinitionPolicy() == DefinitionPolicy.CURRENT_API_CTE_REUSE) {
             logical = work.context.getSession().getScriptDefinitions().get(new QualifiedName(Collections.singletonList(simple)));
@@ -506,15 +577,10 @@ final class QueryBinder {
         if (local != null && local.getDefinition().isPresent()) {
             logical = local.getDefinition().get();
         }
-        ObjectId object = local == null ? work.objectId(name) : local.getObject().getObjectId();
-        BoundObjectReference.ObjectKind kind = local != null && local.getObject().getKind() == ObjectDescriptor.Kind.TEMPORARY_TABLE
-            ? BoundObjectReference.ObjectKind.TEMPORARY : local != null && local.getObject().getKind() == ObjectDescriptor.Kind.VIEW
-                ? BoundObjectReference.ObjectKind.VIEW : BoundObjectReference.ObjectKind.TABLE;
+        ObjectId object = resolved.object;
+        BoundObjectReference.ObjectKind kind = resolved.kind();
         DefinitionRef definition = logical == null ? null : logical.getReference();
-        OverlayEntry overlay = work.context.getSession().getPersistentOverlay().get(name);
-        boolean uncertain = work.context.getSession().getUncertainty().getObjects().contains(object)
-            || overlay != null && overlay.getState() == OverlayEntry.State.UNKNOWN
-            || local == null && work.context.getSession().getUncertainty().isCatalogUncertain();
+        boolean uncertain = resolved.uncertain;
         if (uncertain) {
             definition = null;
             work.warn("SESSION_OBJECT_UNCERTAIN", "Prior effects left object state uncertain", syntax.getSourceRef());
@@ -582,30 +648,6 @@ final class QueryBinder {
         work.activeDefinitions.remove(cacheKey);
         work.cteRoots.put(cacheKey, result);
         return result;
-    }
-
-    private CatalogEntry local(List<String> parts, String simple, Optional<QualifiedName> database) {
-        for (CatalogEntry entry : work.context.getSession().getTemporaryCatalog().values()) {
-            for (QualifiedName alias : entry.getLookupNames()) {
-                if (alias.getParts().equals(parts)
-                    || (parts.size() == 1 && SemanticNames.normalize(entry.getObject().getName().getParts()
-                        .get(entry.getObject().getName().getParts().size() - 1)).equals(simple))) {
-                    return entry;
-                }
-            }
-        }
-        QualifiedName qualified = parts.size() > 1 ? new QualifiedName(parts)
-            : database.isPresent() ? SemanticNames.qualify(parts, database) : null;
-        if (qualified != null) {
-            OverlayEntry entry = work.context.getSession().getPersistentOverlay().get(qualified);
-            if (entry != null && entry.getState() == OverlayEntry.State.DELETED) {
-                throw new BindingFailure("OBJECT_NOT_FOUND", "Object was dropped earlier in this script");
-            }
-            if (entry != null && entry.getEntry().isPresent()) {
-                return entry.getEntry().get();
-            }
-        }
-        return null;
     }
 
     private List<IdentifierPart> definitionColumns(DefinitionRef reference, PreparedDefinition localPrepared) {
@@ -807,10 +849,10 @@ final class QueryBinder {
     }
 
     private List<Relations.OrderKey> clauseOrders(QueryTailSyntax tail, ReferenceScope scope) {
-        String previous = scope.clauseLocation;
-        scope.clauseLocation = "order_by";
+        ClauseLocation previous = scope.clauseLocation;
+        scope.clauseLocation = ClauseLocation.ORDER_BY;
         List<Relations.OrderKey> orders = expressions.orders(tail.getOrderBy(), scope);
-        scope.clauseLocation = "sort_by";
+        scope.clauseLocation = ClauseLocation.SORT_BY;
         orders.addAll(expressions.orders(tail.getSortBy(), scope));
         scope.clauseLocation = previous;
         return orders;
@@ -819,18 +861,18 @@ final class QueryBinder {
     private void distributionOutputs(SyntaxQuery syntax, QueryTailSyntax tail, ReferenceScope scope,
             Map<SlotId, BoundExpression> outputExpressions, List<OutputAssignment> assignments, List<OutputSlot> slots) {
         int index = 0;
-        scope.clauseLocation = "distribute_by";
+        scope.clauseLocation = ClauseLocation.DISTRIBUTE_BY;
         for (SyntaxExpression key : tail.getDistributeBy()) {
             BoundExpression expression = OutputAliasExpander.expand(expressions.bind(key, scope), outputExpressions);
             hiddenOutput(syntax, scope, "distribute-" + index++, expression, assignments, slots);
         }
         index = 0;
-        scope.clauseLocation = "cluster_by";
+        scope.clauseLocation = ClauseLocation.CLUSTER_BY;
         for (SyntaxExpression key : tail.getClusterBy()) {
             BoundExpression expression = OutputAliasExpander.expand(expressions.bind(key, scope), outputExpressions);
             hiddenOutput(syntax, scope, "cluster-" + index++, expression, assignments, slots);
         }
-        scope.clauseLocation = "select";
+        scope.clauseLocation = ClauseLocation.SELECT;
     }
 
     private BoundRelation tail(BoundRelation relation, QueryTailSyntax tail, SyntaxQuery syntax, ReferenceScope scope,

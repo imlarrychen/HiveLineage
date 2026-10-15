@@ -95,6 +95,33 @@ public class ArchitectureContractTest {
         Assert.assertTrue(violations.toString(), violations.isEmpty());
     }
 
+    @Test
+    public void complexityMustStayWithinReviewedBaseline() throws Exception {
+        Path output = Paths.get("target/quality-check").toAbsolutePath();
+        Files.createDirectories(output);
+        javax.tools.JavaCompiler compiler = javax.tools.ToolProvider.getSystemJavaCompiler();
+        Assert.assertNotNull("Quality checks require the build JDK", compiler);
+        Assert.assertEquals(0, compiler.run(null, null, null, "-d", output.toString(),
+            "scripts/quality/V2ComplexityGate.java"));
+        try (java.net.URLClassLoader loader = new java.net.URLClassLoader(new java.net.URL[] { output.toUri().toURL() })) {
+            try {
+                loader.loadClass("V2ComplexityGate").getMethod("main", String[].class).invoke(null,
+                    (Object) new String[] { ROOT.toString(), "scripts/quality/v2-complexity-baseline.tsv" });
+            } catch (java.lang.reflect.InvocationTargetException failure) {
+                throw new AssertionError(failure.getCause().getMessage(), failure.getCause());
+            }
+        }
+    }
+
+    @Test
+    public void apiPolicyCannotDependOnDialectTokenNames() throws IOException {
+        String classification = new String(Files.readAllBytes(ROOT.resolve("api/StatementClassification.java")), StandardCharsets.UTF_8);
+        Assert.assertFalse(classification, classification.contains("TOK_"));
+        for (java.lang.reflect.Field field : com.panfan.hivelineage.v2.api.DefaultScriptLineageAnalyzer.class.getDeclaredFields()) {
+            Assert.assertNotEquals(com.panfan.hivelineage.v2.metadata.DefaultMetadataAccessFactory.class, field.getType());
+        }
+    }
+
     private void assertNoReferences(String segment, List<String> forbidden) throws IOException {
         List<String> violations = new ArrayList<>();
         try (Stream<Path> paths = Files.walk(ROOT.resolve(segment))) {

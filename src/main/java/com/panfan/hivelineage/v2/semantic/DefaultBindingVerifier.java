@@ -40,10 +40,12 @@ public final class DefaultBindingVerifier implements BindingVerifier {
     public DiagnosticBag verifyBinding(BoundAnalysisUnit unit, BindingDemand demand) {
         List<Diagnostic> diagnostics = new ArrayList<Diagnostic>();
         Map<NodeId, BoundRelation> relations = VerificationSupport.relations(unit);
+        Map<NodeId, Set<SlotId>> outputs = new LinkedHashMap<>();
+        relations.forEach((id, relation) -> outputs.put(id, VerificationSupport.outputs(relation)));
         Map<SlotId, QueryBlockId> slotBlocks = new LinkedHashMap<SlotId, QueryBlockId>();
         Map<RelationInstanceId, Relations.Scan> scans = new LinkedHashMap<RelationInstanceId, Relations.Scan>();
         for (BoundRelation relation : unit.getRelations()) {
-            for (SlotId slot : VerificationSupport.outputs(relation)) {
+            for (SlotId slot : outputs.get(relation.getId())) {
                 if (!slotBlocks.containsKey(slot)) {
                     slotBlocks.put(slot, relation.getQueryBlockId());
                 }
@@ -59,7 +61,7 @@ public final class DefaultBindingVerifier implements BindingVerifier {
             Set<RelationInstanceId> owners = new LinkedHashSet<RelationInstanceId>();
             for (NodeId input : relation.getInputIds()) {
                 if (relations.containsKey(input)) {
-                    available.addAll(VerificationSupport.outputs(relations.get(input)));
+                    available.addAll(outputs.get(input));
                 }
                 for (NodeId ancestor : VerificationSupport.reachable(input, relations)) {
                     if (relations.get(ancestor) instanceof Relations.Scan) {
@@ -74,7 +76,7 @@ public final class DefaultBindingVerifier implements BindingVerifier {
                         need(diagnostics, "Requested expression region was not bound", nested);
                     }
                 }
-                references(expression, relation.getQueryBlockId(), available, owners, slotBlocks, scans, relations, unit, diagnostics);
+                references(expression, relation.getQueryBlockId(), available, owners, slotBlocks, scans, relations, outputs, unit, diagnostics);
             }
             boolean regionRequested = demand.getRegions().isEmpty() || demand.getRegions().contains(unit.getStatementId())
                     || demand.getRegions().contains(relation.getId());
@@ -99,7 +101,7 @@ public final class DefaultBindingVerifier implements BindingVerifier {
                 writeSlots.clear();
                 writeOwners.clear();
                 if (source != null) {
-                    writeSlots.addAll(VerificationSupport.outputs(source));
+                    writeSlots.addAll(outputs.get(source.getId()));
                     for (NodeId ancestor : VerificationSupport.reachable(source.getId(), relations)) {
                         if (relations.get(ancestor) instanceof Relations.Scan) {
                             writeOwners.add(((Relations.Scan) relations.get(ancestor)).getInstanceId());
@@ -108,13 +110,13 @@ public final class DefaultBindingVerifier implements BindingVerifier {
                 }
             }
             for (WriteAssignment assignment : write.getAssignments()) {
-                references(assignment.getExpression(), null, writeSlots, writeOwners, slotBlocks, scans, relations, unit, diagnostics);
+                references(assignment.getExpression(), null, writeSlots, writeOwners, slotBlocks, scans, relations, outputs, unit, diagnostics);
             }
             for (PartitionScope.Assignment assignment : write.getPartitionScope().getAssignments()) {
-                references(assignment.getExpression(), null, writeSlots, writeOwners, slotBlocks, scans, relations, unit, diagnostics);
+                references(assignment.getExpression(), null, writeSlots, writeOwners, slotBlocks, scans, relations, outputs, unit, diagnostics);
             }
             write.getCondition().ifPresent(expression -> references(expression, null, writeSlots, writeOwners,
-                    slotBlocks, scans, relations, unit, diagnostics));
+                    slotBlocks, scans, relations, outputs, unit, diagnostics));
             if (demand.getRequirements().contains(BindingRequirement.SINK_MAPPING)
                     && write.getMappingCoverage() == MappingCoverage.NOT_REQUESTED) {
                 need(diagnostics, "Requested sink mapping was not bound", null);
@@ -198,7 +200,7 @@ public final class DefaultBindingVerifier implements BindingVerifier {
 
     private void references(BoundExpression root, QueryBlockId block, Set<SlotId> available,
             Set<RelationInstanceId> owners, Map<SlotId, QueryBlockId> slotBlocks,
-            Map<RelationInstanceId, Relations.Scan> scans, Map<NodeId, BoundRelation> relations,
+            Map<RelationInstanceId, Relations.Scan> scans, Map<NodeId, BoundRelation> relations, Map<NodeId, Set<SlotId>> outputs,
             BoundAnalysisUnit unit, List<Diagnostic> diagnostics) {
         for (BoundExpression expression : VerificationSupport.flatten(root)) {
             if (expression instanceof Expressions.SlotRef) {
@@ -228,16 +230,16 @@ public final class DefaultBindingVerifier implements BindingVerifier {
                 }
             } else if (expression instanceof Expressions.ScalarSubquery) {
                 Expressions.ScalarSubquery subquery = (Expressions.ScalarSubquery) expression;
-                subquerySlot(subquery.getQueryRoot(), subquery.getResultSlot(), relations, diagnostics, expression);
+                subquerySlot(subquery.getQueryRoot(), subquery.getResultSlot(), outputs, diagnostics, expression);
             } else if (expression instanceof Expressions.InSubquery) {
                 Expressions.InSubquery subquery = (Expressions.InSubquery) expression;
-                subquerySlot(subquery.getQueryRoot(), subquery.getResultSlot(), relations, diagnostics, expression);
+                subquerySlot(subquery.getQueryRoot(), subquery.getResultSlot(), outputs, diagnostics, expression);
             }
         }
     }
 
-    private void subquerySlot(NodeId root, SlotId slot, Map<NodeId, BoundRelation> relations, List<Diagnostic> diagnostics, BoundExpression expression) {
-        if (!relations.containsKey(root) || !VerificationSupport.outputs(relations.get(root)).contains(slot)) {
+    private void subquerySlot(NodeId root, SlotId slot, Map<NodeId, Set<SlotId>> outputs, List<Diagnostic> diagnostics, BoundExpression expression) {
+        if (!outputs.containsKey(root) || !outputs.get(root).contains(slot)) {
             error(diagnostics, "IR_SUBQUERY_SLOT_INVALID", "Subquery result slot is not exported by its root", expression);
         }
     }

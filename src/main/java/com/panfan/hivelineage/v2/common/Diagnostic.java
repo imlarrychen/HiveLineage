@@ -6,6 +6,10 @@ public final class Diagnostic {
     private final String message;
     private final SourceRef sourceRef;
 
+    public Diagnostic(AnalysisStage stage, DiagnosticCode code, String message, SourceRef sourceRef) {
+        this(stage, ModelChecks.value(code, "code").getValue(), message, sourceRef);
+    }
+
     public Diagnostic(AnalysisStage stage, String code, String message, SourceRef sourceRef) {
         this.stage = ModelChecks.value(stage, "stage");
         this.code = ModelChecks.text(code, "code");

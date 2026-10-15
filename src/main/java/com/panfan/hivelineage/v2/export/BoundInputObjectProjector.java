@@ -26,6 +26,7 @@ public final class BoundInputObjectProjector {
     private final BoundAnalysisUnit unit;
     private final BoundNameIndex names;
     private final boolean includeTemporary;
+    private final Map<NodeId, List<QualifiedName>> rootInputs = new LinkedHashMap<NodeId, List<QualifiedName>>();
 
     public BoundInputObjectProjector(BoundAnalysisUnit unit, BoundNameIndex names, boolean includeTemporary) {
         this.unit = unit;
@@ -34,11 +35,12 @@ public final class BoundInputObjectProjector {
     }
 
     public List<QualifiedName> inputs(Optional<BoundWrite> write) {
+        if (write.isPresent()) {
+            return write.get().getSourceRelation().map(this::inputsForRoot).orElse(Collections.emptyList());
+        }
         Set<NodeId> seen = new LinkedHashSet<NodeId>();
         Map<String, QualifiedName> objects = new LinkedHashMap<String, QualifiedName>();
-        if (write.isPresent()) {
-            write.get().getSourceRelation().ifPresent(root -> relation(root, seen, objects));
-        } else if (!unit.getWrites().isEmpty()) {
+        if (!unit.getWrites().isEmpty()) {
             for (BoundWrite sink : unit.getWrites()) {
                 sink.getSourceRelation().ifPresent(root -> relation(root, seen, objects));
             }
@@ -53,9 +55,11 @@ public final class BoundInputObjectProjector {
     }
 
     public List<QualifiedName> inputsForRoot(NodeId root) {
-        Map<String, QualifiedName> objects = new LinkedHashMap<String, QualifiedName>();
-        relation(root, new LinkedHashSet<NodeId>(), objects);
-        return new ArrayList<QualifiedName>(objects.values());
+        return rootInputs.computeIfAbsent(root, id -> {
+            Map<String, QualifiedName> objects = new LinkedHashMap<String, QualifiedName>();
+            relation(id, new LinkedHashSet<NodeId>(), objects);
+            return Collections.unmodifiableList(new ArrayList<QualifiedName>(objects.values()));
+        });
     }
 
     private void relation(NodeId id, Set<NodeId> seen, Map<String, QualifiedName> objects) {

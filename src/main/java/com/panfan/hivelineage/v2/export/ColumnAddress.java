@@ -27,4 +27,17 @@ public final class ColumnAddress {
     public List<String> getFieldPath() {
         return fieldPath;
     }
+    @Override
+    public boolean equals(Object other) {
+        if (!(other instanceof ColumnAddress)) {
+            return false;
+        }
+        ColumnAddress address = (ColumnAddress) other;
+        return object.equals(address.object) && fieldPath.equals(address.fieldPath);
+    }
+
+    @Override
+    public int hashCode() {
+        return 31 * object.hashCode() + fieldPath.hashCode();
+    }
 }

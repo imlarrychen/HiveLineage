@@ -42,10 +42,15 @@ import com.panfan.hivelineage.v2.syntax.SubscriptSyntax;
 import com.panfan.hivelineage.v2.syntax.SyntaxExpression;
 import com.panfan.hivelineage.v2.syntax.SyntaxName;
 import com.panfan.hivelineage.v2.syntax.UnarySyntax;
+import com.panfan.hivelineage.v2.syntax.UnknownExpressionSyntax;
 import com.panfan.hivelineage.v2.syntax.WindowCallSyntax;
 import com.panfan.hivelineage.v2.syntax.WindowFrameSyntax;
 import com.panfan.hivelineage.v2.syntax.WindowSpecificationSyntax;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -195,6 +200,19 @@ final class ExpressionBinder {
         if (syntax instanceof WindowCallSyntax) {
             return window((WindowCallSyntax) syntax, scope);
         }
+        return unknown(syntax, scope, id, source);
+    }
+
+    private BoundExpression unknown(SyntaxExpression syntax, ReferenceScope scope, NodeId id, SourceRef source) {
+        if (syntax instanceof UnknownExpressionSyntax) {
+            UnknownExpressionSyntax unknown = (UnknownExpressionSyntax) syntax;
+            List<BoundExpression> children = new ArrayList<>();
+            for (SyntaxExpression child : unknown.getKnownChildren()) {
+                children.add(bind(child, scope));
+            }
+            work.warn("UNSUPPORTED_EXPRESSION", "Unknown expression: " + unknown.getReason(), source);
+            return new Expressions.UnknownExpression(id, TypeRef.unknown(), source, children, unknown.getReason());
+        }
         work.warn("UNSUPPORTED_EXPRESSION", "Expression has no declared binding rule", source);
         return new Expressions.UnknownExpression(id, TypeRef.unknown(), source, Collections.<BoundExpression>emptyList(), "UNSUPPORTED_EXPRESSION");
     }
@@ -216,7 +234,7 @@ final class ExpressionBinder {
         NodeId id = work.id(syntax, scope, "call");
         Expressions.Call result = new Expressions.Call(id, TypeRef.unknown(), syntax.getSourceRef(), symbol, arguments,
             syntax.getArguments().getQuantifier() == QuantifierSyntax.DISTINCT);
-        TypeRef type = work.types.analyze(result, work.context.getFunctions()).getType();
+        TypeRef type = work.analyzeType(result);
         return new Expressions.Call(id, type, syntax.getSourceRef(), symbol, arguments, result.getDistinct());
     }
 
@@ -224,7 +242,7 @@ final class ExpressionBinder {
         FunctionSymbol function = new ResolvedFunctionSymbol(new QualifiedName(Collections.singletonList(name)),
             FunctionSymbol.FunctionKind.OPERATOR, "operator." + name);
         Expressions.Call call = new Expressions.Call(id, TypeRef.unknown(), source, function, arguments, false);
-        return new Expressions.Call(id, work.types.analyze(call, work.context.getFunctions()).getType(), source, function, arguments, false);
+        return new Expressions.Call(id, work.analyzeType(call), source, function, arguments, false);
     }
 
     List<Relations.OrderKey> orders(List<SortItemSyntax> syntax, ReferenceScope scope) {
@@ -274,54 +292,49 @@ final class ExpressionBinder {
 
     List<RelationInstanceId> owners(BoundExpression expression, ReferenceScope scope) {
         Set<RelationInstanceId> result = new LinkedHashSet<>();
-        collectOwners(expression, scope, result);
+        Map<SlotId, RelationInstanceId> slotOwners = scope.slotOwners();
+        Deque<BoundExpression> pending = new ArrayDeque<>();
+        Set<BoundExpression> visited = Collections.newSetFromMap(new IdentityHashMap<BoundExpression, Boolean>());
+        pending.push(expression);
+        while (!pending.isEmpty()) {
+            BoundExpression current = pending.pop();
+            if (!visited.add(current)) {
+                continue;
+            }
+            if (current instanceof QualifiedFieldHandle) {
+                result.add(((QualifiedFieldHandle) current).getOwner());
+            } else if (current instanceof CorrelatedQualifiedFieldHandle) {
+                result.add(((CorrelatedQualifiedFieldHandle) current).getOwner());
+            } else if (current instanceof Expressions.UnknownReference) {
+                ((Expressions.UnknownReference) current).getDisplayOwner().ifPresent(result::add);
+            } else if (current instanceof Expressions.SlotRef) {
+                RelationInstanceId owner = slotOwners.get(((Expressions.SlotRef) current).getSlotId());
+                if (owner != null) {
+                    result.add(owner);
+                }
+            }
+            List<BoundExpression> children = IrTraversal.children(current);
+            for (int index = children.size() - 1; index >= 0; index--) {
+                pending.push(children.get(index));
+            }
+        }
         return new ArrayList<>(result);
     }
 
     boolean correlated(BoundExpression expression) {
-        if (expression instanceof Expressions.CorrelatedSlotRef || expression instanceof CorrelatedQualifiedFieldHandle) {
-            return true;
-        }
-        for (BoundExpression child : IrTraversal.children(expression)) {
-            if (correlated(child)) {
+        Deque<BoundExpression> pending = new ArrayDeque<>();
+        Set<BoundExpression> visited = Collections.newSetFromMap(new IdentityHashMap<BoundExpression, Boolean>());
+        pending.push(expression);
+        while (!pending.isEmpty()) {
+            BoundExpression current = pending.pop();
+            if (!visited.add(current)) {
+                continue;
+            }
+            if (current instanceof Expressions.CorrelatedSlotRef || current instanceof CorrelatedQualifiedFieldHandle) {
                 return true;
             }
+            pending.addAll(IrTraversal.children(current));
         }
         return false;
-    }
-
-    private void collectOwners(BoundExpression expression, ReferenceScope scope, Set<RelationInstanceId> owners) {
-        if (expression instanceof QualifiedFieldHandle) {
-            owners.add(((QualifiedFieldHandle) expression).getOwner());
-        } else if (expression instanceof CorrelatedQualifiedFieldHandle) {
-            owners.add(((CorrelatedQualifiedFieldHandle) expression).getOwner());
-        } else if (expression instanceof Expressions.UnknownReference) {
-            ((Expressions.UnknownReference) expression).getDisplayOwner().ifPresent(owners::add);
-        } else if (expression instanceof Expressions.SlotRef) {
-            SlotId slot = ((Expressions.SlotRef) expression).getSlotId();
-            for (SourceBinding source : scope.sources) {
-                for (OutputSlot candidate : BindingWork.slots(source.schema)) {
-                    if (candidate.getId().equals(slot)) {
-                        owners.add(source.instanceId);
-                    }
-                }
-            }
-        } else if (expression instanceof Expressions.Call) {
-            for (BoundExpression child : ((Expressions.Call) expression).getArguments()) {
-                collectOwners(child, scope, owners);
-            }
-        } else if (expression instanceof Expressions.Cast) {
-            collectOwners(((Expressions.Cast) expression).getExpression(), scope, owners);
-        } else if (expression instanceof Expressions.Subscript) {
-            collectOwners(((Expressions.Subscript) expression).getExpression(), scope, owners);
-            collectOwners(((Expressions.Subscript) expression).getIndex(), scope, owners);
-        } else if (expression instanceof Expressions.FieldAccess) {
-            collectOwners(((Expressions.FieldAccess) expression).getExpression(), scope, owners);
-        } else if (expression instanceof Expressions.Case) {
-            for (Expressions.WhenThen branch : ((Expressions.Case) expression).getBranches()) {
-                collectOwners(branch.getCondition(), scope, owners);
-                collectOwners(branch.getValue(), scope, owners);
-            }
-        }
     }
 }

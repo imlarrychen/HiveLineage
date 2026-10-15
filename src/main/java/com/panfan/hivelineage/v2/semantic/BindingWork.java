@@ -65,6 +65,10 @@ final class BindingWork {
         this.types = types;
     }
 
+    com.panfan.hivelineage.v2.ir.TypeRef analyzeType(com.panfan.hivelineage.v2.ir.expression.BoundExpression expression) {
+        return types.analyze(expression, context.getFunctions(), context.getDialect().getSemanticRuleVersion()).getType();
+    }
+
     boolean requested(BindingRequirement requirement) {
         return demand.getRequirements().contains(requirement);
     }
@@ -92,17 +96,8 @@ final class BindingWork {
     }
 
     ObjectId objectId(QualifiedName name) {
-        com.panfan.hivelineage.v2.session.OverlayEntry overlay = context.getSession().getPersistentOverlay().get(name);
-        if (overlay != null && overlay.getEntry().isPresent()) {
-            return overlay.getEntry().get().getObject().getObjectId();
-        }
-        for (com.panfan.hivelineage.v2.session.CatalogEntry entry : context.getSession().getTemporaryCatalog().values()) {
-            if (entry.getObject().getName().equals(name)) {
-                return entry.getObject().getObjectId();
-            }
-        }
-        return new ObjectId(context.getMetadataContext().getSourceId() + ":" + context.getMetadataContext().getClusterName()
-            + ":" + name.getDisplayName());
+        CatalogObjectResolver resolver = new CatalogObjectResolver(context);
+        return resolver.canonical(name, resolver.identity(name)).object;
     }
 
     FieldIdentity field(ObjectId object, String name) {

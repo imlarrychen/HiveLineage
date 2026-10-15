@@ -13,8 +13,8 @@ import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.ir.relation.SlotMapping;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -71,33 +71,37 @@ final class VerificationSupport {
 
     static Set<NodeId> reachable(NodeId root, Map<NodeId, BoundRelation> relations) {
         Set<NodeId> result = new LinkedHashSet<NodeId>();
-        collect(root, relations, result);
+        ArrayDeque<NodeId> pending = new ArrayDeque<>();
+        pending.push(root);
+        while (!pending.isEmpty()) {
+            NodeId id = pending.pop();
+            if (result.add(id) && relations.containsKey(id)) {
+                List<NodeId> inputs = relations.get(id).getInputIds();
+                for (int i = inputs.size() - 1; i >= 0; i--) {
+                    pending.push(inputs.get(i));
+                }
+            }
+        }
         return result;
-    }
-
-    private static void collect(NodeId id, Map<NodeId, BoundRelation> relations, Set<NodeId> result) {
-        if (!result.add(id) || !relations.containsKey(id)) {
-            return;
-        }
-        for (NodeId input : relations.get(id).getInputIds()) {
-            collect(input, relations, result);
-        }
     }
 
     static List<BoundExpression> flatten(BoundExpression root) {
-        List<BoundExpression> result = new ArrayList<BoundExpression>();
-        flatten(root, result, new HashSet<BoundExpression>());
+        List<BoundExpression> result = new ArrayList<>();
+        Set<BoundExpression> seen = Collections.newSetFromMap(new java.util.IdentityHashMap<BoundExpression, Boolean>());
+        ArrayDeque<BoundExpression> pending = new ArrayDeque<>();
+        pending.push(root);
+        while (!pending.isEmpty()) {
+            BoundExpression expression = pending.pop();
+            if (!seen.add(expression)) {
+                continue;
+            }
+            result.add(expression);
+            List<BoundExpression> children = IrTraversal.children(expression);
+            for (int i = children.size() - 1; i >= 0; i--) {
+                pending.push(children.get(i));
+            }
+        }
         return result;
-    }
-
-    private static void flatten(BoundExpression expression, List<BoundExpression> result, Set<BoundExpression> seen) {
-        if (!seen.add(expression)) {
-            return;
-        }
-        result.add(expression);
-        for (BoundExpression child : IrTraversal.children(expression)) {
-            flatten(child, result, seen);
-        }
     }
 
     static List<NodeId> subqueries(BoundExpression expression) {

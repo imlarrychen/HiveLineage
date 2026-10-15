@@ -3,11 +3,9 @@ package com.panfan.hivelineage.v2.export;
 import com.panfan.hivelineage.v2.analysis.ColumnEndpoint;
 import com.panfan.hivelineage.v2.analysis.Dependency;
 import com.panfan.hivelineage.v2.analysis.DependencyRole;
-import com.panfan.hivelineage.v2.analysis.LineageEndpoint;
 import com.panfan.hivelineage.v2.api.SourceDocument;
 import com.panfan.hivelineage.v2.api.StatementAnalysisResult;
 import com.panfan.hivelineage.v2.common.QualifiedName;
-import com.panfan.hivelineage.v2.ir.FieldIdentity;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
 import com.panfan.hivelineage.v2.ir.statement.WriteAssignment;
@@ -39,6 +37,7 @@ public final class DefaultFormalLineageRecordExporter implements FormalLineageRe
             return Collections.emptyList();
         }
         BoundAnalysisUnit unit = statement.getBoundUnit().get();
+        WriteDependencyIndex dependencies = new WriteDependencyIndex(statement.getLineage().get().getWriteDependencies());
         BoundNameIndex names = new BoundNameIndex(unit);
         BoundExpressionFormatter expressions = new BoundExpressionFormatter(unit, names, renderer);
         for (BoundWrite write : unit.getWrites()) {
@@ -46,15 +45,15 @@ public final class DefaultFormalLineageRecordExporter implements FormalLineageRe
             if (!target.isPresent()) {
                 throw new IllegalArgumentException("Write target has no bound display declaration");
             }
-            Map<String, QualifiedName> sources = new LinkedHashMap<String, QualifiedName>();
-            for (Dependency dependency : statement.getLineage().get().getWriteDependencies()) {
+            Map<QualifiedName, QualifiedName> sources = new LinkedHashMap<QualifiedName, QualifiedName>();
+            for (Dependency dependency : dependencies.forWrite(write)) {
                 if (dependency.getEvidence().getOperationId().equals(write.getId()) && include(dependency, names)) {
                     names.endpointName(dependency.getSource())
-                            .ifPresent(name -> sources.putIfAbsent(name.getDisplayName(), name));
+                            .ifPresent(name -> sources.putIfAbsent(name, name));
                 }
             }
             records.add(new TableLineageRecord(statement.getIdentity(), target.get(), new ArrayList<QualifiedName>(sources.values()),
-                    statement.getStatementType(), throughTemporary(statement, write, names)));
+                    statement.getStatementType(), throughTemporary(dependencies, write, names)));
         }
         records.addAll(new DefinitionLineageRecordExporter(statement, names, expressions, includeTemporary).tables());
         return Collections.unmodifiableList(records);
@@ -66,12 +65,13 @@ public final class DefaultFormalLineageRecordExporter implements FormalLineageRe
             return Collections.emptyList();
         }
         BoundAnalysisUnit unit = statement.getBoundUnit().get();
+        WriteDependencyIndex dependencies = new WriteDependencyIndex(statement.getLineage().get().getWriteDependencies());
         BoundNameIndex names = new BoundNameIndex(unit);
         BoundExpressionFormatter expressions = new BoundExpressionFormatter(unit, names, renderer);
         List<ColumnLineageRecord> records = new ArrayList<ColumnLineageRecord>();
         for (BoundWrite write : unit.getWrites()) {
             for (WriteAssignment assignment : write.getAssignments()) {
-                records.add(column(statement, write, assignment, names, expressions));
+                records.add(column(statement, write, assignment, dependencies, names, expressions));
             }
         }
         records.addAll(new DefinitionLineageRecordExporter(statement, names, expressions, includeTemporary).columns());
@@ -79,16 +79,13 @@ public final class DefaultFormalLineageRecordExporter implements FormalLineageRe
     }
 
     private ColumnLineageRecord column(StatementAnalysisResult statement, BoundWrite write, WriteAssignment assignment,
-                                       BoundNameIndex names, BoundExpressionFormatter expressions) {
+                                       WriteDependencyIndex dependencyIndex, BoundNameIndex names, BoundExpressionFormatter expressions) {
         QualifiedName targetObject = names.declaredObject(write.getTargetObject())
                 .orElseThrow(() -> new IllegalArgumentException("Write target has no bound declaration"));
         ColumnAddress target = new ColumnAddress(targetObject, Collections.singletonList(assignment.getTargetField().getDisplayName()));
-        Map<String, ColumnAddress> sources = new LinkedHashMap<String, ColumnAddress>();
+        Map<ColumnAddress, ColumnAddress> sources = new LinkedHashMap<ColumnAddress, ColumnAddress>();
         List<Dependency> dependencies = new ArrayList<Dependency>();
-        for (Dependency dependency : statement.getLineage().get().getWriteDependencies()) {
-            if (!target(dependency, write, assignment.getTargetField())) {
-                continue;
-            }
+        for (Dependency dependency : dependencyIndex.forField(write, assignment.getTargetField())) {
             dependencies.add(dependency);
             if (dependency.getSource() instanceof ColumnEndpoint && dependency.getRole() != DependencyRole.ROWSET
                     && include(dependency, names)) {
@@ -99,8 +96,8 @@ public final class DefaultFormalLineageRecordExporter implements FormalLineageRe
                     List<String> path = new ArrayList<String>();
                     path.add(name.get());
                     path.addAll(field.getFieldPath());
-                    sources.putIfAbsent(object.get().getDisplayName() + "." + String.join(".", path),
-                            new ColumnAddress(object.get(), path));
+                    ColumnAddress source = new ColumnAddress(object.get(), path);
+                    sources.putIfAbsent(source, source);
                 }
             }
         }
@@ -112,19 +109,12 @@ public final class DefaultFormalLineageRecordExporter implements FormalLineageRe
                 statement.getLineage().get().getQuality());
     }
 
-    private boolean target(Dependency dependency, BoundWrite write, FieldIdentity field) {
-        LineageEndpoint target = dependency.getTarget();
-        return target instanceof ColumnEndpoint && ((ColumnEndpoint) target).getObjectId().equals(write.getTargetObject())
-                && ((ColumnEndpoint) target).getFieldId().equals(field.getId())
-                && dependency.getEvidence().getOperationId().equals(write.getId());
-    }
-
     private boolean include(Dependency dependency, BoundNameIndex names) {
         return dependency.getRole() != DependencyRole.DEFINITION || includeTemporary || !names.temporary(dependency.getSource());
     }
 
-    private boolean throughTemporary(StatementAnalysisResult statement, BoundWrite write, BoundNameIndex names) {
-        for (Dependency dependency : statement.getLineage().get().getWriteDependencies()) {
+    private boolean throughTemporary(WriteDependencyIndex dependencies, BoundWrite write, BoundNameIndex names) {
+        for (Dependency dependency : dependencies.forWrite(write)) {
             if (dependency.getEvidence().getOperationId().equals(write.getId())
                     && dependency.getRole() == DependencyRole.DEFINITION
                     && names.endpointObject(dependency.getSource()).map(names::temporary).orElse(false)) {

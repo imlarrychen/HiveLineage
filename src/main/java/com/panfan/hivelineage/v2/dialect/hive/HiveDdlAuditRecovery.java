@@ -42,6 +42,7 @@ final class HiveDdlAuditRecovery {
             return null;
         }
         return new OtherStatementSyntax(new NodeId(unit.getExpandedUnit().getExpandedSourceId() + ":ddl-audit"),
-                unit.getExpandedUnit().getOriginalUnit().getSourceRef(), "TOK_" + operation + family, "INVALID_DDL");
+                unit.getExpandedUnit().getOriginalUnit().getSourceRef(),
+                HiveStatementClassification.semantic("TOK_" + operation + family), "INVALID_DDL", false);
     }
 }

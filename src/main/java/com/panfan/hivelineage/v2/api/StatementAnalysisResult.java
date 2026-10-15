@@ -21,6 +21,7 @@ public final class StatementAnalysisResult {
     private final Optional<String> failureCode;
     private final Optional<String> failureMessage;
     private final DiagnosticBag diagnostics;
+    private final Optional<Throwable> failureCause;
     private final Optional<com.panfan.hivelineage.v2.frontend.ExpandedUnit> frontendEvidence;
 
     public StatementAnalysisResult(StatementIdentity identity, String statementType, SourceDocument rawSql, SourceDocument normalizedSql, StatementStatus status, boolean formalLineageProduced, Optional<LineageFacts> lineage, Optional<JoinFacts> joins, Optional<BoundAnalysisUnit> boundUnit, Optional<String> skipReason, Optional<String> failureCode, Optional<String> failureMessage, DiagnosticBag diagnostics) {
@@ -32,6 +33,16 @@ public final class StatementAnalysisResult {
             StatementStatus status, boolean formalLineageProduced, Optional<LineageFacts> lineage, Optional<JoinFacts> joins,
             Optional<BoundAnalysisUnit> boundUnit, Optional<String> skipReason, Optional<String> failureCode, Optional<String> failureMessage,
             DiagnosticBag diagnostics, Optional<com.panfan.hivelineage.v2.frontend.ExpandedUnit> frontendEvidence) {
+        this(identity, statementType, rawSql, normalizedSql, status, formalLineageProduced, lineage, joins,
+            boundUnit, skipReason, failureCode, failureMessage, diagnostics, frontendEvidence, Optional.empty());
+    }
+
+    public StatementAnalysisResult(StatementIdentity identity, String statementType, SourceDocument rawSql, SourceDocument normalizedSql,
+            StatementStatus status, boolean formalLineageProduced, Optional<LineageFacts> lineage, Optional<JoinFacts> joins,
+            Optional<BoundAnalysisUnit> boundUnit, Optional<String> skipReason, Optional<String> failureCode, Optional<String> failureMessage,
+            DiagnosticBag diagnostics, Optional<com.panfan.hivelineage.v2.frontend.ExpandedUnit> frontendEvidence,
+            Optional<Throwable> failureCause) {
+        this.failureCause = ModelChecks.value(failureCause, "failureCause");
         this.frontendEvidence = ModelChecks.value(frontendEvidence, "frontendEvidence");
         this.identity = ModelChecks.value(identity, "identity");
         this.statementType = ModelChecks.text(statementType, "statementType");
@@ -104,6 +115,11 @@ public final class StatementAnalysisResult {
 
     public Optional<String> getFailureMessage() {
         return failureMessage;
+    }
+
+    /** In-process debugging evidence; renderers retain the stable failure code/message contract. */
+    public Optional<Throwable> getFailureCause() {
+        return failureCause;
     }
 
     public DiagnosticBag getDiagnostics() {

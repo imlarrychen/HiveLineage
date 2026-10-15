@@ -33,9 +33,9 @@ final class ReferenceBinder {
 
     BoundExpression bind(NameRefSyntax syntax, ReferenceScope scope) {
         List<String> parts = SemanticNames.parts(syntax.getName());
-        if (parts.size() == 1 && !scope.queryOutputs.isEmpty()) {
+        if (parts.size() == 1 && !scope.visibleOutputAliases().isEmpty()) {
             List<OutputSlot> aliases = new ArrayList<>();
-            for (OutputSlot slot : scope.queryOutputs) {
+            for (OutputSlot slot : scope.visibleOutputAliases()) {
                 if (SemanticNames.normalize(slot.getDisplayName()).equals(parts.get(0))) {
                     aliases.add(slot);
                 }
@@ -251,29 +251,16 @@ final class ReferenceBinder {
             return;
         }
         binding.schemaAttempted = true;
-        com.panfan.hivelineage.v2.session.CatalogEntry local = null;
-        for (com.panfan.hivelineage.v2.session.CatalogEntry entry : work.context.getSession().getTemporaryCatalog().values()) {
-            if (entry.getObject().getObjectId().equals(binding.objectId)) {
-                local = entry;
-                break;
-            }
+        CatalogObjectResolver resolver = new CatalogObjectResolver(work.context);
+        CatalogObjectResolver.Resolution resolved = resolver.canonical(binding.name, binding.objectId);
+        resolved.requireAvailable();
+        if (resolved.uncertain) {
+            binding.uncertain = true;
+            binding.schema = BindingWork.unknown(new NodeId(binding.relationId.getValue() + "/uncertain-width"), "SESSION_OBJECT_UNCERTAIN");
+            work.warn("SESSION_OBJECT_UNCERTAIN", "Prior effects left object state uncertain", binding.source);
+            return;
         }
-        if (local == null) {
-            com.panfan.hivelineage.v2.session.OverlayEntry overlay = work.context.getSession().getPersistentOverlay().get(binding.name);
-            if (overlay != null && overlay.getState() == com.panfan.hivelineage.v2.session.OverlayEntry.State.DELETED) {
-                throw new BindingFailure("OBJECT_NOT_FOUND", "Object was dropped earlier in this script");
-            }
-            if (overlay != null && overlay.getState() == com.panfan.hivelineage.v2.session.OverlayEntry.State.UNKNOWN) {
-                binding.schema = BindingWork.unknown(new NodeId(binding.relationId.getValue() + "/uncertain-width"), "SESSION_OBJECT_UNCERTAIN");
-                work.warn("SESSION_OBJECT_UNCERTAIN", "Prior effects left object state uncertain", binding.source);
-                return;
-            }
-            local = overlay == null ? null : overlay.getEntry().orElse(null);
-        }
-        LookupResult<RelationSchema> result = local == null
-            ? work.context.getMetadata().lookupSchema(binding.name, work.context.getMetadataContext())
-            : local.getSchema().isPresent() ? LookupResult.found(local.getSchema().get())
-                : LookupResult.unknown(com.panfan.hivelineage.v2.common.DiagnosticBag.empty());
+        LookupResult<RelationSchema> result = resolver.schema(resolved);
         work.diagnostics.addAll(result.getDiagnostics().getDiagnostics());
         if (result.getStatus() != LookupStatus.FOUND) {
             binding.schema = BindingWork.unknown(new NodeId(binding.relationId.getValue() + "/unknown-width"), "METADATA_NOT_FOUND");

@@ -35,11 +35,16 @@ import com.panfan.hivelineage.v2.syntax.TableSampleSyntax;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.IdentityHashMap;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 
 final class HiveQueryNormalizer {
     private final HiveAstSupport ast;
     private final HiveExpressionNormalizer expressions;
+    private final Map<ASTNode, SyntaxQuery> queryCache = new IdentityHashMap<ASTNode, SyntaxQuery>();
+    private final Map<ASTNode, FromSyntax> fromCache = new IdentityHashMap<ASTNode, FromSyntax>();
+    private final Map<ASTNode, List<CteSyntax>> cteCache = new IdentityHashMap<ASTNode, List<CteSyntax>>();
 
     HiveQueryNormalizer(HiveAstSupport ast) {
         this.ast = ast;
@@ -51,6 +56,15 @@ final class HiveQueryNormalizer {
     }
 
     SyntaxQuery query(ASTNode node) {
+        SyntaxQuery cached = queryCache.get(node);
+        if (cached == null) {
+            cached = queryUncached(node);
+            queryCache.put(node, cached);
+        }
+        return cached;
+    }
+
+    private SyntaxQuery queryUncached(ASTNode node) {
         if (isSet(ast.kind(node))) {
             List<SyntaxQuery> branches = new ArrayList<SyntaxQuery>();
             for (ASTNode branch : ast.children(node)) {
@@ -96,6 +110,10 @@ final class HiveQueryNormalizer {
     }
 
     List<CteSyntax> ctes(ASTNode node) {
+        List<CteSyntax> cached = cteCache.get(node);
+        if (cached != null) {
+            return cached;
+        }
         List<CteSyntax> ctes = new ArrayList<CteSyntax>();
         for (ASTNode definition : ast.children(ast.child(node, "TOK_CTE"))) {
             SyntaxQuery query = query(ast.at(definition, 0));
@@ -108,7 +126,9 @@ final class HiveQueryNormalizer {
             }
             ctes.add(new CteSyntax(ast.id(definition), ast.ref(definition), name, columns, query));
         }
-        return ctes;
+        List<CteSyntax> result = Collections.unmodifiableList(ctes);
+        cteCache.put(node, result);
+        return result;
     }
 
     private QueryClausesSyntax clauses(ASTNode node) {
@@ -177,6 +197,15 @@ final class HiveQueryNormalizer {
     }
 
     FromSyntax from(ASTNode node) {
+        FromSyntax cached = fromCache.get(node);
+        if (cached == null) {
+            cached = fromUncached(node);
+            fromCache.put(node, cached);
+        }
+        return cached;
+    }
+
+    private FromSyntax fromUncached(ASTNode node) {
         String kind = ast.kind(node);
         if ("TOK_TABREF".equals(kind)) {
             IdentifierPart alias = null;

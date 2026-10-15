@@ -5,10 +5,14 @@ import java.util.Objects;
 
 /** One request's budget over the shared captured workflow read boundary. */
 public final class BudgetedMetadataAccess implements MetadataAccess {
-    private final CapturedMetadataAccess access;
+    private final WorkflowMetadataAccess access;
     private final ExternalReadBudget budget;
 
     public BudgetedMetadataAccess(CapturedMetadataAccess access, ExternalReadBudget budget) {
+        this((WorkflowMetadataAccess) access, budget);
+    }
+
+    public BudgetedMetadataAccess(WorkflowMetadataAccess access, ExternalReadBudget budget) {
         this.access = Objects.requireNonNull(access, "access");
         this.budget = Objects.requireNonNull(budget, "budget");
     }

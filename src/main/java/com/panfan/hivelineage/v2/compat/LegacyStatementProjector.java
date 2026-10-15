@@ -11,10 +11,11 @@ import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.result.TableLineage;
 import com.panfan.hivelineage.result.WarningCode;
 import com.panfan.hivelineage.v2.analysis.ColumnEndpoint;
+import com.panfan.hivelineage.v2.analysis.SlotProvenanceIndex;
+import com.panfan.hivelineage.v2.export.WriteDependencyIndex;
 import com.panfan.hivelineage.v2.analysis.Dependency;
 import com.panfan.hivelineage.v2.analysis.DependencyRole;
 import com.panfan.hivelineage.v2.analysis.JoinFact;
-import com.panfan.hivelineage.v2.analysis.LineageEndpoint;
 import com.panfan.hivelineage.v2.analysis.UnknownEndpoint;
 import com.panfan.hivelineage.v2.api.AnalysisCapability;
 import com.panfan.hivelineage.v2.api.AnalysisContract;
@@ -31,7 +32,6 @@ import com.panfan.hivelineage.v2.export.BoundExpressionFormatter;
 import com.panfan.hivelineage.v2.export.BoundInputObjectProjector;
 import com.panfan.hivelineage.v2.export.ColumnDerivationClassifier;
 import com.panfan.hivelineage.v2.export.ColumnDerivationKind;
-import com.panfan.hivelineage.v2.ir.FieldIdentity;
 import com.panfan.hivelineage.v2.ir.expression.Expressions;
 import com.panfan.hivelineage.v2.ir.identity.FieldId;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
@@ -73,25 +73,30 @@ final class LegacyStatementProjector {
             BoundAnalysisUnit unit = statement.getBoundUnit().get();
             BoundNameIndex names = new BoundNameIndex(unit);
             boolean includeTemporary = contract.map(AnalysisContract::isIncludeTemporaryLineage).orElse(false);
-            BoundExpressionFormatter expressions = new BoundExpressionFormatter(unit, names, renderer,
+            SlotProvenanceIndex provenance = new SlotProvenanceIndex(unit);
+            LegacyColumnSourceSelector selector = new LegacyColumnSourceSelector(unit, names, includeTemporary, provenance);
+            BoundInputObjectProjector inputProjector = new BoundInputObjectProjector(unit, names, includeTemporary);
+            BoundExpressionFormatter expressions = new BoundExpressionFormatter(provenance, names, renderer,
                     object -> names.view(object) || includeTemporary && names.temporary(object));
-            inputs = inputs(statement, names);
+            inputs = inputs(inputProjector, Optional.empty());
             output = output(statement, unit, names, warnings);
             if (statement.isFormalLineageProduced() && statement.getLineage().isPresent()) {
+                WriteDependencyIndex dependencyIndex = new WriteDependencyIndex(statement.getLineage().get().getWriteDependencies());
                 for (BoundWrite write : unit.getWrites()) {
-                    if (tableMode() && !inputs(statement, names, Optional.of(write)).isEmpty()) {
+                    List<DataObjectRef> writeInputs = inputs(inputProjector, Optional.of(write));
+                    if (tableMode() && !writeInputs.isEmpty()) {
                         tables.add(new TableLineage(names.object(write.getTargetObject()).map(DataObjectRef::new).orElse(null),
-                                inputs(statement, names, Optional.of(write)), statement.getStatementType(),
-                                identity.getStatementIndex(), throughTemporary(statement, write, names)));
+                                writeInputs, statement.getStatementType(),
+                                identity.getStatementIndex(), throughTemporary(dependencyIndex, write, names)));
                     }
                     if (columnMode()) {
-                        columns.addAll(columns(statement, write, names, expressions));
+                        columns.addAll(columns(statement, write, names, expressions, selector, dependencyIndex, writeInputs));
                     }
                 }
             }
             if (statement.isFormalLineageProduced() && statement.getLineage().isPresent()) {
                 LegacyBoundaryProjector boundaries = new LegacyBoundaryProjector(statement, names, expressions,
-                        contract.map(AnalysisContract::isIncludeTemporaryLineage).orElse(false));
+                        contract.map(AnalysisContract::isIncludeTemporaryLineage).orElse(false), selector, inputProjector);
                 if (tableMode()) {
                     tables.addAll(0, boundaries.tables());
                 }
@@ -151,25 +156,18 @@ final class LegacyStatementProjector {
         return targets.isEmpty() ? null : names.object(targets.iterator().next()).map(DataObjectRef::new).orElse(null);
     }
 
-    private List<DataObjectRef> inputs(StatementAnalysisResult statement, BoundNameIndex names) {
-        return inputs(statement, names, Optional.<BoundWrite>empty());
-    }
-
-    private List<DataObjectRef> inputs(StatementAnalysisResult statement, BoundNameIndex names, Optional<BoundWrite> write) {
+    private List<DataObjectRef> inputs(BoundInputObjectProjector projector, Optional<BoundWrite> write) {
         List<DataObjectRef> result = new ArrayList<DataObjectRef>();
-        BoundInputObjectProjector inputs = new BoundInputObjectProjector(statement.getBoundUnit().get(), names,
-                contract.map(AnalysisContract::isIncludeTemporaryLineage).orElse(false));
-        for (com.panfan.hivelineage.v2.common.QualifiedName input : inputs.inputs(write)) {
+        for (com.panfan.hivelineage.v2.common.QualifiedName input : projector.inputs(write)) {
             result.add(new DataObjectRef(input.getDisplayName()));
         }
         return result;
     }
 
     private List<ColumnLineage> columns(StatementAnalysisResult statement, BoundWrite write, BoundNameIndex names,
-                                        BoundExpressionFormatter expressions) {
+                                        BoundExpressionFormatter expressions, LegacyColumnSourceSelector selector,
+                                        WriteDependencyIndex dependencyIndex, List<DataObjectRef> writeInputs) {
         List<ColumnLineage> result = new ArrayList<ColumnLineage>();
-        LegacyColumnSourceSelector selector = new LegacyColumnSourceSelector(statement.getBoundUnit().get(), names,
-                contract.map(AnalysisContract::isIncludeTemporaryLineage).orElse(false));
         Map<FieldId, WriteAssignment> assignments = new LinkedHashMap<FieldId, WriteAssignment>();
         for (WriteAssignment assignment : write.getAssignments()) {
             assignments.put(assignment.getTargetField().getId(), assignment);
@@ -181,7 +179,7 @@ final class LegacyStatementProjector {
                         Optional.of(statement.getIdentity())));
                 continue;
             }
-            List<Dependency> dependencies = dependencies(statement, write, assignment.getTargetField());
+            List<Dependency> dependencies = dependencyIndex.forField(write, assignment.getTargetField());
             List<Dependency> selected = selector.select(dependencies, assignment.getExpression(), write);
             Set<String> sources = new LinkedHashSet<String>();
             Set<String> objects = new LinkedHashSet<String>();
@@ -195,7 +193,7 @@ final class LegacyStatementProjector {
             }
             if (currentApi()) {
                 objects.clear();
-                inputs(statement, names, Optional.of(write)).forEach(input -> objects.add(input.getQualifiedName()));
+                writeInputs.forEach(input -> objects.add(input.getQualifiedName()));
             }
             boolean atomicSetUnknown = currentApi() && expressions.hasSetProvenance(assignment.getExpression())
                     && dependencies.stream().anyMatch(dependency -> dependency.getRole() == DependencyRole.VALUE
@@ -286,19 +284,6 @@ final class LegacyStatementProjector {
         return result;
     }
 
-    private List<Dependency> dependencies(StatementAnalysisResult statement, BoundWrite write, FieldIdentity field) {
-        List<Dependency> result = new ArrayList<Dependency>();
-        for (Dependency dependency : statement.getLineage().get().getWriteDependencies()) {
-            LineageEndpoint target = dependency.getTarget();
-            if (target instanceof ColumnEndpoint && ((ColumnEndpoint) target).getObjectId().equals(write.getTargetObject())
-                    && ((ColumnEndpoint) target).getFieldId().equals(field.getId())
-                    && dependency.getEvidence().getOperationId().equals(write.getId())) {
-                result.add(dependency);
-            }
-        }
-        return result;
-    }
-
     private boolean include(Dependency dependency, BoundNameIndex names) {
         if (dependency.getRole() == DependencyRole.DEFINITION) {
             return !names.temporary(dependency.getSource()) || contract.map(AnalysisContract::isIncludeTemporaryLineage).orElse(false);
@@ -307,8 +292,8 @@ final class LegacyStatementProjector {
                 || dependency.getRole() == DependencyRole.ROWSET;
     }
 
-    private boolean throughTemporary(StatementAnalysisResult statement, BoundWrite write, BoundNameIndex names) {
-        for (Dependency dependency : statement.getLineage().get().getWriteDependencies()) {
+    private boolean throughTemporary(WriteDependencyIndex dependencyIndex, BoundWrite write, BoundNameIndex names) {
+        for (Dependency dependency : dependencyIndex.forWrite(write)) {
             if (dependency.getEvidence().getOperationId().equals(write.getId())
                     && dependency.getRole() == DependencyRole.DEFINITION
                     && names.endpointObject(dependency.getSource()).map(names::temporary).orElse(false)) {

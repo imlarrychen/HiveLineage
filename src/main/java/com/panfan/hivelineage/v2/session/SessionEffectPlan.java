@@ -35,6 +35,12 @@ public final class SessionEffectPlan {
         this.diagnostics = ModelChecks.value(diagnostics, "diagnostics");
     }
 
+    public SessionEffectPlan withDefinitions(Map<DefinitionId, DefinitionTemplate> templates) {
+        Map<DefinitionId, DefinitionTemplate> combined = new java.util.LinkedHashMap<>(definitions);
+        templates.forEach(combined::putIfAbsent);
+        return new SessionEffectPlan(expectedRevision, effects, diagnostics, boundUnit, combined);
+    }
+
     public long getExpectedRevision() {
         return expectedRevision;
     }

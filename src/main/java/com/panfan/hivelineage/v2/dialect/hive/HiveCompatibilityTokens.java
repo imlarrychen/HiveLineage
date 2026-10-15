@@ -17,6 +17,10 @@ final class HiveCompatibilityTokens {
                 visible.add(token);
             }
         }
+        return overwriteColumnExtensions(visible);
+    }
+
+    static Set<Integer> overwriteColumnExtensions(List<LexToken> visible) {
         Set<Integer> replacements = new HashSet<Integer>();
         for (int index = 0; index + 2 < visible.size(); index++) {
             if (!"insert".equalsIgnoreCase(visible.get(index).getLexeme())) {

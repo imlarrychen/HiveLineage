@@ -4,12 +4,9 @@ import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.lexical.LexToken;
 import com.panfan.hivelineage.v2.lexical.LexedUnit;
-import com.panfan.hivelineage.v2.lexical.TokenChannel;
-import com.panfan.hivelineage.v2.lexical.TokenKind;
 import com.panfan.hivelineage.v2.syntax.CommandStatementSyntax;
 import com.panfan.hivelineage.v2.syntax.CommandSyntax;
 import com.panfan.hivelineage.v2.syntax.IdentifierPart;
-import com.panfan.hivelineage.v2.syntax.QuoteKind;
 import com.panfan.hivelineage.v2.syntax.ResourceCommandKindSyntax;
 import com.panfan.hivelineage.v2.syntax.ResourceCommandSyntax;
 import com.panfan.hivelineage.v2.syntax.SetCommandSyntax;
@@ -24,19 +21,18 @@ import java.util.Locale;
 
 final class HiveCommandParser {
     SyntaxStatement parse(LexedUnit unit) {
-        List<LexToken> tokens = new ArrayList<LexToken>();
-        for (LexToken token : unit.getTokens()) {
-            if (token.getChannel() == TokenChannel.DEFAULT && token.getKind() != TokenKind.END_OF_INPUT) {
-                tokens.add(token);
-            }
-        }
+        return parse(unit, new HiveTokenIndex(unit));
+    }
+
+    SyntaxStatement parse(LexedUnit unit, HiveTokenIndex index) {
+        List<LexToken> tokens = index.visible();
         if (tokens.isEmpty()) {
             return null;
         }
         String first = tokens.get(0).getLexeme().toLowerCase(Locale.ROOT);
-        if ("use".equals(first) && (tokens.size() != 2 || tokens.get(1).getKind() == TokenKind.STRING_LITERAL)) {
+        if ("use".equals(first) && (tokens.size() != 2 || !databaseIdentifier(tokens.get(1)))) {
             return new OtherStatementSyntax(new NodeId(unit.getExpandedUnit().getExpandedSourceId() + ":invalid-use"),
-                    unit.getExpandedUnit().getOriginalUnit().getSourceRef(), "USE", "INVALID_USE_DATABASE");
+                    unit.getExpandedUnit().getOriginalUnit().getSourceRef(), "USE", "INVALID_USE_DATABASE", false);
         }
         CommandSyntax command = command(first, tokens, unit.getExpandedUnit().getExpandedText());
         if (command == null) {
@@ -46,14 +42,17 @@ final class HiveCommandParser {
         return new CommandStatementSyntax(new NodeId(unit.getExpandedUnit().getExpandedSourceId() + ":command"), source, command);
     }
 
+    private boolean databaseIdentifier(LexToken token) {
+        return new HiveIdentifierReader().read(token) != null;
+    }
+
     private CommandSyntax command(String kind, List<LexToken> tokens, String text) {
         if ("set".equals(kind)) {
             return set(tokens, text);
         }
         if ("use".equals(kind) && tokens.size() == 2) {
             LexToken database = tokens.get(1);
-            IdentifierPart part = new IdentifierPart(database.getLexeme(), HiveAstSupport.unquote(database.getLexeme()),
-                    database.getLexeme().startsWith("`") ? QuoteKind.BACKTICK : QuoteKind.NONE, database.getSourceRef());
+            IdentifierPart part = new HiveIdentifierReader().read(database);
             return new UseCommandSyntax(new SyntaxName(java.util.Collections.singletonList(part)));
         }
         if ("source".equals(kind) && tokens.size() >= 2) {

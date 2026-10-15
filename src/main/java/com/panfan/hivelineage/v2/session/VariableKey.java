@@ -6,12 +6,31 @@ import java.util.Objects;
 /** Namespace is explicit; lookup precedence is outside this immutable identity. */
 public final class VariableKey {
     public enum Namespace {
-        UNQUALIFIED,
-        HIVEVAR,
-        HIVECONF,
-        RUNTIME,
-        SYSTEM,
-        ENVIRONMENT
+        UNQUALIFIED(""),
+        HIVEVAR("hivevar"),
+        HIVECONF("hiveconf"),
+        RUNTIME("runtime"),
+        SYSTEM("system"),
+        ENVIRONMENT("env");
+
+        private final String qualifier;
+
+        Namespace(String qualifier) {
+            this.qualifier = qualifier;
+        }
+
+        public String getQualifier() {
+            return qualifier;
+        }
+
+        public static Namespace fromQualifier(String text) {
+            for (Namespace namespace : values()) {
+                if (namespace.qualifier.equalsIgnoreCase(text)) {
+                    return namespace;
+                }
+            }
+            throw new IllegalArgumentException("Unknown variable namespace: " + text);
+        }
     }
 
     private final Namespace namespace;

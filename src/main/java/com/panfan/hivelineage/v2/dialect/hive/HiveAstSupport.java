@@ -2,38 +2,79 @@ package com.panfan.hivelineage.v2.dialect.hive;
 
 import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.common.SourceSpan;
+import com.panfan.hivelineage.v2.common.AnalysisStage;
+import com.panfan.hivelineage.v2.common.Diagnostic;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.ir.identity.QueryBlockId;
 import com.panfan.hivelineage.v2.lexical.LexToken;
 import com.panfan.hivelineage.v2.lexical.LexedUnit;
 import com.panfan.hivelineage.v2.lexical.TokenKind;
-import com.panfan.hivelineage.v2.lexical.TokenChannel;
 import com.panfan.hivelineage.v2.syntax.IdentifierPart;
 import com.panfan.hivelineage.v2.syntax.QuoteKind;
 import com.panfan.hivelineage.v2.syntax.SyntaxName;
+import com.panfan.hivelineage.v2.syntax.SyntaxOptions;
+import com.panfan.hivelineage.v2.syntax.InsertModeSyntax;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Collections;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
 
 final class HiveAstSupport {
+    private static final Map<Integer, String> NATIVE_SYMBOLS = nativeSymbols();
     private final LexedUnit unit;
     private final Map<ASTNode, Integer> nodeIndexes = new IdentityHashMap<ASTNode, Integer>();
+    private final HiveTokenIndex tokens;
+    private final List<Diagnostic> diagnostics = new ArrayList<Diagnostic>();
 
-    HiveAstSupport(HiveParseArtifact artifact) {
+    HiveAstSupport(HiveParseArtifact artifact, SyntaxOptions options) {
         this.unit = artifact.unit();
+        this.tokens = artifact.tokens();
         if (artifact.tree() != null) {
-            index(artifact.tree());
+            index(artifact.tree(), options);
         }
     }
 
-    private void index(ASTNode node) {
-        nodeIndexes.put(node, nodeIndexes.size());
-        for (ASTNode child : children(node)) {
-            index(child);
+    private void index(ASTNode root, SyntaxOptions options) {
+        Deque<IndexedNode> pending = new ArrayDeque<IndexedNode>();
+        pending.push(new IndexedNode(root, 1));
+        while (!pending.isEmpty()) {
+            IndexedNode next = pending.peek();
+            if (!next.entered) {
+                if (next.depth > options.getMaximumAstDepth()) {
+                    throw new NormalizationLimit("NORMALIZATION_DEPTH_LIMIT", "AST depth exceeds the normalization resource limit");
+                }
+                if (nodeIndexes.containsKey(next.node)) {
+                    pending.pop();
+                    continue;
+                }
+                if (nodeIndexes.size() >= options.getMaximumAstNodeCount()) {
+                    throw new NormalizationLimit("NORMALIZATION_NODE_LIMIT", "AST node count exceeds the normalization resource limit");
+                }
+                nodeIndexes.put(next.node, nodeIndexes.size());
+                next.entered = true;
+            }
+            if (next.child < next.node.getChildCount()) {
+                pending.push(new IndexedNode(at(next.node, next.child++), next.depth + 1));
+            } else {
+                pending.pop();
+            }
         }
+    }
+
+    List<Diagnostic> diagnostics() {
+        return diagnostics;
+    }
+
+    void unsupported(ASTNode node, String reason) {
+        diagnostics.add(new Diagnostic(AnalysisStage.NORMALIZATION, "UNSUPPORTED_NATIVE_EXPRESSION", reason, ref(node)));
     }
 
     NodeId id(ASTNode node) {
@@ -67,13 +108,11 @@ final class HiveAstSupport {
     boolean betweenHas(ASTNode left, ASTNode right, String symbol) {
         int end = ref(left).getSpan().getEnd();
         int start = ref(right).getSpan().getStart();
-        for (LexToken token : unit.getTokens()) {
-            int position = token.getSourceRef().getSpan().getStart();
-            if (position >= end && position < start && symbol.equals(token.getDialectSymbol().getSymbolName())) {
-                return true;
-            }
-        }
-        return false;
+        return tokens.between(end, start, symbol);
+    }
+
+    InsertModeSyntax insertModeBefore(int end) {
+        return tokens.modeBefore(end);
     }
 
     boolean recoveredExpression(ASTNode node) {
@@ -84,11 +123,9 @@ final class HiveAstSupport {
     List<IdentifierPart> cteColumns(ASTNode alias) {
         List<IdentifierPart> columns = new ArrayList<IdentifierPart>();
         boolean list = false;
-        for (LexToken token : unit.getTokens()) {
-            if (token.getSourceRef().getSpan().getStart() < ref(alias).getSpan().getEnd()
-                    || token.getChannel() != TokenChannel.DEFAULT) {
-                continue;
-            }
+        List<LexToken> visible = tokens.visible();
+        for (int index = tokens.firstVisibleAt(ref(alias).getSpan().getEnd()); index < visible.size(); index++) {
+            LexToken token = visible.get(index);
             if (!list) {
                 if (!"(".equals(token.getLexeme())) {
                     return columns;
@@ -117,11 +154,27 @@ final class HiveAstSupport {
         if (node == null || node.getType() < 0) {
             return "";
         }
-        String text = node.getText();
-        if (text != null && text.toUpperCase(java.util.Locale.ROOT).startsWith("TOK_")) {
-            return text.toUpperCase(java.util.Locale.ROOT);
+        String symbol = NATIVE_SYMBOLS.get(node.getType());
+        return symbol == null ? node.getText() : symbol;
+    }
+
+    private static Map<Integer, String> nativeSymbols() {
+        Map<Integer, String> symbols = new HashMap<Integer, String>();
+        for (int index = 0; index < HiveParser.tokenNames.length; index++) {
+            symbols.put(index, HiveParser.tokenNames[index]);
         }
-        return node.getType() < HiveParser.tokenNames.length ? HiveParser.tokenNames[node.getType()] : text;
+        // Hive's public vocabulary also includes virtual AST types beyond tokenNames.
+        for (Field field : HiveParser.class.getDeclaredFields()) {
+            if (field.getType() == int.class && Modifier.isPublic(field.getModifiers())
+                    && Modifier.isStatic(field.getModifiers()) && Modifier.isFinal(field.getModifiers())) {
+                try {
+                    symbols.put(field.getInt(null), field.getName());
+                } catch (IllegalAccessException error) {
+                    throw new IllegalStateException("Cannot read Hive token vocabulary", error);
+                }
+            }
+        }
+        return Collections.unmodifiableMap(symbols);
     }
 
     ASTNode child(ASTNode node, String kind) {
@@ -134,13 +187,18 @@ final class HiveAstSupport {
     }
 
     ASTNode first(ASTNode node, String kind) {
-        if (node == null || kind.equals(kind(node))) {
-            return node;
+        if (node == null) {
+            return null;
         }
-        for (ASTNode child : children(node)) {
-            ASTNode found = first(child, kind);
-            if (found != null) {
-                return found;
+        Deque<ASTNode> pending = new ArrayDeque<ASTNode>();
+        pending.push(node);
+        while (!pending.isEmpty()) {
+            ASTNode next = pending.pop();
+            if (kind.equals(kind(next))) {
+                return next;
+            }
+            for (int index = next.getChildCount() - 1; index >= 0; index--) {
+                pending.push(at(next, index));
             }
         }
         return null;
@@ -174,13 +232,43 @@ final class HiveAstSupport {
     }
 
     private void addNameParts(ASTNode node, List<IdentifierPart> parts) {
-        String kind = kind(node);
-        if ("TOK_TABNAME".equals(kind) || "TOK_TABLE_OR_COL".equals(kind) || "DOT".equals(kind)) {
-            for (ASTNode child : children(node)) {
-                addNameParts(child, parts);
+        Deque<ASTNode> pending = new ArrayDeque<ASTNode>();
+        pending.push(node);
+        while (!pending.isEmpty()) {
+            ASTNode next = pending.pop();
+            String kind = kind(next);
+            if ("TOK_TABNAME".equals(kind) || "TOK_TABLE_OR_COL".equals(kind) || "DOT".equals(kind)) {
+                for (int index = next.getChildCount() - 1; index >= 0; index--) {
+                    pending.push(at(next, index));
+                }
+            } else {
+                parts.add(part(next));
             }
-        } else {
-            parts.add(part(node));
+        }
+    }
+
+    static final class NormalizationLimit extends RuntimeException {
+        private final String code;
+
+        NormalizationLimit(String code, String message) {
+            super(message);
+            this.code = code;
+        }
+
+        String code() {
+            return code;
+        }
+    }
+
+    private static final class IndexedNode {
+        private final ASTNode node;
+        private final int depth;
+        private int child;
+        private boolean entered;
+
+        private IndexedNode(ASTNode node, int depth) {
+            this.node = node;
+            this.depth = depth;
         }
     }
 

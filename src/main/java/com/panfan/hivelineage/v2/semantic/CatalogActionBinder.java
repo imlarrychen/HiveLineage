@@ -17,7 +17,6 @@ import com.panfan.hivelineage.v2.metadata.LookupStatus;
 import com.panfan.hivelineage.v2.metadata.ObjectDescriptor;
 import com.panfan.hivelineage.v2.metadata.RelationSchema;
 import com.panfan.hivelineage.v2.session.CatalogEntry;
-import com.panfan.hivelineage.v2.session.OverlayEntry;
 import com.panfan.hivelineage.v2.syntax.AlterActionSyntax;
 import com.panfan.hivelineage.v2.syntax.ChangeColumnActionSyntax;
 import com.panfan.hivelineage.v2.syntax.ColumnChangeKindSyntax;
@@ -136,33 +135,13 @@ final class CatalogActionBinder {
     }
 
     RelationSchema schema(QualifiedName name, ObjectId object) {
-        if (context.getSession().getUncertainty().getObjects().contains(object)) {
-            return null;
-        }
-        OverlayEntry overlay = context.getSession().getPersistentOverlay().get(name);
-        if (overlay != null) {
-            if (overlay.getEntry().isPresent()) {
-                return overlay.getEntry().get().getSchema().orElse(null);
-            }
-            return null;
-        }
-        for (CatalogEntry entry : context.getSession().getTemporaryCatalog().values()) {
-            if (entry.getObject().getObjectId().equals(object)) {
-                return entry.getSchema().orElse(null);
-            }
-        }
-        LookupResult<RelationSchema> metadata = context.getMetadata().lookupSchema(name, context.getMetadataContext());
-        return metadata.getStatus() == LookupStatus.FOUND ? metadata.getValue().get() : null;
+        CatalogObjectResolver resolver = new CatalogObjectResolver(context);
+        LookupResult<RelationSchema> result = resolver.schema(resolver.canonical(name, object));
+        return result.getStatus() == LookupStatus.FOUND ? result.getValue().get() : null;
     }
 
     private CatalogEntry local(QualifiedName name, ObjectId object) {
-        for (CatalogEntry entry : context.getSession().getTemporaryCatalog().values()) {
-            if (entry.getObject().getObjectId().equals(object)) {
-                return entry;
-            }
-        }
-        OverlayEntry overlay = context.getSession().getPersistentOverlay().get(name);
-        return overlay == null ? null : overlay.getEntry().orElse(null);
+        return new CatalogObjectResolver(context).canonical(name, object).local;
     }
 
     private void addColumns(List<ColumnMetadata> columns, List<ColumnDefinitionSyntax> additions) {

@@ -13,6 +13,11 @@ public final class StatementIdentity {
         this.statementId = ModelChecks.text(statementId, "statementId");
     }
 
+    public static StatementIdentity forTask(TaskIdentity task, int index) {
+        return new StatementIdentity(task, index,
+            task.getWorkflowId() + "_" + task.getTaskId() + "_" + task.getTaskVersion() + "_" + index);
+    }
+
     public TaskIdentity getTask() {
         return task;
     }

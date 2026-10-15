@@ -15,17 +15,21 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.LinkedHashSet;
 
 /** Identity-only lookup over a verified graph. No textual name recovery or external access. */
 public final class PureIrIndex {
     private final Map<NodeId, BoundRelation> relations = new LinkedHashMap<NodeId, BoundRelation>();
     private final Map<SlotId, OutputSlot> slots = new LinkedHashMap<SlotId, OutputSlot>();
     private final Map<SlotId, BoundRelation> slotOwners = new LinkedHashMap<SlotId, BoundRelation>();
+    private final Map<NodeId, Set<SlotId>> transparentSlots = new LinkedHashMap<NodeId, Set<SlotId>>();
     private final Map<RelationInstanceId, ObjectId> objects = new LinkedHashMap<RelationInstanceId, ObjectId>();
 
     public PureIrIndex(BoundAnalysisUnit unit) {
         for (BoundRelation relation : unit.getRelations()) {
             relations.put(relation.getId(), relation);
+            transparentSlots.put(relation.getId(), transparentSlots(relation));
             for (OutputSlot slot : IrTraversal.knownSlots(relation.getOutputSchema())) {
                 if (!slots.containsKey(slot.getId())
                         || isTransparent(slotOwners.get(slot.getId()), slot.getId()) && !isTransparent(relation, slot.getId())) {
@@ -59,6 +63,10 @@ public final class PureIrIndex {
     }
 
     private boolean isTransparent(BoundRelation relation, SlotId slot) {
+        return relation != null && transparentSlots.getOrDefault(relation.getId(), Collections.emptySet()).contains(slot);
+    }
+
+    private Set<SlotId> transparentSlots(BoundRelation relation) {
         List<SlotMapping> mappings = Collections.emptyList();
         if (relation instanceof Relations.Filter) {
             mappings = ((Relations.Filter) relation).getMappings();
@@ -77,11 +85,12 @@ public final class PureIrIndex {
         } else if (relation instanceof Relations.DefinitionInstance) {
             mappings = ((Relations.DefinitionInstance) relation).getMappings();
         }
+        Set<SlotId> slots = new LinkedHashSet<SlotId>();
         for (SlotMapping mapping : mappings) {
-            if (mapping.getInput().equals(slot) && mapping.getOutput().equals(slot)) {
-                return true;
+            if (mapping.getInput().equals(mapping.getOutput())) {
+                slots.add(mapping.getInput());
             }
         }
-        return false;
+        return slots;
     }
 }
