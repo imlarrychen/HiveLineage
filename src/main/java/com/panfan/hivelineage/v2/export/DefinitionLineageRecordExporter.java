@@ -120,9 +120,9 @@ final class DefinitionLineageRecordExporter {
         NodeId id = new NodeId(definition.getId().getValue() + ":export:" + mapping.getInput().getValue());
         Expressions.SlotRef expression = new Expressions.SlotRef(id, TypeRef.unknown(), null, mapping.getInput(), Collections.emptyList());
         Optional<String> text = expressions.format(expression);
-        ColumnDerivationKind kind = ColumnDerivationClassifier.classify(expressions, expression, facts.getDependencies());
+        ColumnDerivationKind kind = ColumnDerivationClassifier.classifyShape(expressions.shapes(), expression, facts.getDependencies());
         return new ColumnLineageRecord(statement.getIdentity(), target, new ArrayList<ColumnAddress>(sources.values()), kind,
-                new RenderedExpression(text, expressions.extracted(expression)), expressions.functions(expression), facts.getQuality());
+                new RenderedExpression(text, expressions.extracted(expression)), expressions.functionUsage().functions(expression), facts.getQuality());
     }
 
     private List<QualifiedName> objects(List<Dependency> dependencies) {

@@ -13,10 +13,8 @@ import com.panfan.hivelineage.v2.ir.identity.RelationInstanceId;
 import com.panfan.hivelineage.v2.ir.identity.ScopeId;
 import com.panfan.hivelineage.v2.ir.identity.SlotId;
 import com.panfan.hivelineage.v2.ir.quality.MappingCoverage;
-import com.panfan.hivelineage.v2.ir.quality.SchemaState;
 import com.panfan.hivelineage.v2.ir.relation.BoundRelation;
 import com.panfan.hivelineage.v2.ir.relation.ExternalDatasetRelation;
-import com.panfan.hivelineage.v2.ir.relation.OutputAssignment;
 import com.panfan.hivelineage.v2.ir.relation.OutputSlot;
 import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.ir.relation.SlotMapping;
@@ -29,7 +27,6 @@ import com.panfan.hivelineage.v2.ir.statement.QueryResult;
 import com.panfan.hivelineage.v2.ir.statement.WriteAssignment;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -46,7 +43,9 @@ public final class DefaultStructuralVerifier implements StructuralVerifier {
     public DiagnosticBag verifyStructure(BoundAnalysisUnit unit) {
         List<Diagnostic> diagnostics = new ArrayList<Diagnostic>();
         Map<NodeId, Object> nodes = new LinkedHashMap<NodeId, Object>();
-        Map<NodeId, BoundRelation> relations = VerificationSupport.relations(unit);
+        VerificationContext context = new VerificationContext(unit);
+        Map<NodeId, BoundRelation> relations = context.relations();
+        OperatorOutputVerification operators = new OperatorOutputVerification(context, new VerificationDiagnostics(diagnostics));
         Set<RelationInstanceId> instances = new HashSet<RelationInstanceId>();
         for (BoundRelation relation : unit.getRelations()) {
             declare(nodes, relation.getId(), relation, diagnostics);
@@ -74,7 +73,7 @@ public final class DefaultStructuralVerifier implements StructuralVerifier {
             for (BoundExpression root : IrTraversal.expressions(relation)) {
                 expressionNodes(root, nodes, relations, diagnostics);
             }
-            operator(relation, relations, diagnostics);
+            operators.verify(relation);
         }
         Map<NodeId, Integer> colors = new HashMap<NodeId, Integer>();
         for (NodeId id : relations.keySet()) {
@@ -230,134 +229,6 @@ public final class DefaultStructuralVerifier implements StructuralVerifier {
             order(input, relations, seen, ordered);
         }
         ordered.add(relations.get(id));
-    }
-
-    private void operator(BoundRelation relation, Map<NodeId, BoundRelation> relations, List<Diagnostic> diagnostics) {
-        Set<SlotId> output = VerificationSupport.outputs(relation);
-        Set<SlotId> inputs = new LinkedHashSet<SlotId>();
-        for (NodeId input : relation.getInputIds()) {
-            if (relations.containsKey(input)) {
-                inputs.addAll(VerificationSupport.outputs(relations.get(input)));
-            }
-        }
-        Set<SlotId> produced = new LinkedHashSet<SlotId>();
-        for (SlotMapping mapping : VerificationSupport.mappings(relation)) {
-            if (!inputs.contains(mapping.getInput()) || !output.contains(mapping.getOutput())) {
-                error(diagnostics, "IR_SLOT_MAPPING_INVALID", "Transparent mapping references an absent input/output");
-            }
-            if (!produced.add(mapping.getOutput())) {
-                error(diagnostics, "IR_DUPLICATE_MAPPING", "Output has multiple transparent mappings");
-            }
-        }
-        if (relation instanceof ExternalDatasetRelation) {
-            if (!relation.getInputIds().isEmpty() || !output.isEmpty()
-                    || relation.getOutputSchema().getState() == SchemaState.KNOWN) {
-                error(diagnostics, "IR_EXTERNAL_DATASET_SHAPE", "External storage input must be a leaf with unclaimed output fields");
-            }
-        } else if (relation instanceof Relations.Values) {
-            for (List<BoundExpression> row : ((Relations.Values) relation).getRows()) {
-                if (relation.getOutputSchema().getState() == SchemaState.KNOWN && row.size() != output.size()) {
-                    error(diagnostics, "IR_VALUES_WIDTH_MISMATCH", "Values row width differs from declared output");
-                }
-            }
-            produced.addAll(output);
-        } else if (relation instanceof Relations.Project) {
-            assignments(((Relations.Project) relation).getAssignments(), output, produced, diagnostics);
-        } else if (relation instanceof Relations.Aggregate) {
-            assignments(((Relations.Aggregate) relation).getAssignments(), output, produced, diagnostics);
-        } else if (relation instanceof Relations.Window) {
-            for (Relations.WindowComputation window : ((Relations.Window) relation).getComputations()) {
-                assignments(Collections.singletonList(window.getAssignment()), output, produced, diagnostics);
-            }
-        } else if (relation instanceof Relations.Generate) {
-            for (SlotId slot : ((Relations.Generate) relation).getGeneratedSlots()) {
-                if (!output.contains(slot) || !produced.add(slot)) {
-                    error(diagnostics, "IR_GENERATE_SLOT_INVALID", "Generated slot absent or duplicated");
-                }
-            }
-        } else if (relation instanceof Relations.SetOp) {
-            set((Relations.SetOp) relation, relations, output, produced, diagnostics);
-        }
-        if (relation instanceof Relations.Join) {
-            Relations.Join join = (Relations.Join) relation;
-            if ((join.getJoinType() == Relations.JoinType.LEFT_SEMI || join.getJoinType() == Relations.JoinType.LEFT_ANTI)
-                    && relations.containsKey(join.getRight())) {
-                Set<SlotId> right = VerificationSupport.outputs(relations.get(join.getRight()));
-                for (SlotMapping mapping : join.getMappings()) {
-                    if (right.contains(mapping.getInput())) {
-                        error(diagnostics, "IR_SEMI_JOIN_OUTPUT", "Semi/anti join exposes the right side");
-                    }
-                }
-            }
-        }
-        if (!(relation instanceof Relations.Scan) && !(relation instanceof Relations.UnknownRelation)
-                && relation.getOutputSchema().getState() == SchemaState.KNOWN && !produced.equals(output)) {
-            error(diagnostics, "IR_OUTPUT_MAPPING_INCOMPLETE", "Known output is not fully assigned or mapped");
-        }
-    }
-
-    private void assignments(List<OutputAssignment> assignments, Set<SlotId> output, Set<SlotId> produced, List<Diagnostic> diagnostics) {
-        for (OutputAssignment assignment : assignments) {
-            if (!output.contains(assignment.getOutput()) || !produced.add(assignment.getOutput())) {
-                error(diagnostics, "IR_ASSIGNMENT_INVALID", "Output assignment absent or duplicated");
-            }
-        }
-    }
-
-    private void set(Relations.SetOp set, Map<NodeId, BoundRelation> relations, Set<SlotId> output, Set<SlotId> produced, List<Diagnostic> diagnostics) {
-        Integer knownWidth = null;
-        for (NodeId branch : set.getBranches()) {
-            if (relations.containsKey(branch) && relations.get(branch).getOutputSchema().getState() == SchemaState.KNOWN) {
-                int width = VerificationSupport.outputs(relations.get(branch)).size();
-                if (knownWidth != null && width != knownWidth) {
-                    error(diagnostics, "IR_SET_WIDTH_MISMATCH", "Set branches have different known widths");
-                }
-                knownWidth = width;
-            }
-        }
-        if (set.getBranches().size() < 2) {
-            error(diagnostics, "IR_SET_BRANCH_COUNT", "Set operation needs at least two branches");
-        }
-        List<OutputSlot> outputs = IrTraversal.knownSlots(set.getOutputSchema());
-        Map<NodeId, List<OutputSlot>> branchSlots = new LinkedHashMap<>();
-        Map<NodeId, Set<SlotId>> branchOutputs = new LinkedHashMap<>();
-        indexSetBranches(set, relations, branchSlots, branchOutputs);
-        for (int position = 0; position < set.getMappings().size(); position++) {
-            Relations.SetOutputMapping mapping = set.getMappings().get(position);
-            if (!output.contains(mapping.getOutput()) || !produced.add(mapping.getOutput())
-                    || mapping.getBranchSlots().size() != set.getBranches().size()) {
-                error(diagnostics, "IR_SET_MAPPING_INVALID", "Set mapping output/branch count is invalid");
-                continue;
-            }
-            if (set.getOutputSchema().getState() == SchemaState.KNOWN && (position >= outputs.size() || !outputs.get(position).getId().equals(mapping.getOutput()))) {
-                error(diagnostics, "IR_SET_POSITION_INVALID", "Set mappings do not follow output order");
-            }
-            for (int branchIndex = 0; branchIndex < set.getBranches().size(); branchIndex++) {
-                BoundRelation branch = relations.get(set.getBranches().get(branchIndex));
-                if (branch != null && mapping.getBranchSlots().get(branchIndex).getSlot().isPresent()) {
-                    SlotId slot = mapping.getBranchSlots().get(branchIndex).getSlot().get();
-                    List<OutputSlot> slots = branchSlots.get(branch.getId());
-                    if (!branchOutputs.get(branch.getId()).contains(slot)
-                            || branch.getOutputSchema().getState() == SchemaState.KNOWN
-                            && (position >= slots.size() || !slots.get(position).getId().equals(slot))) {
-                        error(diagnostics, "IR_SET_POSITION_INVALID", "Branch slot does not match positional mapping");
-                    }
-                }
-            }
-        }
-    }
-
-    private void indexSetBranches(Relations.SetOp set, Map<NodeId, BoundRelation> relations,
-                                  Map<NodeId, List<OutputSlot>> branchSlots, Map<NodeId, Set<SlotId>> branchOutputs) {
-        for (NodeId id : set.getBranches()) {
-            if (relations.containsKey(id)) {
-                List<OutputSlot> slots = IrTraversal.knownSlots(relations.get(id).getOutputSchema());
-                branchSlots.put(id, slots);
-                Set<SlotId> ids = new HashSet<>();
-                slots.forEach(slot -> ids.add(slot.getId()));
-                branchOutputs.put(id, ids);
-            }
-        }
     }
 
     private void error(List<Diagnostic> diagnostics, String code, String message) {

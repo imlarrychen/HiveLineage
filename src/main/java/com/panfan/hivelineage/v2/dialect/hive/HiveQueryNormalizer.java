@@ -35,9 +35,9 @@ import com.panfan.hivelineage.v2.syntax.TableSampleSyntax;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.IdentityHashMap;
 
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 
@@ -50,7 +50,7 @@ final class HiveQueryNormalizer {
 
     HiveQueryNormalizer(HiveAstSupport ast) {
         this.ast = ast;
-        this.expressions = new HiveExpressionNormalizer(ast, this);
+        this.expressions = new HiveExpressionNormalizer(ast, this::query);
     }
 
     HiveExpressionNormalizer expressions() {

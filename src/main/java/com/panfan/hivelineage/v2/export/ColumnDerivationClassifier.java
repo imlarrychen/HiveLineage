@@ -16,9 +16,15 @@ public final class ColumnDerivationClassifier {
     private ColumnDerivationClassifier() {
     }
 
+    /** Source and binary compatibility bridge; classification never requests rendered text. */
     public static ColumnDerivationKind classify(BoundExpressionFormatter formatter, BoundExpression expression,
                                                 List<Dependency> dependencies) {
-        Objects.requireNonNull(formatter, "formatter");
+        return classifyShape(Objects.requireNonNull(formatter, "formatter").shapes(), expression, dependencies);
+    }
+
+    public static ColumnDerivationKind classifyShape(ExpressionShapeAnalyzer shapes, BoundExpression expression,
+                                                     List<Dependency> dependencies) {
+        Objects.requireNonNull(shapes, "shapes");
         Objects.requireNonNull(expression, "expression");
         Objects.requireNonNull(dependencies, "dependencies");
         boolean field = false;
@@ -29,9 +35,9 @@ public final class ColumnDerivationClassifier {
             field |= dependency.getSource() instanceof ColumnEndpoint
                     && (dependency.getRole() == DependencyRole.VALUE || dependency.getRole() == DependencyRole.DEFINITION);
         }
-        if (formatter.literalOnly(expression)) {
+        if (shapes.literalOnly(expression)) {
             return ColumnDerivationKind.CONSTANT;
         }
-        return field && !formatter.complex(expression) ? ColumnDerivationKind.DIRECT : ColumnDerivationKind.DERIVED;
+        return field && !shapes.complex(expression) ? ColumnDerivationKind.DIRECT : ColumnDerivationKind.DERIVED;
     }
 }

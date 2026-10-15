@@ -9,12 +9,9 @@ import com.panfan.hivelineage.v2.ir.relation.OutputSchema;
 import com.panfan.hivelineage.v2.ir.expression.BoundExpression;
 import com.panfan.hivelineage.v2.ir.statement.BoundScopeReference;
 import com.panfan.hivelineage.v2.common.QualifiedName;
-import com.panfan.hivelineage.v2.ir.relation.OutputSlot;
-import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.syntax.NamedWindowSyntax;
 import com.panfan.hivelineage.v2.syntax.CteSyntax;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,13 +23,9 @@ final class ReferenceScope {
     final QueryBlockId block;
     final String prefix;
     final Map<String, CteSyntax> ctes = new LinkedHashMap<>();
-    final List<SourceBinding> sources = new ArrayList<>();
+    final ScopeSymbols symbols = new ScopeSymbols();
     final Map<String, NamedWindowSyntax> windows = new LinkedHashMap<>();
-    final List<OutputSlot> windowSlots = new ArrayList<>();
-    final List<Relations.WindowComputation> windowComputations = new ArrayList<>();
-    private List<OutputSlot> queryOutputs = java.util.Collections.emptyList();
-    private final Map<RelationInstanceId, OutputSchema> indexedSchemas = new LinkedHashMap<>();
-    private Map<SlotId, RelationInstanceId> slotOwners = java.util.Collections.emptyMap();
+    final WindowLayout windowsLayout = new WindowLayout();
     final Map<NodeId, BoundExpression> expressions = new LinkedHashMap<>();
     Optional<QualifiedName> database;
     String displayPath = "root";
@@ -41,30 +34,11 @@ final class ReferenceScope {
     boolean analyzeJoins = true;
 
     Map<SlotId, RelationInstanceId> slotOwners() {
-        boolean changed = indexedSchemas.size() != sources.size();
-        for (SourceBinding source : sources) {
-            changed |= indexedSchemas.get(source.instanceId) != source.schema;
-        }
-        if (changed) {
-            Map<SlotId, RelationInstanceId> owners = new LinkedHashMap<>();
-            indexedSchemas.clear();
-            for (SourceBinding source : sources) {
-                indexedSchemas.put(source.instanceId, source.schema);
-                for (OutputSlot slot : BindingWork.slots(source.schema)) {
-                    owners.put(slot.getId(), source.instanceId);
-                }
-            }
-            slotOwners = java.util.Collections.unmodifiableMap(owners);
-        }
-        return slotOwners;
+        return symbols.slotOwners();
     }
 
-    void setOutputAliases(com.panfan.hivelineage.v2.ir.relation.OutputSchema schema) {
-        queryOutputs = java.util.Collections.unmodifiableList(BindingWork.slots(schema));
-    }
-
-    List<OutputSlot> visibleOutputAliases() {
-        return clauseLocation.outputAliasesVisible() ? queryOutputs : java.util.Collections.<OutputSlot>emptyList();
+    void setOutputAliases(OutputSchema schema) {
+        symbols.setOutputAliases(schema);
     }
 
     ReferenceScope(BindingWork work, ReferenceScope parent, ScopeId id, QueryBlockId block,

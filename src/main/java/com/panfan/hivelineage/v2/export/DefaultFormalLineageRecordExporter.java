@@ -104,11 +104,11 @@ public final class DefaultFormalLineageRecordExporter implements FormalLineageRe
                 }
             }
         }
-        ColumnDerivationKind kind = ColumnDerivationClassifier.classify(expressions, assignment.getExpression(), dependencies);
+        ColumnDerivationKind kind = ColumnDerivationClassifier.classifyShape(expressions.shapes(), assignment.getExpression(), dependencies);
         Optional<String> expression = expressions.format(assignment.getExpression());
         return new ColumnLineageRecord(statement.getIdentity(), target, new ArrayList<ColumnAddress>(sources.values()), kind,
                 new RenderedExpression(expression, expressions.extracted(assignment.getExpression())),
-                expressions.functions(assignment.getExpression()),
+                expressions.functionUsage().functions(assignment.getExpression()),
                 statement.getLineage().get().getQuality());
     }
 

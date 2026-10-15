@@ -1,25 +1,5 @@
 # AST cyclomatic count: 1 + if/loops/catch/case/ternary/&&/||; new method limit=20
-analysis/ExpressionFactsResolver.java#ExpressionFactsResolver.resolve(BoundExpression,Map<SlotId, ExpressionFacts>,List<Dependency>)	29
-analysis/RelationFactsEngine.java#RelationFactsEngine.relation(NodeId)	47
-api/DefaultScriptLineageAnalyzer.java#DefaultScriptLineageAnalyzer.analyzeStatement(ScriptAnalysisRequest,ScriptUnit,SessionSnapshot,MetadataAccess,DefaultDefinitionCoordinator,Map<DefinitionId, PreparedDefinition>,Map<DefinitionId, DiagnosticBag>,Map<String, SourceDocument>)	49
-api/StatementClassification.java#StatementClassification.of(SyntaxStatement,AnalysisContract)	56
 compat/LegacySqlPresentation.java#LegacySqlPresentation.normalized(String)	24
-dialect/hive/HiveExpressionNormalizer.java#HiveExpressionNormalizer.expression(ASTNode)	27
 export/BoundExpressionFormatter.java#BoundExpressionFormatter.expression(BoundExpression,boolean,Set<SlotId>)	23
-frontend/DefaultVariableResolver.java#DefaultVariableResolver.expand(ScriptUnit,VariableContext,VariableOptions)	21
-semantic/CatalogActionBinder.java#CatalogActionBinder.alter(DefinitionBodySyntax,QualifiedName,ObjectId,NodeId,Effects.Precondition)	28
-semantic/DefaultBindingVerifier.java#DefaultBindingVerifier.verifyBinding(BoundAnalysisUnit,BindingDemand)	40
-semantic/DefaultEffectBinder.java#DefaultEffectBinder.bind(SyntaxStatement,BindingContext,BindingDemand)	43
-semantic/DefaultSinkPlanner.java#DefaultSinkPlanner.plan(BoundRelation,SinkBindingRequest)	32
-semantic/DefaultStructuralVerifier.java#DefaultStructuralVerifier.operator(BoundRelation,Map<NodeId, BoundRelation>,List<Diagnostic>)	34
-semantic/DefaultStructuralVerifier.java#DefaultStructuralVerifier.set(Relations.SetOp,Map<NodeId, BoundRelation>,Set<SlotId>,Set<SlotId>,List<Diagnostic>)	21
 semantic/DefaultStructuralVerifier.java#DefaultStructuralVerifier.verifyStructure(BoundAnalysisUnit)	24
-semantic/DefaultTypeAnalyzer.java#DefaultTypeAnalyzer.analyze(BoundExpression,FunctionCatalog)	38
-semantic/ExpressionBinder.java#ExpressionBinder.bindUncached(SyntaxExpression,ReferenceScope)	35
-semantic/QueryBinder.java#QueryBinder.named(NamedFromSyntax,ReferenceScope,boolean)	45
-semantic/QueryBinder.java#QueryBinder.select(SelectQuerySyntax,ReferenceScope,boolean,FromSyntax)	39
-semantic/ReferenceBinder.java#ReferenceBinder.bind(NodeId,SourceRef,List<String>,ReferenceScope,ReferenceScope)	50
-semantic/StatementBinder.java#StatementBinder.targetSchema(QualifiedName,ObjectId,NodeId,List<IdentifierPart>,OutputSchema)	22
 semantic/SyntaxSubqueryCollector.java#SyntaxSubqueryCollector.collect(SyntaxExpression,ReferenceScope,List<NodeId>)	21
-session/DefaultSessionEffectCommitter.java#DefaultSessionEffectCommitter.commit(SessionSnapshot,SessionEffectPlan)	33
-session/SessionCatalogConversions.java#SessionCatalogConversions.sourceVersions(BoundWrite,SessionEffectPlan)	28

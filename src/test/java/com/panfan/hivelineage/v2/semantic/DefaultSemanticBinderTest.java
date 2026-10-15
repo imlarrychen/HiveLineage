@@ -70,6 +70,47 @@ import static org.junit.Assert.assertTrue;
 
 public class DefaultSemanticBinderTest {
     @Test
+    public void explicitAliasWinsOverAnotherPhysicalSourcesImplicitName() {
+        BindingResult result = bind("insert into dwd.t(id) select a.id from ods.a x join ods.b a on x.id=a.id",
+                new TestMetadata(), AnalysisCapability.COLUMN_LINEAGE, AnalysisCapability.JOIN_CONDITION);
+        Relations.Project project = (Relations.Project) result.getUnit().get().getRelations().stream()
+                .filter(relation -> relation instanceof Relations.Project).findFirst().get();
+        com.panfan.hivelineage.v2.ir.expression.QualifiedFieldHandle field =
+                (com.panfan.hivelineage.v2.ir.expression.QualifiedFieldHandle) project.getAssignments().get(0).getExpression();
+        assertEquals("ods.b", result.getUnit().get().getObjects().get(
+                result.getUnit().get().getRelationReferences().get(field.getOwner()).getObjectId().get()).getName().getDisplayName());
+    }
+
+    @Test
+    public void semiJoinKeepsRightSourcesVisibleOnlyToItsCondition() {
+        TestMetadata metadata = new TestMetadata().table("ods.a", "id").table("ods.b", "id", "extra");
+        BindingResult result = bind("insert into dwd.t(id) select * from ods.a a left semi join ods.b b on a.id=b.id order by a.id",
+                metadata, AnalysisCapability.COLUMN_LINEAGE, AnalysisCapability.JOIN_CONDITION);
+        Relations.Join join = (Relations.Join) result.getUnit().get().getRelations().stream()
+                .filter(relation -> relation instanceof Relations.Join).findFirst().get();
+        assertEquals(2, join.getPredicates().get(0).getOwners().size());
+        assertEquals(1, BindingWork.slots(result.getUnit().get().getQueryResults().get(0).getOutputSchema()).size());
+        BindingResult hidden = bind("insert into dwd.t(extra) select b.extra from ods.a a left semi join ods.b b on a.id=b.id",
+                new TestMetadata(), AnalysisCapability.COLUMN_LINEAGE, AnalysisCapability.JOIN_CONDITION);
+        assertTrue(hidden.getDiagnostics().getDiagnostics().stream()
+                .anyMatch(diagnostic -> "UNKNOWN_QUALIFIED_OWNER".equals(diagnostic.getCode())));
+    }
+
+    @Test
+    public void caseWindowAliasReusesOneComputationAndHidesOrderingOutputs() {
+        BindingResult result = bind("insert into dwd.t(value) select case id when 1 then row_number() over(order by id) else 0 end as value "
+                        + "from ods.a order by value", new TestMetadata(), AnalysisCapability.COLUMN_LINEAGE);
+        Relations.Window window = (Relations.Window) result.getUnit().get().getRelations().stream()
+                .filter(relation -> relation instanceof Relations.Window).findFirst().get();
+        assertEquals(1, window.getComputations().size());
+        Relations.Project visible = (Relations.Project) result.getUnit().get().getRelations().stream()
+                .filter(relation -> relation instanceof Relations.Project && relation.getId().getValue().endsWith("/visible-project"))
+                .findFirst().get();
+        assertEquals(1, visible.getAssignments().size());
+        assertEquals("value", BindingWork.slots(visible.getOutputSchema()).get(0).getDisplayName());
+    }
+
+    @Test
     public void structuredMultiPartDefaultDatabaseCannotBecomeAPhysicalNamespace() {
         AnalysisContract contract = contract(false, AnalysisCapability.TABLE_LINEAGE);
         TestMetadata metadata = new TestMetadata();

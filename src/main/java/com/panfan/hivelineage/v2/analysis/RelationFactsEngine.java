@@ -1,14 +1,13 @@
 package com.panfan.hivelineage.v2.analysis;
 
-import com.panfan.hivelineage.v2.ir.IrTraversal;
 import com.panfan.hivelineage.v2.ir.expression.BoundExpression;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.ir.identity.RelationInstanceId;
 import com.panfan.hivelineage.v2.ir.identity.SlotId;
 import com.panfan.hivelineage.v2.ir.quality.SchemaState;
 import com.panfan.hivelineage.v2.ir.relation.BoundRelation;
-import com.panfan.hivelineage.v2.ir.relation.UnknownOutputSegment;
 import com.panfan.hivelineage.v2.ir.relation.OutputSegment;
+import com.panfan.hivelineage.v2.ir.relation.UnknownOutputSegment;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 
 import java.util.ArrayList;
@@ -84,14 +83,8 @@ final class RelationFactsEngine implements ExpressionFactsResolver.Upstream {
         RuleKey key = LineageRuleIdentity.relation(relation);
         RelationLineageRule rule = rules.relationRule(key).orElseGet(() ->
                 BuiltInRelationRules.lookup(key).orElseGet(BuiltInRelationRules::unknown));
-        Map<NodeId, ExpressionFacts> arguments = new LinkedHashMap<NodeId, ExpressionFacts>();
-        if (!(rule instanceof BuiltInRelationRules.BuiltInRule)) {
-            for (BoundExpression expression : IrTraversal.expressions(relation)) {
-                arguments.put(expression.getId(), expressions.resolve(expression, slots, rows));
-            }
-        }
-        RelationFacts result = rule.analyze(relation, inputs, arguments,
-                new LineageRuleContext(LineageRuleIdentity.VERSION, slots, rows, support, expressions::resolve));
+        RelationFacts result = rule.evaluate(relation, inputs,
+                new RelationEvaluationContext(LineageRuleIdentity.VERSION, slots, rows, support, expressions::resolve));
         support.capture(result.getRowSetFacts());
         for (ExpressionFacts output : result.getOutputFacts().values()) {
             support.capture(output.getDependencies());

@@ -49,7 +49,7 @@ final class ModificationBinder {
         ReferenceScope scope = new ReferenceScope(work, null, new ScopeId(statement.getNodeId().getValue() + "/scope"),
                 new QueryBlockId("root"), "", statement.getCtes());
         BoundRelation relation = new QueryBinder(work).from(statement.getTarget(), scope, false);
-        ObjectId target = scope.sources.get(0).objectId;
+        ObjectId target = scope.symbols.sources().get(0).objectId;
         BoundExpression condition = statement.getWhere() == null || !work.requested(BindingRequirement.CONDITION_FIELDS)
                 ? null : expressions.bind(statement.getWhere(), scope);
         write(new NodeId(statement.getNodeId().getValue() + "/write"), target, relation, BoundWrite.WriteMode.UPDATE,
@@ -60,7 +60,7 @@ final class ModificationBinder {
         ReferenceScope scope = new ReferenceScope(work, null, new ScopeId(statement.getNodeId().getValue() + "/scope"),
                 new QueryBlockId("root"), "", statement.getCtes());
         BoundRelation relation = new QueryBinder(work).from(statement.getTarget(), scope, false);
-        ObjectId target = scope.sources.get(0).objectId;
+        ObjectId target = scope.symbols.sources().get(0).objectId;
         BoundExpression condition = statement.getWhere() == null || !work.requested(BindingRequirement.CONDITION_FIELDS)
                 ? null : expressions.bind(statement.getWhere(), scope);
         write(new NodeId(statement.getNodeId().getValue() + "/write"), target, relation, BoundWrite.WriteMode.DELETE,
@@ -74,7 +74,7 @@ final class ModificationBinder {
                 statement.getSourceRef(), statement.getBody().getTarget().getName(), statement.getBody().getTarget().getAlias(), null);
         QueryBinder queries = new QueryBinder(work);
         BoundRelation targetRelation = queries.from(targetSyntax, scope, false);
-        ObjectId target = scope.sources.get(0).objectId;
+        ObjectId target = scope.symbols.sources().get(0).objectId;
         BoundRelation sourceRelation = queries.from(statement.getBody().getSource(), scope, false);
         BoundExpression match = work.requested(BindingRequirement.CONDITION_FIELDS) ? expressions.bind(statement.getBody().getCondition(), scope) : null;
         List<SlotMapping> mappings = BindingWork.mappings(targetRelation.getOutputSchema());
@@ -110,8 +110,8 @@ final class ModificationBinder {
                     fields.add(work.field(target, column.getValue()));
                 }
                 if (fields.isEmpty() && work.requested(BindingRequirement.SINK_MAPPING)) {
-                    new ReferenceBinder(work).loadSchema(scope.sources.get(0), scope);
-                    for (OutputSlot slot : BindingWork.slots(scope.sources.get(0).schema)) {
+                    new ReferenceBinder(work).loadSchema(scope.symbols.sources().get(0), scope);
+                    for (OutputSlot slot : BindingWork.slots(scope.symbols.sources().get(0).schema())) {
                         fields.add(slot.getFieldIdentity().get());
                     }
                 }

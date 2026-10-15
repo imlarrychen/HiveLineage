@@ -131,14 +131,14 @@ final class LegacyBoundaryProjector {
             return;
         }
         Optional<String> text = expressions.format(expression);
-        ColumnDerivationKind kind = ColumnDerivationClassifier.classify(expressions, expression, dependencies.getDependencies());
+        ColumnDerivationKind kind = ColumnDerivationClassifier.classifyShape(expressions.shapes(), expression, dependencies.getDependencies());
         LineageType derivation = kind == ColumnDerivationKind.UNKNOWN ? LineageType.DERIVED : LineageType.valueOf(kind.name());
         result.add(ColumnLineage.builder().targetColumn(new ColumnRef(target)).sourceColumns(columns)
                 .sourceObjects(objects(selected)).expression(text.orElse(null))
                 .expressionExtracted(expressions.extracted(expression))
                 .lineageType(derivation)
-                .functionNames(expressions.functions(expression))
-                .complexExpression(derivation != LineageType.CONSTANT && expressions.complex(expression))
+                .functionNames(expressions.functionUsage().functions(expression))
+                .complexExpression(derivation != LineageType.CONSTANT && expressions.shapes().complex(expression))
                 .statementIndex(statement.getIdentity().getStatementIndex()).build());
     }
 

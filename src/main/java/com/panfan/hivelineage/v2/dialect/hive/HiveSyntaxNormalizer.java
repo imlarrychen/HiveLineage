@@ -1,5 +1,11 @@
 package com.panfan.hivelineage.v2.dialect.hive;
 
+import com.panfan.hivelineage.v2.common.AnalysisStage;
+import com.panfan.hivelineage.v2.common.Diagnostic;
+import com.panfan.hivelineage.v2.frontend.StageOutcome;
+import com.panfan.hivelineage.v2.syntax.CommandStatementSyntax;
+import com.panfan.hivelineage.v2.syntax.FunctionCommandSyntax;
+import com.panfan.hivelineage.v2.syntax.FunctionResourceSyntax;
 import com.panfan.hivelineage.v2.syntax.IdentifierPart;
 import com.panfan.hivelineage.v2.syntax.InsertBranchSyntax;
 import com.panfan.hivelineage.v2.syntax.InsertModeSyntax;
@@ -17,14 +23,8 @@ import com.panfan.hivelineage.v2.syntax.SyntaxNormalizer;
 import com.panfan.hivelineage.v2.syntax.SyntaxOptions;
 import com.panfan.hivelineage.v2.syntax.SyntaxResult;
 import com.panfan.hivelineage.v2.syntax.SyntaxStatement;
-import com.panfan.hivelineage.v2.syntax.CommandStatementSyntax;
-import com.panfan.hivelineage.v2.syntax.FunctionCommandSyntax;
-import com.panfan.hivelineage.v2.syntax.FunctionResourceSyntax;
 import com.panfan.hivelineage.v2.syntax.ValuesInsertSourceSyntax;
 import com.panfan.hivelineage.v2.syntax.ValuesRowSyntax;
-import com.panfan.hivelineage.v2.common.AnalysisStage;
-import com.panfan.hivelineage.v2.common.Diagnostic;
-import com.panfan.hivelineage.v2.frontend.StageOutcome;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -42,7 +42,7 @@ public final class HiveSyntaxNormalizer implements SyntaxNormalizer<HiveParseArt
         final HiveAstSupport ast;
         try {
             ast = new HiveAstSupport(artifact, options);
-        } catch (HiveAstSupport.NormalizationLimit limit) {
+        } catch (HiveNormalizationLimit limit) {
             return new SyntaxResult(null, Collections.singletonList(new Diagnostic(AnalysisStage.NORMALIZATION,
                     limit.code(), limit.getMessage(), artifact.unit().getExpandedUnit().getOriginalUnit().getSourceRef())),
                     StageOutcome.FAILED);

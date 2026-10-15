@@ -11,35 +11,35 @@ import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.result.TableLineage;
 import com.panfan.hivelineage.result.WarningCode;
 import com.panfan.hivelineage.v2.analysis.ColumnEndpoint;
-import com.panfan.hivelineage.v2.analysis.SlotProvenanceIndex;
-import com.panfan.hivelineage.v2.export.WriteDependencyIndex;
 import com.panfan.hivelineage.v2.analysis.Dependency;
 import com.panfan.hivelineage.v2.analysis.DependencyRole;
 import com.panfan.hivelineage.v2.analysis.JoinFact;
+import com.panfan.hivelineage.v2.analysis.SlotProvenanceIndex;
 import com.panfan.hivelineage.v2.analysis.UnknownEndpoint;
 import com.panfan.hivelineage.v2.api.AnalysisCapability;
 import com.panfan.hivelineage.v2.api.AnalysisContract;
 import com.panfan.hivelineage.v2.api.StatementAnalysisResult;
 import com.panfan.hivelineage.v2.api.StatementIdentity;
-import com.panfan.hivelineage.v2.api.TaskIdentity;
-import com.panfan.hivelineage.v2.api.StatementStatus;
 import com.panfan.hivelineage.v2.api.StatementPublicationPolicy;
-import com.panfan.hivelineage.v2.ir.statement.PartitionScope;
+import com.panfan.hivelineage.v2.api.StatementStatus;
+import com.panfan.hivelineage.v2.api.TaskIdentity;
 import com.panfan.hivelineage.v2.common.Diagnostic;
-import com.panfan.hivelineage.v2.export.SourceRenderer;
-import com.panfan.hivelineage.v2.export.BoundNameIndex;
 import com.panfan.hivelineage.v2.export.BoundExpressionFormatter;
 import com.panfan.hivelineage.v2.export.BoundInputObjectProjector;
+import com.panfan.hivelineage.v2.export.BoundNameIndex;
 import com.panfan.hivelineage.v2.export.ColumnDerivationClassifier;
 import com.panfan.hivelineage.v2.export.ColumnDerivationKind;
+import com.panfan.hivelineage.v2.export.SourceRenderer;
+import com.panfan.hivelineage.v2.export.WriteDependencyIndex;
 import com.panfan.hivelineage.v2.ir.expression.Expressions;
 import com.panfan.hivelineage.v2.ir.identity.FieldId;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
+import com.panfan.hivelineage.v2.ir.quality.SchemaState;
+import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
+import com.panfan.hivelineage.v2.ir.statement.PartitionScope;
 import com.panfan.hivelineage.v2.ir.statement.WriteAssignment;
-import com.panfan.hivelineage.v2.ir.relation.Relations;
-import com.panfan.hivelineage.v2.ir.quality.SchemaState;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -196,7 +196,7 @@ final class LegacyStatementProjector {
                 objects.clear();
                 writeInputs.forEach(input -> objects.add(input.getQualifiedName()));
             }
-            boolean atomicSetUnknown = currentApi() && expressions.hasSetProvenance(assignment.getExpression())
+            boolean atomicSetUnknown = currentApi() && expressions.shapes().hasSetProvenance(assignment.getExpression())
                     && dependencies.stream().anyMatch(dependency -> dependency.getRole() == DependencyRole.VALUE
                     && dependency.getSource() instanceof UnknownEndpoint);
             if (atomicSetUnknown) {
@@ -215,14 +215,14 @@ final class LegacyStatementProjector {
                 sourceObjects.add(new DataObjectRef(source));
             }
             Optional<String> expression = expressions.format(assignment.getExpression());
-            ColumnDerivationKind kind = ColumnDerivationClassifier.classify(expressions, assignment.getExpression(), dependencies);
+            ColumnDerivationKind kind = ColumnDerivationClassifier.classifyShape(expressions.shapes(), assignment.getExpression(), dependencies);
             LineageType derivation = kind == ColumnDerivationKind.UNKNOWN ? LineageType.DERIVED : LineageType.valueOf(kind.name());
             result.add(ColumnLineage.builder().targetColumn(names.column(write.getTargetObject(), assignment.getTargetField())
                             .map(ColumnRef::new).orElse(null)).sourceColumns(sourceColumns).sourceObjects(sourceObjects)
                     .expression(expression.orElse(null)).expressionExtracted(expressions.extracted(assignment.getExpression()))
                     .lineageType(derivation)
-                    .functionNames(expressions.functionsWithOccurrences(assignment.getExpression()))
-                    .complexExpression(derivation != LineageType.CONSTANT && expressions.complex(assignment.getExpression()))
+                    .functionNames(expressions.functionUsage().functionsWithOccurrences(assignment.getExpression()))
+                    .complexExpression(derivation != LineageType.CONSTANT && expressions.shapes().complex(assignment.getExpression()))
                     .statementIndex(statement.getIdentity().getStatementIndex()).build());
         }
         return result;
