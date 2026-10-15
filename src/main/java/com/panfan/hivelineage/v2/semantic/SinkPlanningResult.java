@@ -3,6 +3,7 @@ package com.panfan.hivelineage.v2.semantic;
 import com.panfan.hivelineage.v2.common.DiagnosticBag;
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
+
 import java.util.Optional;
 
 public final class SinkPlanningResult {

@@ -4,6 +4,7 @@ import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.ir.identity.FieldId;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
+
 import java.util.List;
 
 public final class ColumnEndpoint implements LineageEndpoint {

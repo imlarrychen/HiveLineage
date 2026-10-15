@@ -1,9 +1,12 @@
 package com.panfan.hivelineage.v2.metadata;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
+
 import java.util.Optional;
 
-/** Shared services and read scope; no task Session is retained. */
+/**
+ * Shared services and read scope; no task Session is retained.
+ */
 public final class WorkflowContext {
     private final String workflowId;
     private final MetadataReadContext readContext;
@@ -15,7 +18,7 @@ public final class WorkflowContext {
     public WorkflowContext(String workflowId, MetadataReadContext readContext,
                            MetadataProvider metadataProvider, MetadataCache metadataCache) {
         this(workflowId, readContext, Optional.of(ModelChecks.value(metadataProvider, "metadataProvider")), metadataCache,
-            Optional.<ObjectDescriptorProvider>empty(), Optional.<RelationSchemaProvider>empty());
+                Optional.<ObjectDescriptorProvider>empty(), Optional.<RelationSchemaProvider>empty());
     }
 
     public WorkflowContext(String workflowId, MetadataReadContext readContext,
@@ -23,7 +26,7 @@ public final class WorkflowContext {
                            Optional<ObjectDescriptorProvider> objectDescriptorProvider,
                            Optional<RelationSchemaProvider> relationSchemaProvider) {
         this(workflowId, readContext, Optional.of(ModelChecks.value(metadataProvider, "metadataProvider")), metadataCache,
-            objectDescriptorProvider, relationSchemaProvider);
+                objectDescriptorProvider, relationSchemaProvider);
     }
 
     public WorkflowContext(String workflowId, MetadataReadContext readContext,

@@ -5,9 +5,12 @@ import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 import com.panfan.hivelineage.v2.session.DataVersionState;
+
 import java.util.Optional;
 
-/** Static committed state after one statement; it does not assert successful execution. */
+/**
+ * Static committed state after one statement; it does not assert successful execution.
+ */
 public final class DatasetVersionRecord {
     private final StatementIdentity statement;
     private final ObjectId objectId;

@@ -1,13 +1,17 @@
 package com.panfan.hivelineage.v2.ir;
 
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
-/** Immutable type description; UNKNOWN is distinct from a verified Hive type. */
+/**
+ * Immutable type description; UNKNOWN is distinct from a verified Hive type.
+ */
 public final class TypeRef {
-    public enum Kind { UNKNOWN, NULL, BOOLEAN, INTEGER, DECIMAL, STRING, DATE, TIMESTAMP, BINARY, ARRAY, MAP, STRUCT, UNION }
+    public enum Kind {UNKNOWN, NULL, BOOLEAN, INTEGER, DECIMAL, STRING, DATE, TIMESTAMP, BINARY, ARRAY, MAP, STRUCT, UNION}
+
     private final Kind kind;
     private final String displayName;
     private final List<TypeRef> arguments;

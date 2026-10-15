@@ -10,10 +10,13 @@ import com.panfan.hivelineage.v2.metadata.RelationSchema;
 import com.panfan.hivelineage.v2.session.CatalogEntry;
 import com.panfan.hivelineage.v2.session.OverlayEntry;
 import com.panfan.hivelineage.v2.syntax.SyntaxName;
+
 import java.util.List;
 import java.util.Optional;
 
-/** One identity and session-state lookup for source, sink and catalog binders. */
+/**
+ * One identity and session-state lookup for source, sink and catalog binders.
+ */
 final class CatalogObjectResolver {
     private final BindingContext context;
 
@@ -63,7 +66,7 @@ final class CatalogObjectResolver {
 
     ObjectId identity(QualifiedName name) {
         return new ObjectId(context.getMetadataContext().getSourceId() + ":"
-            + context.getMetadataContext().getClusterName() + ":" + name.getDisplayName());
+                + context.getMetadataContext().getClusterName() + ":" + name.getDisplayName());
     }
 
     LookupResult<RelationSchema> schema(Resolution resolution) {
@@ -73,7 +76,7 @@ final class CatalogObjectResolver {
         }
         if (resolution.local != null) {
             return resolution.local.getSchema().isPresent() ? LookupResult.found(resolution.local.getSchema().get())
-                : LookupResult.unknown(DiagnosticBag.empty());
+                    : LookupResult.unknown(DiagnosticBag.empty());
         }
         return context.getMetadata().lookupSchema(resolution.name, context.getMetadataContext());
     }
@@ -83,7 +86,7 @@ final class CatalogObjectResolver {
             for (CatalogEntry entry : context.getSession().getTemporaryCatalog().values()) {
                 if (entry.getObject().getName().equals(name)) {
                     return context.getSession().getUncertainty().getObjects().contains(entry.getObject().getObjectId())
-                        ? LookupStatus.UNKNOWN : LookupStatus.FOUND;
+                            ? LookupStatus.UNKNOWN : LookupStatus.FOUND;
                 }
             }
             return LookupStatus.NOT_FOUND;
@@ -99,14 +102,14 @@ final class CatalogObjectResolver {
             return overlay.getState() == OverlayEntry.State.UPSERTED ? LookupStatus.FOUND : LookupStatus.UNKNOWN;
         }
         return context.getSession().getUncertainty().isCatalogUncertain() ? LookupStatus.UNKNOWN
-            : context.getMetadata().lookupObject(name, context.getMetadataContext()).getStatus();
+                : context.getMetadata().lookupObject(name, context.getMetadataContext()).getStatus();
     }
 
     private Resolution resolution(QualifiedName name, ObjectId object, CatalogEntry local, OverlayEntry overlay) {
         boolean deleted = overlay != null && overlay.getState() == OverlayEntry.State.DELETED;
         boolean uncertain = context.getSession().getUncertainty().getObjects().contains(object)
-            || overlay != null && overlay.getState() == OverlayEntry.State.UNKNOWN
-            || local == null && context.getSession().getUncertainty().isCatalogUncertain();
+                || overlay != null && overlay.getState() == OverlayEntry.State.UNKNOWN
+                || local == null && context.getSession().getUncertainty().isCatalogUncertain();
         return new Resolution(name, object, local, deleted, uncertain);
     }
 
@@ -140,9 +143,12 @@ final class CatalogObjectResolver {
                 return BoundObjectReference.ObjectKind.TABLE;
             }
             switch (local.getObject().getKind()) {
-                case TEMPORARY_TABLE: return BoundObjectReference.ObjectKind.TEMPORARY;
-                case VIEW: return BoundObjectReference.ObjectKind.VIEW;
-                default: return BoundObjectReference.ObjectKind.TABLE;
+                case TEMPORARY_TABLE:
+                    return BoundObjectReference.ObjectKind.TEMPORARY;
+                case VIEW:
+                    return BoundObjectReference.ObjectKind.VIEW;
+                default:
+                    return BoundObjectReference.ObjectKind.TABLE;
             }
         }
     }

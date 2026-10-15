@@ -40,6 +40,7 @@ import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
 import com.panfan.hivelineage.v2.ir.statement.WriteAssignment;
 import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.ir.quality.SchemaState;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -197,7 +198,7 @@ final class LegacyStatementProjector {
             }
             boolean atomicSetUnknown = currentApi() && expressions.hasSetProvenance(assignment.getExpression())
                     && dependencies.stream().anyMatch(dependency -> dependency.getRole() == DependencyRole.VALUE
-                            && dependency.getSource() instanceof UnknownEndpoint);
+                    && dependency.getSource() instanceof UnknownEndpoint);
             if (atomicSetUnknown) {
                 sources.clear();
                 objects.clear();
@@ -217,7 +218,7 @@ final class LegacyStatementProjector {
             ColumnDerivationKind kind = ColumnDerivationClassifier.classify(expressions, assignment.getExpression(), dependencies);
             LineageType derivation = kind == ColumnDerivationKind.UNKNOWN ? LineageType.DERIVED : LineageType.valueOf(kind.name());
             result.add(ColumnLineage.builder().targetColumn(names.column(write.getTargetObject(), assignment.getTargetField())
-                    .map(ColumnRef::new).orElse(null)).sourceColumns(sourceColumns).sourceObjects(sourceObjects)
+                            .map(ColumnRef::new).orElse(null)).sourceColumns(sourceColumns).sourceObjects(sourceObjects)
                     .expression(expression.orElse(null)).expressionExtracted(expressions.extracted(assignment.getExpression()))
                     .lineageType(derivation)
                     .functionNames(expressions.functionsWithOccurrences(assignment.getExpression()))

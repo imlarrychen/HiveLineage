@@ -4,14 +4,18 @@ import com.panfan.hivelineage.v2.common.DiagnosticBag;
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.ir.statement.BoundEffect;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Collections;
+
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 import com.panfan.hivelineage.v2.ir.identity.DefinitionId;
 
-/** Uncommitted effects and their expected base revision, without mutation logic. */
+/**
+ * Uncommitted effects and their expected base revision, without mutation logic.
+ */
 public final class SessionEffectPlan {
     private final long expectedRevision;
     private final List<BoundEffect> effects;

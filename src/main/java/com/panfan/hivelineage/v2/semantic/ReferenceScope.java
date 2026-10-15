@@ -13,6 +13,7 @@ import com.panfan.hivelineage.v2.ir.relation.OutputSlot;
 import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.syntax.NamedWindowSyntax;
 import com.panfan.hivelineage.v2.syntax.CteSyntax;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -82,6 +83,6 @@ final class ReferenceScope {
             ctes.put(SemanticNames.normalize(cte.getName().getValue()), cte);
         }
         work.scopes.put(id, new BoundScopeReference(id, block,
-            parent == null ? Optional.<ScopeId>empty() : Optional.of(parent.id)));
+                parent == null ? Optional.<ScopeId>empty() : Optional.of(parent.id)));
     }
 }

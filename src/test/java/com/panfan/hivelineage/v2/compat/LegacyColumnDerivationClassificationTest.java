@@ -10,6 +10,7 @@ import com.panfan.hivelineage.result.LineageType;
 import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
 import com.panfan.hivelineage.v2.testing.GeneratedSqlSupport;
+
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -17,14 +18,18 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** Checks public compatibility markers through the real frontend, binder and projection. */
+/**
+ * Checks public compatibility markers through the real frontend, binder and projection.
+ */
 @RunWith(Parameterized.class)
 public class LegacyColumnDerivationClassificationTest {
     private final LineageParseMode mode;
@@ -35,26 +40,26 @@ public class LegacyColumnDerivationClassificationTest {
 
     @Parameterized.Parameters(name = "{0}")
     public static Collection<Object[]> modes() {
-        return Arrays.asList(new Object[] {LineageParseMode.COLUMN_ONLY},
-                new Object[] {LineageParseMode.TABLE_AND_COLUMN});
+        return Arrays.asList(new Object[]{LineageParseMode.COLUMN_ONLY},
+                new Object[]{LineageParseMode.TABLE_AND_COLUMN});
     }
 
     public static Set<String> scenarioFiles() {
         return Collections.unmodifiableSet(new LinkedHashSet<>(Arrays.asList(
-            "v2_lineage_compat_alias_literal_static_partition.sql",
-            "v2_lineage_compat_constant_argument_computations.sql",
-            "v2_lineage_compat_nested_functions_opaque_udf.sql",
-            "v2_lineage_compat_derived_cte_expression_shape.sql",
-            "v2_lineage_compat_literal_union_branches.sql",
-            "v2_lineage_compat_computed_union_branch.sql",
-            "v2_lineage_compat_same_source_field_union.sql",
-            "v2_lineage_compat_ctas_direct_computed_expansion.sql",
-            "v2_lineage_compat_view_literal_boundary.sql",
-            "v2_lineage_compat_view_literal_union_boundary.sql",
-            "v2_lineage_compat_view_nested_function_boundary.sql",
-            "v2_lineage_compat_view_count_star_constant_aggregate.sql",
-            "v2_lineage_compat_merge_literal_condition.sql",
-            "v2_lineage_compat_unknown_column_source.sql")));
+                "v2_lineage_compat_alias_literal_static_partition.sql",
+                "v2_lineage_compat_constant_argument_computations.sql",
+                "v2_lineage_compat_nested_functions_opaque_udf.sql",
+                "v2_lineage_compat_derived_cte_expression_shape.sql",
+                "v2_lineage_compat_literal_union_branches.sql",
+                "v2_lineage_compat_computed_union_branch.sql",
+                "v2_lineage_compat_same_source_field_union.sql",
+                "v2_lineage_compat_ctas_direct_computed_expansion.sql",
+                "v2_lineage_compat_view_literal_boundary.sql",
+                "v2_lineage_compat_view_literal_union_boundary.sql",
+                "v2_lineage_compat_view_nested_function_boundary.sql",
+                "v2_lineage_compat_view_count_star_constant_aggregate.sql",
+                "v2_lineage_compat_merge_literal_condition.sql",
+                "v2_lineage_compat_unknown_column_source.sql")));
     }
 
     @Test

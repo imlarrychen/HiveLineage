@@ -8,11 +8,14 @@ import com.panfan.hivelineage.result.LineageType;
 import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
 import com.panfan.hivelineage.v2.compat.DefaultLegacyResultProjector;
 import com.panfan.hivelineage.v2.testing.GeneratedSqlSupport;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 
 public class WindowFunctionExportTest {

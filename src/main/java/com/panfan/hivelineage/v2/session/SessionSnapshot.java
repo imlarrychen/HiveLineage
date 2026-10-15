@@ -4,11 +4,14 @@ import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
+
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 
-/** Immutable per-script state. No method resolves names or commits effects. */
+/**
+ * Immutable per-script state. No method resolves names or commits effects.
+ */
 public final class SessionSnapshot {
     private final InitialSessionContext initialContext;
     private final Optional<QualifiedName> currentDatabase;
@@ -44,10 +47,10 @@ public final class SessionSnapshot {
     public static SessionSnapshot initial(InitialSessionContext context) {
         ModelChecks.value(context, "context");
         return new SessionSnapshot(context, context.getDefaultDatabase(), context.getInitialVariables(),
-            Collections.<QualifiedName, CatalogEntry>emptyMap(),
-            Collections.<QualifiedName, OverlayEntry>emptyMap(),
-            Collections.<QualifiedName, LogicalDefinition>emptyMap(),
-            Collections.<ObjectId, DataVersionState>emptyMap(), UncertaintyState.empty(), 0L);
+                Collections.<QualifiedName, CatalogEntry>emptyMap(),
+                Collections.<QualifiedName, OverlayEntry>emptyMap(),
+                Collections.<QualifiedName, LogicalDefinition>emptyMap(),
+                Collections.<ObjectId, DataVersionState>emptyMap(), UncertaintyState.empty(), 0L);
     }
 
     public InitialSessionContext getInitialContext() {

@@ -23,6 +23,7 @@ import com.panfan.hivelineage.v2.syntax.StorageSpecificationSyntax;
 import com.panfan.hivelineage.v2.syntax.SyntaxName;
 import com.panfan.hivelineage.v2.syntax.SyntaxResult;
 import com.panfan.hivelineage.v2.testing.GeneratedSqlSupport;
+
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -32,9 +33,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+
 import static com.panfan.hivelineage.v2.testing.GeneratedSqlSupport.analyzeWithCatalog;
 import static com.panfan.hivelineage.v2.testing.GeneratedSqlSupport.assertColumnSources;
 import static com.panfan.hivelineage.v2.testing.GeneratedSqlSupport.assertInputs;
@@ -47,7 +50,9 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/** Actual file-backed frontend structure and native audit/effect contracts in all three V2 modes. */
+/**
+ * Actual file-backed frontend structure and native audit/effect contracts in all three V2 modes.
+ */
 @RunWith(Parameterized.class)
 public class HiveDdlSyntaxIntegrationTest {
     private final LineageParseMode mode;
@@ -58,34 +63,36 @@ public class HiveDdlSyntaxIntegrationTest {
 
     @Parameterized.Parameters(name = "{0}")
     public static Collection<Object[]> modes() {
-        return Arrays.stream(LineageParseMode.values()).map(mode -> new Object[] {mode}).collect(Collectors.toList());
+        return Arrays.stream(LineageParseMode.values()).map(mode -> new Object[]{mode}).collect(Collectors.toList());
     }
 
     public static Set<String> scenarioFiles() {
         return Collections.unmodifiableSet(new LinkedHashSet<>(Arrays.asList(
-            "v2_ddl_syntax_primitive_parameterized_types.sql",
-            "v2_ddl_syntax_nested_complex_types.sql",
-            "v2_ddl_syntax_comments_partition_buckets_delimiters.sql",
-            "v2_ddl_syntax_serde_class_properties.sql",
-            "v2_ddl_syntax_generic_storage_formats.sql",
-            "v2_ddl_syntax_temporary_external_flags.sql",
-            "v2_ddl_syntax_if_exists_like_options.sql",
-            "v2_ddl_syntax_view_explicit_columns_comments.sql",
-            "v2_ddl_syntax_view_or_replace_definition.sql",
-            "v2_ddl_syntax_custom_storage_audit_boundary.sql",
-            "v2_ddl_syntax_skew_constraints_audit_boundary.sql",
-            "v2_ddl_syntax_permanent_function_resources.sql",
-            "v2_ddl_syntax_macros_reload_functions_audit.sql",
-            "v2_ddl_syntax_database_schema_lifecycle_audit.sql",
-            "v2_ddl_syntax_materialized_view_lifecycle_audit.sql",
-            "v2_ddl_syntax_import_export_unsupported_boundary.sql",
-            "v2_ddl_syntax_statistics_msck_audit.sql",
-            "v2_ddl_syntax_show_describe_explain_audit.sql",
-            "v2_ddl_syntax_bucket_without_sorted_columns.sql",
-            "v2_ddl_syntax_malformed_nonquery_recovery_then_insert.sql")));
+                "v2_ddl_syntax_primitive_parameterized_types.sql",
+                "v2_ddl_syntax_nested_complex_types.sql",
+                "v2_ddl_syntax_comments_partition_buckets_delimiters.sql",
+                "v2_ddl_syntax_serde_class_properties.sql",
+                "v2_ddl_syntax_generic_storage_formats.sql",
+                "v2_ddl_syntax_temporary_external_flags.sql",
+                "v2_ddl_syntax_if_exists_like_options.sql",
+                "v2_ddl_syntax_view_explicit_columns_comments.sql",
+                "v2_ddl_syntax_view_or_replace_definition.sql",
+                "v2_ddl_syntax_custom_storage_audit_boundary.sql",
+                "v2_ddl_syntax_skew_constraints_audit_boundary.sql",
+                "v2_ddl_syntax_permanent_function_resources.sql",
+                "v2_ddl_syntax_macros_reload_functions_audit.sql",
+                "v2_ddl_syntax_database_schema_lifecycle_audit.sql",
+                "v2_ddl_syntax_materialized_view_lifecycle_audit.sql",
+                "v2_ddl_syntax_import_export_unsupported_boundary.sql",
+                "v2_ddl_syntax_statistics_msck_audit.sql",
+                "v2_ddl_syntax_show_describe_explain_audit.sql",
+                "v2_ddl_syntax_bucket_without_sorted_columns.sql",
+                "v2_ddl_syntax_malformed_nonquery_recovery_then_insert.sql")));
     }
 
-    /** Only this non-query malformed DDL is deliberately recovered as PARTIAL by the frontend. */
+    /**
+     * Only this non-query malformed DDL is deliberately recovered as PARTIAL by the frontend.
+     */
     public static Map<String, Set<Integer>> expectedFrontendPartial() {
         Map<String, Set<Integer>> expected = new LinkedHashMap<>();
         expected.put("v2_ddl_syntax_malformed_nonquery_recovery_then_insert.sql", Collections.singleton(0));
@@ -97,8 +104,8 @@ public class HiveDdlSyntaxIntegrationTest {
         String file = "v2_ddl_syntax_primitive_parameterized_types.sql";
         List<ColumnDefinitionSyntax> columns = definition(file, 0).getSchema().getColumns();
         assertEquals(Arrays.asList("boolean", "tinyint", "smallint", "int", "bigint", "float", "double", "decimal", "char",
-                "varchar", "string", "binary", "timestamp", "date"),
-            columns.stream().map(column -> name(column.getType().getTypeName())).collect(Collectors.toList()));
+                        "varchar", "string", "binary", "timestamp", "date"),
+                columns.stream().map(column -> name(column.getType().getTypeName())).collect(Collectors.toList()));
         assertEquals(Arrays.asList(18, 4), columns.get(7).getType().getNumericArguments());
         assertEquals(Collections.singletonList(8), columns.get(8).getType().getNumericArguments());
         assertEquals(Collections.singletonList(64), columns.get(9).getType().getNumericArguments());
@@ -128,16 +135,16 @@ public class HiveDdlSyntaxIntegrationTest {
         GeneratedSqlSupport.assertNoFailed(catalog);
         Effects.CreateObject created = (Effects.CreateObject) catalog.getStatements().get(0).getBoundUnit().get().getEffects().get(0);
         List<TypeRef> types = created.getShape().getSchema().getSegments().stream()
-            .map(segment -> (KnownOutputSegment) segment).flatMap(segment -> segment.getSlots().stream())
-            .map(slot -> slot.getType()).collect(Collectors.toList());
+                .map(segment -> (KnownOutputSegment) segment).flatMap(segment -> segment.getSlots().stream())
+                .map(slot -> slot.getType()).collect(Collectors.toList());
         assertEquals(Arrays.asList(TypeRef.Kind.INTEGER, TypeRef.Kind.ARRAY, TypeRef.Kind.MAP, TypeRef.Kind.STRUCT, TypeRef.Kind.UNION),
-            types.stream().map(TypeRef::getKind).collect(Collectors.toList()));
+                types.stream().map(TypeRef::getKind).collect(Collectors.toList()));
         assertEquals(TypeRef.Kind.STRING, types.get(1).getArguments().get(0).getKind());
         assertEquals(TypeRef.Kind.ARRAY, types.get(2).getArguments().get(1).getKind());
         assertEquals(TypeRef.Kind.DECIMAL, types.get(2).getArguments().get(1).getArguments().get(0).getKind());
         assertEquals(TypeRef.Kind.ARRAY, types.get(3).getFields().get(1).getType().getFields().get(1).getType().getKind());
         assertEquals(Arrays.asList(TypeRef.Kind.INTEGER, TypeRef.Kind.STRING, TypeRef.Kind.ARRAY),
-            types.get(4).getArguments().stream().map(TypeRef::getKind).collect(Collectors.toList()));
+                types.get(4).getArguments().stream().map(TypeRef::getKind).collect(Collectors.toList()));
         assertEquals(TypeRef.Kind.STRUCT, types.get(4).getArguments().get(2).getArguments().get(0).getKind());
     }
 
@@ -234,7 +241,7 @@ public class HiveDdlSyntaxIntegrationTest {
         assertEquals(StatementStatus.SUCCESS, result.getStatements().get(1).getStatus());
         assertTrue(result.getStatements().get(1).isFormalLineageProduced());
         assertTrue(result.getStatements().get(1).getBoundUnit().get().getEffects().stream()
-            .allMatch(effect -> effect.getCertainty() == Effects.Certainty.CERTAIN));
+                .allMatch(effect -> effect.getCertainty() == Effects.Certainty.CERTAIN));
         assertInputs(statement(result, 1), "ods.users");
         assertColumnSources(statement(result, 1), "dim.ddl_alias_view.user_key", "ods.users.id");
         assertColumnSources(statement(result, 1), "dim.ddl_alias_view.display_name", "ods.users.name");
@@ -312,7 +319,7 @@ public class HiveDdlSyntaxIntegrationTest {
     @Test
     public void databaseAndSchemaLifecycleDoesNotSimulateNamespacesOrPermissions() {
         assertOtherAudit("v2_ddl_syntax_database_schema_lifecycle_audit.sql", "CREATE_DATABASE", "CREATE_DATABASE",
-            "ALTERDATABASE_PROPERTIES", "ALTERDATABASE_OWNER", "ALTERDATABASE_LOCATION", "DROP_DATABASE", "DROP_DATABASE");
+                "ALTERDATABASE_PROPERTIES", "ALTERDATABASE_OWNER", "ALTERDATABASE_LOCATION", "DROP_DATABASE", "DROP_DATABASE");
     }
 
     @Test
@@ -353,7 +360,7 @@ public class HiveDdlSyntaxIntegrationTest {
     @Test
     public void showDescribeAndExplainDoNotPublishPlanQueriesAsWrites() {
         assertOtherAudit("v2_ddl_syntax_show_describe_explain_audit.sql", "SHOWDATABASES", "SHOWTABLES", "SHOWVIEWS",
-            "SHOWFUNCTIONS", "SHOWPARTITIONS", "SHOW_TBLPROPERTIES", "SHOW_CREATETABLE", "DESCTABLE", "DESCDATABASE", "DESCFUNCTION", "EXPLAIN");
+                "SHOWFUNCTIONS", "SHOWPARTITIONS", "SHOW_TBLPROPERTIES", "SHOW_CREATETABLE", "DESCTABLE", "DESCDATABASE", "DESCFUNCTION", "EXPLAIN");
     }
 
     @Test

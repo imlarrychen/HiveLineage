@@ -2,9 +2,12 @@ package com.panfan.hivelineage.v2.session;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.SourceRef;
+
 import java.util.Optional;
 
-/** A fallback value is available text, but remains distinct from a known business value. */
+/**
+ * A fallback value is available text, but remains distinct from a known business value.
+ */
 public final class VariableState {
     public enum Resolution {
         KNOWN,

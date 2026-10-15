@@ -1,6 +1,8 @@
 package com.panfan.hivelineage.v2.compat;
 
-/** Renders the legacy comment-free normalized SQL without changing frontend source evidence. */
+/**
+ * Renders the legacy comment-free normalized SQL without changing frontend source evidence.
+ */
 final class LegacySqlPresentation {
     private LegacySqlPresentation() {
     }

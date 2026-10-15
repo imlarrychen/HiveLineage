@@ -5,10 +5,13 @@ import com.panfan.hivelineage.v2.analysis.Dependency;
 import com.panfan.hivelineage.v2.analysis.DependencyRole;
 import com.panfan.hivelineage.v2.analysis.UnknownEndpoint;
 import com.panfan.hivelineage.v2.ir.expression.BoundExpression;
+
 import java.util.List;
 import java.util.Objects;
 
-/** Classifies the bound value expression; conditions and display boundaries do not transform a copied value. */
+/**
+ * Classifies the bound value expression; conditions and display boundaries do not transform a copied value.
+ */
 public final class ColumnDerivationClassifier {
     private ColumnDerivationClassifier() {
     }

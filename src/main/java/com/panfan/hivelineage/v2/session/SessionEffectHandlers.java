@@ -2,16 +2,20 @@ package com.panfan.hivelineage.v2.session;
 
 import com.panfan.hivelineage.v2.ir.statement.BoundEffect;
 import com.panfan.hivelineage.v2.ir.statement.Effects;
+
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
 
-/** Each pure effect model has one state transition handler. */
+/**
+ * Each pure effect model has one state transition handler.
+ */
 final class SessionEffectHandlers {
     private static final Map<Class<?>, BiConsumer<SessionStateDelta, BoundEffect>> HANDLERS = handlers();
 
-    private SessionEffectHandlers() { }
+    private SessionEffectHandlers() {
+    }
 
     static void apply(SessionStateDelta delta, BoundEffect effect) {
         BiConsumer<SessionStateDelta, BoundEffect> handler = HANDLERS.get(effect.getClass());
@@ -36,7 +40,7 @@ final class SessionEffectHandlers {
     }
 
     private static <E extends BoundEffect> void add(Map<Class<?>, BiConsumer<SessionStateDelta, BoundEffect>> handlers,
-            Class<E> type, BiConsumer<SessionStateDelta, E> handler) {
+                                                    Class<E> type, BiConsumer<SessionStateDelta, E> handler) {
         handlers.put(type, (state, effect) -> handler.accept(state, type.cast(effect)));
     }
 }

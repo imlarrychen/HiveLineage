@@ -1,12 +1,15 @@
 package com.panfan.hivelineage.v2.api;
 
 import com.panfan.hivelineage.v2.metadata.DefinitionContext;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
 
-/** Every component is length-delimited; map display strings are not identity encodings. */
+/**
+ * Every component is length-delimited; map display strings are not identity encodings.
+ */
 final class DefinitionContextFingerprint {
     private DefinitionContextFingerprint() {
     }

@@ -10,11 +10,14 @@ import com.panfan.hivelineage.v2.ir.identity.RelationInstanceId;
 import com.panfan.hivelineage.v2.ir.identity.ScopeId;
 import com.panfan.hivelineage.v2.ir.identity.SlotId;
 import com.panfan.hivelineage.v2.ir.quality.BindingRequirement;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Typed immutable expressions; text attachments never participate in binding or lineage. */
+/**
+ * Typed immutable expressions; text attachments never participate in binding or lineage.
+ */
 public final class Expressions {
     private Expressions() {
     }
@@ -44,7 +47,8 @@ public final class Expressions {
     }
 
     public static final class LiteralValue {
-        public enum Kind { NULL, STRING, BOOLEAN, INTEGER, DECIMAL, DATE, TIMESTAMP, BINARY }
+        public enum Kind {NULL, STRING, BOOLEAN, INTEGER, DECIMAL, DATE, TIMESTAMP, BINARY}
+
         private final Kind kind;
         private final String value;
 
@@ -86,7 +90,8 @@ public final class Expressions {
         }
     }
 
-    public enum ScalarCardinality { VERIFIED_SINGLE, UNKNOWN }
+    public enum ScalarCardinality {VERIFIED_SINGLE, UNKNOWN}
+
     public static final class Literal extends Base {
         private final LiteralValue value;
 
@@ -331,7 +336,9 @@ public final class Expressions {
             this(id, type, sourceRef, candidateSlots, candidateOwners, diagnosticCode, null, null);
         }
 
-        /** Display attachment is not an unresolved identity and cannot be used for rebinding. */
+        /**
+         * Display attachment is not an unresolved identity and cannot be used for rebinding.
+         */
         public UnknownReference(NodeId id, TypeRef type, SourceRef sourceRef, List<SlotId> candidateSlots, List<RelationInstanceId> candidateOwners, String diagnosticCode, RelationInstanceId displayOwner, QualifiedName displayReference) {
             super(id, type, sourceRef);
             this.candidateSlots = ModelCollections.immutableList(candidateSlots);
@@ -381,7 +388,9 @@ public final class Expressions {
         }
     }
 
-    /** Unrequested expression region with separately bound object-only subquery roots. */
+    /**
+     * Unrequested expression region with separately bound object-only subquery roots.
+     */
     public static final class NotRequestedExpression extends Base {
         private final BindingRequirement requiredFor;
         private final List<NodeId> knownQueryRoots;

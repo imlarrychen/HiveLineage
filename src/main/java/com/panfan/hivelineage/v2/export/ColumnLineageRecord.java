@@ -4,6 +4,7 @@ import com.panfan.hivelineage.v2.analysis.AnalysisQuality;
 import com.panfan.hivelineage.v2.api.StatementIdentity;
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.List;
 
 public final class ColumnLineageRecord {
@@ -39,7 +40,9 @@ public final class ColumnLineageRecord {
         return sources;
     }
 
-    /** Value-expression classification, retaining UNKNOWN when the proof is incomplete. */
+    /**
+     * Value-expression classification, retaining UNKNOWN when the proof is incomplete.
+     */
     public ColumnDerivationKind getDerivation() {
         return derivation;
     }
@@ -48,7 +51,9 @@ public final class ColumnLineageRecord {
         return expression;
     }
 
-    /** Function calls collected from the bound expression, independently of source-column count. */
+    /**
+     * Function calls collected from the bound expression, independently of source-column count.
+     */
     public List<String> getFunctionNames() {
         return functionNames;
     }

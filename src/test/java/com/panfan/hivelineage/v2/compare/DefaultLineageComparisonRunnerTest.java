@@ -19,9 +19,12 @@ import com.panfan.hivelineage.v2.metadata.MetadataSnapshot;
 import com.panfan.hivelineage.v2.metadata.WorkflowContext;
 import com.panfan.hivelineage.v2.semantic.DefaultSemanticBinder;
 import com.panfan.hivelineage.v2.testing.LegacyCorpusMetadataFixture;
+
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -35,13 +38,13 @@ public class DefaultLineageComparisonRunnerTest {
             return fixture.getTableMetadata(table);
         };
         ScriptAnalysisRequest request = new DefaultRequestAdapter().adapt(LineageAnalyzeRequest.builder().workflowId("wf").taskId("comparison")
-            .taskVersion("BUSINESS_VERSION").defaultDatabase("default").rawScript("insert into test_a(a1,a2) select b1+1,b3 from test_b")
-            .metadataProvider(live).options(LineageAnalyzeOptions.builder().includeIgnoredStatements(true).build()).build());
+                .taskVersion("BUSINESS_VERSION").defaultDatabase("default").rawScript("insert into test_a(a1,a2) select b1+1,b3 from test_b")
+                .metadataProvider(live).options(LineageAnalyzeOptions.builder().includeIgnoredStatements(true).build()).build());
         WorkflowContext workflow = new WorkflowContext("wf", request.getMetadataContext(), new DefaultV1MetadataAdapterFactory().adapt(
-            new LegacyMetadataBinding(Optional.of(live), Optional.empty(), request.getMetadataContext(), false)), new DefaultMetadataCache());
+                new LegacyMetadataBinding(Optional.of(live), Optional.empty(), request.getMetadataContext(), false)), new DefaultMetadataCache());
         DefaultMetadataAccessFactory captures = new DefaultMetadataAccessFactory();
         DefaultScriptLineageAnalyzer analyzer = new DefaultScriptLineageAnalyzer(new DialectSyntaxFrontend<HiveParseArtifact>(new HiveDialectFactory()),
-            new DefaultSemanticBinder(), captures);
+                new DefaultSemanticBinder(), captures);
         ScriptAnalysisResult initial = analyzer.analyzeScript(request, workflow);
         assertEquals(0, initial.getCounts().getFailed());
         MetadataSnapshot snapshot = captures.create(workflow).snapshot();

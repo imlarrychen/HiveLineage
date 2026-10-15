@@ -20,7 +20,7 @@ public interface MetadataCache {
     }
 
     default <T> void put(MetadataCacheKey key, Class<T> payloadType, LookupResult<T> result, long ttlMillis,
-                        ProviderCapabilities.LookupShape lookupShape) {
+                         ProviderCapabilities.LookupShape lookupShape) {
         put(key, payloadType, result, ttlMillis);
     }
 }

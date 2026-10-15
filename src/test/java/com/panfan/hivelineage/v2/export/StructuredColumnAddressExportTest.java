@@ -25,11 +25,13 @@ import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
 import com.panfan.hivelineage.v2.ir.statement.PartitionScope;
 import com.panfan.hivelineage.v2.ir.statement.VersionRef;
 import com.panfan.hivelineage.v2.ir.statement.WriteAssignment;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+
 import org.junit.Assert;
 import org.junit.Test;
 

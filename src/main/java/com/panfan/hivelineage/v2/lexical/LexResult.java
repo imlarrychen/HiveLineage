@@ -3,6 +3,7 @@ package com.panfan.hivelineage.v2.lexical;
 import com.panfan.hivelineage.v2.common.Diagnostic;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.frontend.StageOutcome;
+
 import java.util.List;
 import java.util.Objects;
 

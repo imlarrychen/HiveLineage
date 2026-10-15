@@ -27,8 +27,10 @@ import com.panfan.hivelineage.v2.syntax.SyntaxExpression;
 import com.panfan.hivelineage.v2.syntax.SyntaxOptions;
 import com.panfan.hivelineage.v2.syntax.SyntaxResult;
 import com.panfan.hivelineage.v2.syntax.UnknownExpressionSyntax;
+
 import java.util.Arrays;
 import java.util.Collections;
+
 import org.antlr.runtime.CommonToken;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.HiveParser;

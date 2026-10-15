@@ -3,6 +3,7 @@ package com.panfan.hivelineage.v2.compat;
 import com.panfan.hivelineage.result.LineageAnalyzeResult;
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.List;
 
 public final class LegacyProjection {

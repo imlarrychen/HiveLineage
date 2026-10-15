@@ -4,10 +4,13 @@ import com.panfan.hivelineage.v2.common.AnalysisStage;
 import com.panfan.hivelineage.v2.common.Diagnostic;
 import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.common.SourceSpan;
+
 import java.util.Collections;
 import java.util.List;
 
-/** Quote-aware script boundaries are found before the current statement is expanded. */
+/**
+ * Quote-aware script boundaries are found before the current statement is expanded.
+ */
 public final class DefaultScriptUnitReader implements ScriptUnitReader {
     @Override
     public ScriptReadResult readNext(String sourceId, String script, ScriptCursor cursor, ScriptOptions options) {
@@ -18,7 +21,7 @@ public final class DefaultScriptUnitReader implements ScriptUnitReader {
             SourceRef source = new SourceRef(sourceId, new SourceSpan(sourceId, offset, boundary.end));
             List<Diagnostic> diagnostics = boundary.unterminated
                     ? Collections.singletonList(new Diagnostic(AnalysisStage.FRONTEND, "UNTERMINATED_SCRIPT_UNIT",
-                            "A quoted value or block comment has no closing delimiter", source))
+                    "A quoted value or block comment has no closing delimiter", source))
                     : Collections.<Diagnostic>emptyList();
             if (boundary.hasCode) {
                 ScriptUnit unit = new ScriptUnit(sourceId, cursor.getStatementIndex(), text, ScriptUnitKind.SQL, source);

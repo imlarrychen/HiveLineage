@@ -1,6 +1,7 @@
 package com.panfan.hivelineage.v2.dialect;
 
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.Objects;
 import java.util.Set;
 

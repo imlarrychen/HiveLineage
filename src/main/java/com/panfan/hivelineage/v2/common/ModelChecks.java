@@ -2,7 +2,9 @@ package com.panfan.hivelineage.v2.common;
 
 import java.util.Objects;
 
-/** Constructor checks for data contracts; does not perform SQL analysis. */
+/**
+ * Constructor checks for data contracts; does not perform SQL analysis.
+ */
 public final class ModelChecks {
     private ModelChecks() {
     }

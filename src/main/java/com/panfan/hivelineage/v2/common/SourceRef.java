@@ -2,7 +2,9 @@ package com.panfan.hivelineage.v2.common;
 
 import java.util.Objects;
 
-/** Optional rendering provenance; no SQL text or executable resolver is stored. */
+/**
+ * Optional rendering provenance; no SQL text or executable resolver is stored.
+ */
 public final class SourceRef {
     private final String sourceId;
     private final SourceSpan span;

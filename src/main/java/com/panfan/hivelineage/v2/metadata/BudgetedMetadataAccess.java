@@ -1,9 +1,12 @@
 package com.panfan.hivelineage.v2.metadata;
 
 import com.panfan.hivelineage.v2.common.QualifiedName;
+
 import java.util.Objects;
 
-/** One request's budget over the shared captured workflow read boundary. */
+/**
+ * One request's budget over the shared captured workflow read boundary.
+ */
 public final class BudgetedMetadataAccess implements MetadataAccess {
     private final WorkflowMetadataAccess access;
     private final ExternalReadBudget budget;

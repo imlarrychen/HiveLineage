@@ -20,6 +20,7 @@ import com.panfan.hivelineage.v2.metadata.LookupResult;
 import com.panfan.hivelineage.v2.metadata.LookupStatus;
 import com.panfan.hivelineage.v2.metadata.RelationSchema;
 import com.panfan.hivelineage.v2.syntax.NameRefSyntax;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -43,7 +44,7 @@ final class ReferenceBinder {
             if (aliases.size() == 1) {
                 OutputSlot slot = aliases.get(0);
                 return new Expressions.SlotRef(work.id(syntax, scope, "output-alias"), slot.getType(),
-                    syntax.getSourceRef(), slot.getId(), Collections.<String>emptyList());
+                        syntax.getSourceRef(), slot.getId(), Collections.<String>emptyList());
             }
             if (aliases.size() > 1) {
                 work.warn("AMBIGUOUS_OUTPUT_ALIAS", "Output alias is not unique", syntax.getSourceRef());
@@ -52,7 +53,7 @@ final class ReferenceBinder {
                     candidates.add(slot.getId());
                 }
                 return new Expressions.UnknownReference(work.id(syntax, scope, "output-alias"), TypeRef.unknown(),
-                    syntax.getSourceRef(), candidates, Collections.<RelationInstanceId>emptyList(), "AMBIGUOUS_OUTPUT_ALIAS");
+                        syntax.getSourceRef(), candidates, Collections.<RelationInstanceId>emptyList(), "AMBIGUOUS_OUTPUT_ALIAS");
             }
         }
         return bind(work.id(syntax, scope, "field"), syntax.getSourceRef(), parts, scope, scope);
@@ -104,7 +105,7 @@ final class ReferenceBinder {
                     loadSchema(candidate, current);
                 }
                 if (hasColumn(candidate, column) || candidate.schema.getState() == SchemaState.UNKNOWN
-                    || (current.sources.size() == 1 && candidate.physical && candidate.schema.getState() != SchemaState.KNOWN)) {
+                        || (current.sources.size() == 1 && candidate.physical && candidate.schema.getState() != SchemaState.KNOWN)) {
                     owners.add(candidate);
                 }
             }
@@ -159,11 +160,11 @@ final class ReferenceBinder {
             work.declareField(owner.objectId, field);
             if (current != origin) {
                 return new CorrelatedQualifiedFieldHandle(id, TypeRef.unknown(), source, current.id,
-                    owner.instanceId, field, path, owner.uncertain ? CorrelatedQualifiedFieldHandle.ExistenceState.UNKNOWN
+                        owner.instanceId, field, path, owner.uncertain ? CorrelatedQualifiedFieldHandle.ExistenceState.UNKNOWN
                         : CorrelatedQualifiedFieldHandle.ExistenceState.UNVERIFIED);
             }
             return new QualifiedFieldHandle(id, TypeRef.unknown(), source, owner.instanceId, field, path,
-                owner.uncertain ? QualifiedFieldHandle.ExistenceState.UNKNOWN : QualifiedFieldHandle.ExistenceState.UNVERIFIED);
+                    owner.uncertain ? QualifiedFieldHandle.ExistenceState.UNKNOWN : QualifiedFieldHandle.ExistenceState.UNVERIFIED);
         }
         return unknown(id, source, owners, "UNRESOLVED_COLUMN", parts, true);
     }
@@ -265,29 +266,29 @@ final class ReferenceBinder {
         if (result.getStatus() != LookupStatus.FOUND) {
             binding.schema = BindingWork.unknown(new NodeId(binding.relationId.getValue() + "/unknown-width"), "METADATA_NOT_FOUND");
             work.warn(result.getStatus() == LookupStatus.ACCESS_ERROR ? "METADATA_ACCESS_ERROR" : "METADATA_NOT_FOUND",
-                "Schema is unavailable for " + binding.name.getDisplayName(), binding.source);
+                    "Schema is unavailable for " + binding.name.getDisplayName(), binding.source);
         } else {
             List<OutputSlot> slots = new ArrayList<>();
             for (ColumnMetadata column : result.getValue().get().getColumns()) {
                 FieldIdentity field = work.field(binding.objectId, column.getName());
                 slots.add(new OutputSlot(new SlotId(binding.relationId.getValue() + "/column/" + column.getPosition()),
-                    SemanticNames.normalize(column.getName()), column.getType(), field));
+                        SemanticNames.normalize(column.getName()), column.getType(), field));
             }
             binding.schema = result.getValue().get().getState() == SchemaState.KNOWN ? OutputSchema.known(slots)
-                : BindingWork.partialSchema(slots, new NodeId(binding.relationId.getValue() + "/unknown-width"), "SCHEMA_UNKNOWN");
+                    : BindingWork.partialSchema(slots, new NodeId(binding.relationId.getValue() + "/unknown-width"), "SCHEMA_UNKNOWN");
             List<FieldIdentity> fields = new ArrayList<>();
             for (OutputSlot slot : slots) {
                 fields.add(slot.getFieldIdentity().get());
             }
             com.panfan.hivelineage.v2.ir.statement.BoundObjectReference object = work.objects.get(binding.objectId);
             work.declare(binding.objectId, binding.name, object.getKind(), result.getValue().get().getState(), fields,
-                object.getDefinitionId().orElse(null));
+                    object.getDefinitionId().orElse(null));
         }
         com.panfan.hivelineage.v2.ir.relation.BoundRelation previous = work.relations.get(binding.relationId);
         if (previous instanceof Relations.Scan) {
             Relations.Scan scan = (Relations.Scan) previous;
             work.put(new Relations.Scan(scan.getId(), binding.schema, scan.getQueryBlockId(), scan.getSourceOrder(),
-                scan.getSourceRef().orElse(null), scan.getObjectId(), scan.getVersion(), scan.getInstanceId()));
+                    scan.getSourceRef().orElse(null), scan.getObjectId(), scan.getVersion(), scan.getInstanceId()));
         }
     }
 }

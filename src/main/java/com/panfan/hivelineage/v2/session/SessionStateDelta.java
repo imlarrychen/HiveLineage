@@ -9,6 +9,7 @@ import com.panfan.hivelineage.v2.ir.identity.ObjectId;
 import com.panfan.hivelineage.v2.ir.statement.BoundEffect;
 import com.panfan.hivelineage.v2.ir.statement.Effects;
 import com.panfan.hivelineage.v2.ir.statement.VersionRef;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -18,7 +19,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-/** Isolated transaction delta. Only commit publishes a new immutable snapshot. */
+/**
+ * Isolated transaction delta. Only commit publishes a new immutable snapshot.
+ */
 final class SessionStateDelta {
     private Optional<QualifiedName> database;
     private final Map<VariableKey, VariableState> variables;
@@ -66,7 +69,7 @@ final class SessionStateDelta {
         }
         ObjectId id = effect.getPrecondition().getObject().get();
         if (temporary.values().stream().anyMatch(entry -> entry.getObject().getObjectId().equals(id))
-            || overlay.values().stream().anyMatch(entry -> entry.getEntry().isPresent()
+                || overlay.values().stream().anyMatch(entry -> entry.getEntry().isPresent()
                 && entry.getEntry().get().getObject().getObjectId().equals(id))) {
             return !uncertainObjects.contains(id);
         }
@@ -83,7 +86,7 @@ final class SessionStateDelta {
         }
         ObjectId id = precondition.getObject().get();
         boolean exists = temporary.values().stream().anyMatch(entry -> entry.getObject().getObjectId().equals(id))
-            || overlay.values().stream().anyMatch(entry -> entry.getEntry().isPresent()
+                || overlay.values().stream().anyMatch(entry -> entry.getEntry().isPresent()
                 && entry.getEntry().get().getObject().getObjectId().equals(id));
         return precondition.getKind() == Effects.Precondition.Kind.OBJECT_PRESENT ? exists : !exists;
     }
@@ -126,10 +129,10 @@ final class SessionStateDelta {
 
     void rename(Effects.RenameObject effect) {
         Optional<CatalogEntry> found = temporary.values().stream()
-            .filter(entry -> entry.getObject().getObjectId().equals(effect.getObjectId())).findFirst();
+                .filter(entry -> entry.getObject().getObjectId().equals(effect.getObjectId())).findFirst();
         if (!found.isPresent()) {
             found = overlay.values().stream().filter(entry -> entry.getEntry().isPresent())
-                .map(entry -> entry.getEntry().get()).filter(entry -> entry.getObject().getObjectId().equals(effect.getObjectId())).findFirst();
+                    .map(entry -> entry.getEntry().get()).filter(entry -> entry.getObject().getObjectId().equals(effect.getObjectId())).findFirst();
         }
         if (found.isPresent()) {
             CatalogEntry original = found.get();
@@ -143,8 +146,8 @@ final class SessionStateDelta {
             }
             if (originalVersion != null) {
                 versions.put(effect.getObjectId(), originallyUncertain
-                    && originalVersion.getVersion().getState() != VersionRef.State.NOT_REQUESTED
-                    ? new DataVersionState(VersionRef.unknown("RENAMED_OBJECT_STATE_UNCERTAIN"),
+                        && originalVersion.getVersion().getState() != VersionRef.State.NOT_REQUESTED
+                        ? new DataVersionState(VersionRef.unknown("RENAMED_OBJECT_STATE_UNCERTAIN"),
                         originalVersion.getPredecessors(), DataVersionState.Basis.UNKNOWN) : originalVersion);
             }
             original.getDefinition().ifPresent(definition -> definitions.put(effect.getNewName(), definition));
@@ -152,7 +155,7 @@ final class SessionStateDelta {
             Optional<QualifiedName> oldName = effect.getPreviousName().isPresent() ? effect.getPreviousName() : declaredName(effect.getObjectId());
             oldName.ifPresent(name -> overlay.put(name, OverlayEntry.deleted()));
             overlay.put(effect.getNewName(), OverlayEntry.unknown(new DiagnosticBag(Collections.singletonList(
-                new Diagnostic(AnalysisStage.BINDING, "RENAMED_SCHEMA_UNKNOWN", "External object schema was not bound", SourceRef.synthetic("session"))))));
+                    new Diagnostic(AnalysisStage.BINDING, "RENAMED_SCHEMA_UNKNOWN", "External object schema was not bound", SourceRef.synthetic("session"))))));
             markUncertain(effect);
         }
     }
@@ -210,7 +213,7 @@ final class SessionStateDelta {
             }
         }
         diagnostics.add(new Diagnostic(AnalysisStage.BINDING, "SESSION_EFFECT_UNCERTAIN",
-            "Effect cannot be committed with certainty: " + effect.getKind(), SourceRef.synthetic("session")));
+                "Effect cannot be committed with certainty: " + effect.getKind(), SourceRef.synthetic("session")));
     }
 
     private final SessionSnapshot before;
@@ -218,8 +221,8 @@ final class SessionStateDelta {
 
     boolean creationBranchApplied(BoundEffect effect) {
         return effect instanceof Effects.RegisterDefinition
-            && ((Effects.RegisterDefinition) effect).getPhysicalObject().isPresent()
-            && appliedCreateBranches.contains(((Effects.RegisterDefinition) effect).getPhysicalObject().get());
+                && ((Effects.RegisterDefinition) effect).getPhysicalObject().isPresent()
+                && appliedCreateBranches.contains(((Effects.RegisterDefinition) effect).getPhysicalObject().get());
     }
 
     void suppressCreateVersion(BoundEffect effect) {
@@ -283,9 +286,9 @@ final class SessionStateDelta {
         SessionCatalogConversions.updateVersions(versions, plan, uncertainObjects, suppressedVersionWrites);
         DiagnosticBag bag = new DiagnosticBag(DiagnosticBag.distinct(diagnostics));
         UncertaintyState uncertainty = new UncertaintyState(uncertainObjects, uncertainVariables,
-            catalogUncertain, databaseUncertain, bag);
+                catalogUncertain, databaseUncertain, bag);
         SessionSnapshot after = new SessionSnapshot(before.getInitialContext(), database, variables,
-            temporary, overlay, definitions, versions, uncertainty, before.getRevision() + 1L);
+                temporary, overlay, definitions, versions, uncertainty, before.getRevision() + 1L);
         return new SessionCommitResult(uncertain ? CommitOutcome.UNCERTAIN : CommitOutcome.COMMITTED, after, bag);
     }
 }

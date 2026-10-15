@@ -10,14 +10,18 @@ import com.panfan.hivelineage.v2.ir.identity.QueryBlockId;
 import com.panfan.hivelineage.v2.ir.quality.BindingCoverage;
 import com.panfan.hivelineage.v2.ir.quality.NotRequestedRegion;
 import com.panfan.hivelineage.v2.ir.relation.BoundRelation;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Data-only binding product; construction does not verify the graph or calculate lineage. */
+/**
+ * Data-only binding product; construction does not verify the graph or calculate lineage.
+ */
 public final class BoundAnalysisUnit {
-    public enum ExecutionAssumption { PRECEDING_STATEMENTS_SUCCEED, NO_EXECUTION_ASSUMPTION }
+    public enum ExecutionAssumption {PRECEDING_STATEMENTS_SUCCEED, NO_EXECUTION_ASSUMPTION}
+
     private final NodeId statementId;
     private final Map<ObjectId, BoundObjectReference> objects;
     private final Map<ScopeId, BoundScopeReference> scopes;

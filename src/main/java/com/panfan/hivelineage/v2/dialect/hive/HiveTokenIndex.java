@@ -5,6 +5,7 @@ import com.panfan.hivelineage.v2.lexical.LexedUnit;
 import com.panfan.hivelineage.v2.lexical.TokenChannel;
 import com.panfan.hivelineage.v2.lexical.TokenKind;
 import com.panfan.hivelineage.v2.syntax.InsertModeSyntax;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -14,7 +15,9 @@ import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.Set;
 
-/** One immutable source-position index shared by normalization queries. */
+/**
+ * One immutable source-position index shared by normalization queries.
+ */
 final class HiveTokenIndex {
     private final List<LexToken> visible;
     private final Map<String, List<Integer>> symbols = new HashMap<String, List<Integer>>();

@@ -3,9 +3,12 @@ package com.panfan.hivelineage.v2.semantic;
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.ir.identity.DefinitionId;
 import com.panfan.hivelineage.v2.metadata.MetadataReadContext;
+
 import java.util.Objects;
 
-/** Explicit definition, grammar, configuration and source identity; never a task version key. */
+/**
+ * Explicit definition, grammar, configuration and source identity; never a task version key.
+ */
 public final class ViewTemplateKey {
     private final DefinitionId definition;
     private final String definitionDigest;
@@ -49,9 +52,9 @@ public final class ViewTemplateKey {
         }
         ViewTemplateKey that = (ViewTemplateKey) other;
         return definition.equals(that.definition) && definitionDigest.equals(that.definitionDigest)
-            && dialectFingerprint.equals(that.dialectFingerprint)
-            && definitionContextFingerprint.equals(that.definitionContextFingerprint)
-            && metadataContext.equals(that.metadataContext);
+                && dialectFingerprint.equals(that.dialectFingerprint)
+                && definitionContextFingerprint.equals(that.definitionContextFingerprint)
+                && metadataContext.equals(that.metadataContext);
     }
 
     @Override

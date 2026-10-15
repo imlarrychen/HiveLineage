@@ -2,7 +2,9 @@ package com.panfan.hivelineage.v2.metadata;
 
 import com.panfan.hivelineage.v2.common.QualifiedName;
 
-/** Binder-facing facet access; callers request only the metadata they actually need. */
+/**
+ * Binder-facing facet access; callers request only the metadata they actually need.
+ */
 public interface MetadataAccess {
     LookupResult<ObjectDescriptor> lookupObject(QualifiedName name, MetadataReadContext context);
 

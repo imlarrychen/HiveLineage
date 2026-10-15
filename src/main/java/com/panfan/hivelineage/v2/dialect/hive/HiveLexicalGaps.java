@@ -8,9 +8,12 @@ import com.panfan.hivelineage.v2.lexical.LexToken;
 import com.panfan.hivelineage.v2.lexical.TokenChannel;
 import com.panfan.hivelineage.v2.lexical.TokenKind;
 import com.panfan.hivelineage.v2.lexical.TokenLocation;
+
 import java.util.List;
 
-/** Retains characters skipped by a recovering native lexer as explicit unknown lexical input. */
+/**
+ * Retains characters skipped by a recovering native lexer as explicit unknown lexical input.
+ */
 final class HiveLexicalGaps {
     static void append(List<LexToken> tokens, ExpandedUnit unit, int start, int end) {
         if (start >= end) {

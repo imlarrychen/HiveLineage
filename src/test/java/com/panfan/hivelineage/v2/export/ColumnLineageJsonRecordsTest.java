@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.panfan.hivelineage.request.LineageParseMode;
 import com.panfan.hivelineage.v2.testing.GeneratedSqlSupport;
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -43,7 +44,7 @@ public class ColumnLineageJsonRecordsTest {
     @Test
     public void unknownFunctionRetainsItsNameAndPartialQuality() throws Exception {
         JsonNode score = target(columns("v2_expression_opaque_udf_arguments.sql",
-            LineageParseMode.TABLE_AND_COLUMN), "amount");
+                LineageParseMode.TABLE_AND_COLUMN), "amount");
         assertEquals("UNKNOWN", score.get("lineageType").asText());
         assertEquals("business_score", score.get("functionNames").get(0).asText());
         assertTrue(score.get("sourceColumns").size() > 0);

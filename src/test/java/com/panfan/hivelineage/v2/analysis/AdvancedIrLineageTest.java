@@ -25,13 +25,16 @@ import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 import com.panfan.hivelineage.v2.ir.statement.BoundObjectReference;
 import com.panfan.hivelineage.v2.ir.statement.BoundScopeReference;
 import com.panfan.hivelineage.v2.ir.statement.VersionRef;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -133,12 +136,12 @@ public class AdvancedIrLineageTest {
         Relations.Scan inner = AnalysisFixtures.scan("inner", "b", "sub", "id");
         Relations.Aggregate aggregate = new Relations.Aggregate(new NodeId("aggregate"), OutputSchema.known(Collections.singletonList(AnalysisFixtures.output("count"))),
                 new QueryBlockId("main"), 1, null, outer.getId(), Collections.emptyList(), Collections.singletonList(new OutputAssignment(new SlotId("count"),
-                    AnalysisFixtures.call("count.call", "count", FunctionSymbol.FunctionKind.AGGREGATE))));
+                AnalysisFixtures.call("count.call", "count", FunctionSymbol.FunctionKind.AGGREGATE))));
         Expressions.CorrelatedSlotRef correlated = new Expressions.CorrelatedSlotRef(new NodeId("outer.count"), TypeRef.unknown(), null,
                 new ScopeId("main.scope"), new SlotId("count"), Collections.emptyList());
         Relations.Filter innerFilter = new Relations.Filter(new NodeId("inner.filter"), inner.getOutputSchema(), new QueryBlockId("sub"), 1, null,
                 inner.getId(), AnalysisFixtures.call("inner.condition", "equal", FunctionSymbol.FunctionKind.OPERATOR,
-                    AnalysisFixtures.ref("inner.id.ref", "inner.id"), correlated), AnalysisFixtures.passthrough(inner.getOutputSchema()));
+                AnalysisFixtures.ref("inner.id.ref", "inner.id"), correlated), AnalysisFixtures.passthrough(inner.getOutputSchema()));
         Relations.Filter outerFilter = new Relations.Filter(new NodeId("outer.filter"), aggregate.getOutputSchema(), new QueryBlockId("main"), 2, null,
                 aggregate.getId(), new Expressions.ExistsSubquery(new NodeId("outer.exists"), TypeRef.unknown(), null, innerFilter.getId(), false),
                 AnalysisFixtures.passthrough(aggregate.getOutputSchema()));

@@ -1,8 +1,11 @@
 package com.panfan.hivelineage.v2.dialect.hive;
 
-/** Native vocabulary is translated before crossing the syntax adapter boundary. */
+/**
+ * Native vocabulary is translated before crossing the syntax adapter boundary.
+ */
 final class HiveStatementClassification {
-    private HiveStatementClassification() { }
+    private HiveStatementClassification() {
+    }
 
     static String semantic(String nativeKind) {
         if ("TOK_CREATEDATABASE".equals(nativeKind)) {

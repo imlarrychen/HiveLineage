@@ -17,7 +17,9 @@ import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 
-/** Runtime JUnit fixtures are compiled outside the IDE's test discovery roots. */
+/**
+ * Runtime JUnit fixtures are compiled outside the IDE's test discovery roots.
+ */
 final class RuntimeRunnerFixtures implements AutoCloseable {
     private final Path directory;
     private final URLClassLoader loader;
@@ -50,15 +52,15 @@ final class RuntimeRunnerFixtures implements AutoCloseable {
             DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
             try (StandardJavaFileManager files = compiler.getStandardFileManager(diagnostics, Locale.ROOT, StandardCharsets.UTF_8)) {
                 boolean compiled = compiler.getTask(null, files, diagnostics,
-                    Arrays.asList("-classpath", System.getProperty("java.class.path"), "-d", directory.toString()),
-                    null, files.getJavaFileObjects(source.toFile())).call();
+                        Arrays.asList("-classpath", System.getProperty("java.class.path"), "-d", directory.toString()),
+                        null, files.getJavaFileObjects(source.toFile())).call();
                 if (!compiled) {
                     throw new IllegalStateException("Runner fixture compilation failed: " + diagnostics.getDiagnostics());
                 }
             }
-            loader = new URLClassLoader(new URL[] { directory.toUri().toURL() }, RuntimeRunnerFixtures.class.getClassLoader());
+            loader = new URLClassLoader(new URL[]{directory.toUri().toURL()}, RuntimeRunnerFixtures.class.getClassLoader());
             return new RuntimeRunnerFixtures(directory, loader,
-                loader.loadClass("com.panfan.hivelineage.v2.testing.runnerfixtures." + name));
+                    loader.loadClass("com.panfan.hivelineage.v2.testing.runnerfixtures." + name));
         } catch (Exception | Error failure) {
             if (loader != null) {
                 loader.close();

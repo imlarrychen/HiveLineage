@@ -2,9 +2,12 @@ package com.panfan.hivelineage.v2.session;
 
 import com.panfan.hivelineage.v2.common.DiagnosticBag;
 import com.panfan.hivelineage.v2.common.ModelChecks;
+
 import java.util.Optional;
 
-/** Permanent tombstones suppress fallback; absence of an overlay does not do so. */
+/**
+ * Permanent tombstones suppress fallback; absence of an overlay does not do so.
+ */
 public final class OverlayEntry {
     public enum State {
         UPSERTED,

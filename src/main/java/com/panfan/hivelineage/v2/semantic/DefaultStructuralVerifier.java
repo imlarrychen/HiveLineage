@@ -27,6 +27,7 @@ import com.panfan.hivelineage.v2.ir.statement.BoundScopeReference;
 import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
 import com.panfan.hivelineage.v2.ir.statement.QueryResult;
 import com.panfan.hivelineage.v2.ir.statement.WriteAssignment;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -37,7 +38,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Checks graph and operator invariants without recovering names or executing SQL. */
+/**
+ * Checks graph and operator invariants without recovering names or executing SQL.
+ */
 public final class DefaultStructuralVerifier implements StructuralVerifier {
     @Override
     public DiagnosticBag verifyStructure(BoundAnalysisUnit unit) {
@@ -345,7 +348,7 @@ public final class DefaultStructuralVerifier implements StructuralVerifier {
     }
 
     private void indexSetBranches(Relations.SetOp set, Map<NodeId, BoundRelation> relations,
-            Map<NodeId, List<OutputSlot>> branchSlots, Map<NodeId, Set<SlotId>> branchOutputs) {
+                                  Map<NodeId, List<OutputSlot>> branchSlots, Map<NodeId, Set<SlotId>> branchOutputs) {
         for (NodeId id : set.getBranches()) {
             if (relations.containsKey(id)) {
                 List<OutputSlot> slots = IrTraversal.knownSlots(relations.get(id).getOutputSchema());
@@ -363,21 +366,21 @@ public final class DefaultStructuralVerifier implements StructuralVerifier {
 
     private boolean knownRelation(BoundRelation relation) {
         return relation instanceof Relations.Scan || relation instanceof Relations.Values || relation instanceof Relations.Project
-            || relation instanceof Relations.Filter || relation instanceof Relations.Join || relation instanceof Relations.Aggregate
-            || relation instanceof Relations.SetOp || relation instanceof Relations.Window || relation instanceof Relations.Generate
-            || relation instanceof Relations.Sort || relation instanceof Relations.Limit || relation instanceof Relations.Distinct
-            || relation instanceof Relations.DefinitionInstance || relation instanceof Relations.UnknownRelation
-            || relation instanceof ExternalDatasetRelation;
+                || relation instanceof Relations.Filter || relation instanceof Relations.Join || relation instanceof Relations.Aggregate
+                || relation instanceof Relations.SetOp || relation instanceof Relations.Window || relation instanceof Relations.Generate
+                || relation instanceof Relations.Sort || relation instanceof Relations.Limit || relation instanceof Relations.Distinct
+                || relation instanceof Relations.DefinitionInstance || relation instanceof Relations.UnknownRelation
+                || relation instanceof ExternalDatasetRelation;
     }
 
     private boolean knownExpression(BoundExpression expression) {
         return expression instanceof Expressions.Literal || expression instanceof Expressions.SlotRef
-            || expression instanceof Expressions.CorrelatedSlotRef || expression instanceof QualifiedFieldHandle
-            || expression instanceof CorrelatedQualifiedFieldHandle || expression instanceof Expressions.Call
-            || expression instanceof Expressions.Case || expression instanceof Expressions.Cast
-            || expression instanceof Expressions.FieldAccess || expression instanceof Expressions.Subscript
-            || expression instanceof Expressions.ScalarSubquery || expression instanceof Expressions.ExistsSubquery
-            || expression instanceof Expressions.InSubquery || expression instanceof Expressions.UnknownReference
-            || expression instanceof Expressions.UnknownExpression || expression instanceof Expressions.NotRequestedExpression;
+                || expression instanceof Expressions.CorrelatedSlotRef || expression instanceof QualifiedFieldHandle
+                || expression instanceof CorrelatedQualifiedFieldHandle || expression instanceof Expressions.Call
+                || expression instanceof Expressions.Case || expression instanceof Expressions.Cast
+                || expression instanceof Expressions.FieldAccess || expression instanceof Expressions.Subscript
+                || expression instanceof Expressions.ScalarSubquery || expression instanceof Expressions.ExistsSubquery
+                || expression instanceof Expressions.InSubquery || expression instanceof Expressions.UnknownReference
+                || expression instanceof Expressions.UnknownExpression || expression instanceof Expressions.NotRequestedExpression;
     }
 }

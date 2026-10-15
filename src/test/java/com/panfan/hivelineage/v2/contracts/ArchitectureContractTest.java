@@ -10,6 +10,7 @@ import com.panfan.hivelineage.v2.semantic.SemanticBinder;
 import com.panfan.hivelineage.v2.semantic.SinkPlanner;
 import com.panfan.hivelineage.v2.syntax.SqlSyntaxParser;
 import com.panfan.hivelineage.v2.syntax.SyntaxNormalizer;
+
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -20,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -29,8 +31,8 @@ public class ArchitectureContractTest {
     @Test
     public void stagesAreInterfacesWithoutFakeRunnableImplementations() {
         List<Class<?>> stages = Arrays.asList(SqlLexer.class, SqlSyntaxParser.class, SyntaxNormalizer.class,
-            SemanticBinder.class, SinkPlanner.class, IrVerifier.class, LineageEngine.class,
-            JoinConditionAnalysis.class, ScriptLineageAnalyzer.class);
+                SemanticBinder.class, SinkPlanner.class, IrVerifier.class, LineageEngine.class,
+                JoinConditionAnalysis.class, ScriptLineageAnalyzer.class);
         for (Class<?> stage : stages) {
             Assert.assertTrue(stage.getName(), stage.isInterface());
             for (Method method : stage.getMethods()) {
@@ -54,21 +56,21 @@ public class ArchitectureContractTest {
     @Test
     public void typedCoreCannotDependOnHiveOrExistingDto() throws IOException {
         assertNoReferences("ir", Arrays.asList("org.apache.hadoop.hive", "org.antlr",
-            "com.panfan.hivelineage.v2.metadata", "com.panfan.hivelineage.v2.syntax",
-            "com.panfan.hivelineage.v2.lexical", "com.panfan.hivelineage.result",
-            "com.panfan.hivelineage.core"));
+                "com.panfan.hivelineage.v2.metadata", "com.panfan.hivelineage.v2.syntax",
+                "com.panfan.hivelineage.v2.lexical", "com.panfan.hivelineage.result",
+                "com.panfan.hivelineage.core"));
         assertNoReferences("analysis", Arrays.asList("org.apache.hadoop.hive", "org.antlr",
-            "com.panfan.hivelineage.v2.metadata", "com.panfan.hivelineage.v2.syntax",
-            "com.panfan.hivelineage.v2.lexical", "com.panfan.hivelineage.v2.dialect",
-            "com.panfan.hivelineage.core", "com.panfan.hivelineage.result"));
+                "com.panfan.hivelineage.v2.metadata", "com.panfan.hivelineage.v2.syntax",
+                "com.panfan.hivelineage.v2.lexical", "com.panfan.hivelineage.v2.dialect",
+                "com.panfan.hivelineage.core", "com.panfan.hivelineage.result"));
     }
 
     @Test
     public void frontendDoesNotAccessSessionCatalogOrMetadata() throws IOException {
         List<String> forbidden = Arrays.asList("com.panfan.hivelineage.v2.metadata",
-            "com.panfan.hivelineage.v2.session", "com.panfan.hivelineage.v2.analysis",
-            "com.panfan.hivelineage.core", "com.panfan.hivelineage.result",
-            "org.apache.hadoop.hive", "org.antlr");
+                "com.panfan.hivelineage.v2.session", "com.panfan.hivelineage.v2.analysis",
+                "com.panfan.hivelineage.core", "com.panfan.hivelineage.result",
+                "org.apache.hadoop.hive", "org.antlr");
         for (String segment : Arrays.asList("frontend", "lexical", "syntax")) {
             assertNoReferences(segment, forbidden);
         }
@@ -84,7 +86,7 @@ public class ArchitectureContractTest {
                 try {
                     String text = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
                     if (text.contains("throw new UnsupportedOperationException")
-                        || text.contains("TODO implement") || (text.contains("public interface ") && text.contains("return null;"))) {
+                            || text.contains("TODO implement") || (text.contains("public interface ") && text.contains("return null;"))) {
                         violations.add(path.toString());
                     }
                 } catch (IOException ex) {
@@ -102,11 +104,11 @@ public class ArchitectureContractTest {
         javax.tools.JavaCompiler compiler = javax.tools.ToolProvider.getSystemJavaCompiler();
         Assert.assertNotNull("Quality checks require the build JDK", compiler);
         Assert.assertEquals(0, compiler.run(null, null, null, "-d", output.toString(),
-            "scripts/quality/V2ComplexityGate.java"));
-        try (java.net.URLClassLoader loader = new java.net.URLClassLoader(new java.net.URL[] { output.toUri().toURL() })) {
+                "scripts/quality/V2ComplexityGate.java"));
+        try (java.net.URLClassLoader loader = new java.net.URLClassLoader(new java.net.URL[]{output.toUri().toURL()})) {
             try {
                 loader.loadClass("V2ComplexityGate").getMethod("main", String[].class).invoke(null,
-                    (Object) new String[] { ROOT.toString(), "scripts/quality/v2-complexity-baseline.tsv" });
+                        (Object) new String[]{ROOT.toString(), "scripts/quality/v2-complexity-baseline.tsv"});
             } catch (java.lang.reflect.InvocationTargetException failure) {
                 throw new AssertionError(failure.getCause().getMessage(), failure.getCause());
             }

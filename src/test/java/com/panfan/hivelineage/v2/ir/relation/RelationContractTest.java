@@ -8,11 +8,14 @@ import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.ir.identity.QueryBlockId;
 import com.panfan.hivelineage.v2.ir.identity.SlotId;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;

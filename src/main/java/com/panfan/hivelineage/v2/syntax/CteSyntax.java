@@ -3,10 +3,13 @@ package com.panfan.hivelineage.v2.syntax;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
+
 import java.util.List;
 import java.util.Objects;
 
-/** Statement-scoped syntax; no cross-statement or physical source mapping. */
+/**
+ * Statement-scoped syntax; no cross-statement or physical source mapping.
+ */
 public final class CteSyntax {
     private final NodeId nodeId;
     private final SourceRef sourceRef;

@@ -16,12 +16,15 @@ import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 import com.panfan.hivelineage.v2.ir.statement.VerifiedAnalysisUnit;
 import com.panfan.hivelineage.v2.common.ResourceLimitException;
 import com.panfan.hivelineage.v2.ir.statement.VerificationCertificate;
+
 import java.util.EnumSet;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThrows;
@@ -38,7 +41,7 @@ public class EvidenceGraphTest {
                 AnalysisFixtures.output("joined.left"), AnalysisFixtures.output("joined.right"))), new QueryBlockId("main"), 1, null,
                 left.getId(), right.getId(), Relations.JoinType.INNER, Relations.JoinForm.EXPLICIT, condition,
                 Arrays.asList(new SlotMapping(new SlotId("joined.left"), new SlotId("left.id")),
-                    new SlotMapping(new SlotId("joined.right"), new SlotId("right.id"))), Collections.emptyList());
+                        new SlotMapping(new SlotId("joined.right"), new SlotId("right.id"))), Collections.emptyList());
         Expressions.Call add = AnalysisFixtures.call("add", "add", FunctionSymbol.FunctionKind.OPERATOR,
                 AnalysisFixtures.ref("left.value", "joined.left"), AnalysisFixtures.literal("one", "1"));
         Relations.Project project = new Relations.Project(new NodeId("project"), OutputSchema.known(Collections.singletonList(AnalysisFixtures.output("out"))),

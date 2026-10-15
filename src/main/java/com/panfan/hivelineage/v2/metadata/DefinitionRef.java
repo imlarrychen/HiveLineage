@@ -3,9 +3,12 @@ package com.panfan.hivelineage.v2.metadata;
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.ir.identity.DefinitionId;
+
 import java.util.Optional;
 
-/** Provider/source definition data; text is prepared by orchestration, never by lineage. */
+/**
+ * Provider/source definition data; text is prepared by orchestration, never by lineage.
+ */
 public final class DefinitionRef {
     private final DefinitionId definitionId;
     private final Optional<String> definitionText;

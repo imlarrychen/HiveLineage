@@ -32,6 +32,7 @@ import com.panfan.hivelineage.v2.metadata.MetadataVersion;
 import com.panfan.hivelineage.v2.metadata.ObjectDescriptor;
 import com.panfan.hivelineage.v2.metadata.RelationSchema;
 import com.panfan.hivelineage.v2.semantic.PreparedDefinition;
+
 import java.util.ArrayList;
 import java.util.ArrayDeque;
 import java.util.Collections;
@@ -41,6 +42,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+
 import com.panfan.hivelineage.v2.ir.statement.PartitionScope;
 
 final class SessionCatalogConversions {
@@ -50,11 +52,20 @@ final class SessionCatalogConversions {
     static VariableKey variableKey(Effects.SessionKey key) {
         VariableKey.Namespace namespace;
         switch (key.getNamespace()) {
-            case HIVEVAR: namespace = VariableKey.Namespace.HIVEVAR; break;
-            case HIVECONF: namespace = VariableKey.Namespace.HIVECONF; break;
-            case SYSTEM_PROPERTY: namespace = VariableKey.Namespace.SYSTEM; break;
-            case ENVIRONMENT: namespace = VariableKey.Namespace.ENVIRONMENT; break;
-            default: namespace = VariableKey.Namespace.UNQUALIFIED;
+            case HIVEVAR:
+                namespace = VariableKey.Namespace.HIVEVAR;
+                break;
+            case HIVECONF:
+                namespace = VariableKey.Namespace.HIVECONF;
+                break;
+            case SYSTEM_PROPERTY:
+                namespace = VariableKey.Namespace.SYSTEM;
+                break;
+            case ENVIRONMENT:
+                namespace = VariableKey.Namespace.ENVIRONMENT;
+                break;
+            default:
+                namespace = VariableKey.Namespace.UNQUALIFIED;
         }
         return new VariableKey(namespace, key.getKey());
     }
@@ -62,11 +73,11 @@ final class SessionCatalogConversions {
     static CatalogEntry entry(Effects.ObjectShape shape, SessionSnapshot session) {
         MetadataProvenance provenance = provenance(session);
         ObjectDescriptor.Kind kind = shape.getKind() == Effects.ObjectKind.TEMPORARY_TABLE ? ObjectDescriptor.Kind.TEMPORARY_TABLE
-            : shape.getKind() == Effects.ObjectKind.VIEW ? ObjectDescriptor.Kind.VIEW : ObjectDescriptor.Kind.TABLE;
+                : shape.getKind() == Effects.ObjectKind.VIEW ? ObjectDescriptor.Kind.VIEW : ObjectDescriptor.Kind.TABLE;
         ObjectDescriptor object = new ObjectDescriptor(shape.getObjectId(), shape.getName(), kind,
-            Optional.<DefinitionRef>empty(), provenance, MetadataVersion.unknown());
+                Optional.<DefinitionRef>empty(), provenance, MetadataVersion.unknown());
         return new CatalogEntry(object, shape.getLookupNames(),
-            Optional.of(schema(shape.getSchema(), provenance, shape.getPartitionColumns())), Optional.<LogicalDefinition>empty());
+                Optional.of(schema(shape.getSchema(), provenance, shape.getPartitionColumns())), Optional.<LogicalDefinition>empty());
     }
 
     static RelationSchema schema(OutputSchema schema, MetadataProvenance provenance) {
@@ -79,8 +90,8 @@ final class SessionCatalogConversions {
             if (segment instanceof KnownOutputSegment) {
                 for (OutputSlot slot : ((KnownOutputSegment) segment).getSlots()) {
                     columns.add(new ColumnMetadata(slot.getDisplayName(), columns.size(), slot.getType(),
-                        partitions.contains(slot.getDisplayName()) ? ColumnMetadata.Role.PARTITION : ColumnMetadata.Role.DATA,
-                        ColumnMetadata.Nullability.UNKNOWN));
+                            partitions.contains(slot.getDisplayName()) ? ColumnMetadata.Role.PARTITION : ColumnMetadata.Role.DATA,
+                            ColumnMetadata.Nullability.UNKNOWN));
                 }
             }
         }
@@ -90,7 +101,7 @@ final class SessionCatalogConversions {
     static CatalogEntry renamed(CatalogEntry original, QualifiedName name) {
         ObjectDescriptor old = original.getObject();
         ObjectDescriptor replacement = new ObjectDescriptor(old.getObjectId(), name, old.getKind(), old.getDefinition(),
-            old.getProvenance(), old.getVersion());
+                old.getProvenance(), old.getVersion());
         Set<QualifiedName> lookupNames = new LinkedHashSet<>();
         lookupNames.add(name);
         if (old.getKind() == ObjectDescriptor.Kind.TEMPORARY_TABLE) {
@@ -110,20 +121,20 @@ final class SessionCatalogConversions {
             com.panfan.hivelineage.v2.ir.relation.BoundRelation relation = plan.getBoundUnit().get().getRelations().stream().filter(node -> node.getId().equals(effect.getRelationRoot())).findFirst().orElse(null);
             if (relation != null) {
                 template = Optional.of(new PreparedDefinition(effect.getDefinitionId(), Optional.<com.panfan.hivelineage.v2.syntax.SyntaxTemplate>empty(),
-                    Optional.of(relation), SourceRef.synthetic("session:" + effect.getDefinitionId().getValue()), plan.getBoundUnit()));
+                        Optional.of(relation), SourceRef.synthetic("session:" + effect.getDefinitionId().getValue()), plan.getBoundUnit()));
             }
         }
         InitialSessionContext initial = session.getInitialContext();
         DefinitionContext context = new DefinitionContext(session.getCurrentDatabase(), Collections.<String, String>emptyMap(),
-            "hive", "4.0.1", "v2", new MetadataReadContext(initial.getWorkflowId(), initial.getClusterName(), Optional.<String>empty(),
+                "hive", "4.0.1", "v2", new MetadataReadContext(initial.getWorkflowId(), initial.getClusterName(), Optional.<String>empty(),
                 Collections.<String, String>emptyMap()));
         DefinitionRef reference = new DefinitionRef(effect.getDefinitionId(), Optional.<String>empty(), context, provenance(session),
-            MetadataVersion.unknown(), template.isPresent() ? template.get().getSource() : SourceRef.synthetic("session"));
+                MetadataVersion.unknown(), template.isPresent() ? template.get().getSource() : SourceRef.synthetic("session"));
         LogicalDefinition.Kind kind = !effect.getPhysicalObject().isPresent() ? LogicalDefinition.Kind.LEGACY_CTE
-            : session.getTemporaryCatalog().containsKey(effect.getName()) || plan.getEffects().stream().anyMatch(proposed -> proposed instanceof Effects.CreateObject
+                : session.getTemporaryCatalog().containsKey(effect.getName()) || plan.getEffects().stream().anyMatch(proposed -> proposed instanceof Effects.CreateObject
                 && ((Effects.CreateObject) proposed).getShape().getName().equals(effect.getName())
                 && ((Effects.CreateObject) proposed).getShape().getKind() == Effects.ObjectKind.TEMPORARY_TABLE)
-                ? LogicalDefinition.Kind.TEMPORARY_RELATION : LogicalDefinition.Kind.VIEW;
+                  ? LogicalDefinition.Kind.TEMPORARY_RELATION : LogicalDefinition.Kind.VIEW;
         return new LogicalDefinition(kind, reference, template);
     }
 
@@ -146,16 +157,16 @@ final class SessionCatalogConversions {
             SourceVersions source = sourceVersions(write, plan);
             Set<DatasetVersionId> predecessors = source.ids;
             boolean unknown = source.unknown || uncertainObjects.contains(write.getTargetObject())
-                || write.getAfterVersion().getState() == VersionRef.State.UNKNOWN
-                || write.getPartitionScope().getKind() == PartitionScope.Kind.UNKNOWN;
+                    || write.getAfterVersion().getState() == VersionRef.State.UNKNOWN
+                    || write.getPartitionScope().getKind() == PartitionScope.Kind.UNKNOWN;
             boolean replacesWholeDataset = write.getWriteMode() == BoundWrite.WriteMode.CREATE_AS
-                || write.getWriteMode() == BoundWrite.WriteMode.OVERWRITE && write.getPartitionScope().getKind() == PartitionScope.Kind.UNPARTITIONED;
+                    || write.getWriteMode() == BoundWrite.WriteMode.OVERWRITE && write.getPartitionScope().getKind() == PartitionScope.Kind.UNPARTITIONED;
             unknown |= !replacesWholeDataset && write.getBeforeVersion().getState() == VersionRef.State.UNKNOWN;
             if (unknown || !replacesWholeDataset) {
                 write.getBeforeVersion().getId().ifPresent(predecessors::add);
             }
             versions.put(write.getTargetObject(), new DataVersionState(unknown ? VersionRef.unknown("DATA_VERSION_UNCERTAIN") : write.getAfterVersion(), new ArrayList<DatasetVersionId>(predecessors),
-                unknown ? DataVersionState.Basis.UNKNOWN : DataVersionState.Basis.ASSUMED_PREDECESSOR_SUCCESS));
+                    unknown ? DataVersionState.Basis.UNKNOWN : DataVersionState.Basis.ASSUMED_PREDECESSOR_SUCCESS));
         }
     }
 
@@ -247,6 +258,6 @@ final class SessionCatalogConversions {
 
     private static MetadataProvenance provenance(SessionSnapshot session) {
         return new MetadataProvenance(session.getInitialContext().getSessionId(), MetadataProvenance.Origin.SESSION_DEFINED,
-            Optional.<String>empty(), Optional.<Long>empty());
+                Optional.<String>empty(), Optional.<Long>empty());
     }
 }

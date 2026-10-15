@@ -7,13 +7,16 @@ import com.panfan.hivelineage.v2.ir.identity.FieldId;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
 import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Immutable, projection-scoped grouping; every dependency is visited once when indexing. */
+/**
+ * Immutable, projection-scoped grouping; every dependency is visited once when indexing.
+ */
 public final class WriteDependencyIndex {
     private final Map<NodeId, List<Dependency>> writes = new LinkedHashMap<NodeId, List<Dependency>>();
     private final Map<NodeId, Map<ObjectId, Map<FieldId, List<Dependency>>>> fields = new LinkedHashMap<NodeId, Map<ObjectId, Map<FieldId, List<Dependency>>>>();

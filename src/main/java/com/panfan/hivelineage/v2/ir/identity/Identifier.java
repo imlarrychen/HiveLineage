@@ -2,7 +2,9 @@ package com.panfan.hivelineage.v2.ir.identity;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
 
-/** Type-sensitive immutable identity. Identity allocation is a future binder responsibility. */
+/**
+ * Type-sensitive immutable identity. Identity allocation is a future binder responsibility.
+ */
 public abstract class Identifier {
     private final String value;
 
@@ -17,7 +19,7 @@ public abstract class Identifier {
     @Override
     public final boolean equals(Object other) {
         return other != null && getClass().equals(other.getClass())
-            && value.equals(((Identifier) other).value);
+                && value.equals(((Identifier) other).value);
     }
 
     @Override

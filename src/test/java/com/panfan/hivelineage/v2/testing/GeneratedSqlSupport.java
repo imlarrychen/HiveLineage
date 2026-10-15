@@ -42,6 +42,7 @@ import com.panfan.hivelineage.v2.metadata.RelationMetadata;
 import com.panfan.hivelineage.v2.metadata.RelationSchema;
 import com.panfan.hivelineage.v2.metadata.WorkflowContext;
 import com.panfan.hivelineage.v2.syntax.SyntaxResult;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -57,11 +58,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** File-backed fixtures shared by the V2 scenario suites; unknown tables stay unknown. */
+/**
+ * File-backed fixtures shared by the V2 scenario suites; unknown tables stay unknown.
+ */
 public final class GeneratedSqlSupport {
     private GeneratedSqlSupport() {
     }
@@ -97,21 +101,23 @@ public final class GeneratedSqlSupport {
         schemas.put("dwd.result", result);
         schemas.put("dwd.result_archive", result);
         return table -> schemas.containsKey(table.getQualifiedName())
-            ? HiveTableMetadata.table(table, schemas.get(table.getQualifiedName())) : null;
+                ? HiveTableMetadata.table(table, schemas.get(table.getQualifiedName())) : null;
     }
 
     public static LineageAnalyzeRequest request(String file, LineageParseMode mode) {
         return LineageAnalyzeRequest.builder().workflowId("wf_generated_v2").taskId(file.replace(".sql", ""))
-            .taskVersion("V1").defaultDatabase("default").rawScript(readSql(file)).metadataProvider(provider())
-            .options(LineageAnalyzeOptions.builder().parseMode(mode).includeIgnoredStatements(true)
-                .expandViewLineage(true).parseJoinConditions(true).build()).build();
+                .taskVersion("V1").defaultDatabase("default").rawScript(readSql(file)).metadataProvider(provider())
+                .options(LineageAnalyzeOptions.builder().parseMode(mode).includeIgnoredStatements(true)
+                        .expandViewLineage(true).parseJoinConditions(true).build()).build();
     }
 
     public static ScriptAnalysisResult analyze(String file, LineageParseMode mode) {
         return new HiveScriptLineageAdapter().analyzeNative(request(file, mode));
     }
 
-    /** Inspect normalized syntax too, so dropped options cannot hide behind identical lineage. */
+    /**
+     * Inspect normalized syntax too, so dropped options cannot hide behind identical lineage.
+     */
     public static List<SyntaxResult> syntax(String file) {
         HiveDialectFactory factory = new HiveDialectFactory();
         DialectSyntaxFrontend<HiveParseArtifact> frontend = new DialectSyntaxFrontend<>(factory);
@@ -119,8 +125,8 @@ public final class GeneratedSqlSupport {
         for (ScriptUnit unit : new DefaultScriptPreprocessor().preprocess(file, readSql(file),
                 new ScriptOptions(";", true, 100000)).getUnits()) {
             results.add(frontend.parse(new DefaultVariableResolver().expand(unit,
-                new VariableContext(Collections.emptyMap()), new VariableOptions(VariableResolutionPolicy.LEGACY_FALLBACK,
-                    "__HIVE_LINEAGE_DEFAULT__", 16000000)).getUnit(), factory.getProfile()));
+                    new VariableContext(Collections.emptyMap()), new VariableOptions(VariableResolutionPolicy.LEGACY_FALLBACK,
+                            "__HIVE_LINEAGE_DEFAULT__", 16000000)).getUnit(), factory.getProfile()));
         }
         return results;
     }
@@ -129,22 +135,24 @@ public final class GeneratedSqlSupport {
         return analyzeWithCapabilities(file, mode, AnalysisCapability.CATALOG_SIMULATION);
     }
 
-    /** V1 has no field types; this native fixture supplies verified ARRAY/MAP/STRUCT metadata. */
+    /**
+     * V1 has no field types; this native fixture supplies verified ARRAY/MAP/STRUCT metadata.
+     */
     public static ScriptAnalysisResult analyzeWithComplexTypes(String file, LineageParseMode mode) {
         LineageAnalyzeRequest legacy = request(file, mode);
         ScriptAnalysisRequest nativeRequest = new DefaultRequestAdapter().adapt(legacy);
         MetadataProvider delegate = new DefaultV1MetadataAdapterFactory().adapt(new LegacyMetadataBinding(
-            Optional.of(legacy.getMetadataProvider()), Optional.of(legacy.getMetadataCache()), nativeRequest.getMetadataContext(), false));
+                Optional.of(legacy.getMetadataProvider()), Optional.of(legacy.getMetadataCache()), nativeRequest.getMetadataContext(), false));
         TypeRef number = new TypeRef(TypeRef.Kind.INTEGER, "bigint", Collections.emptyList(), Collections.emptyList());
         TypeRef string = new TypeRef(TypeRef.Kind.STRING, "string", Collections.emptyList(), Collections.emptyList());
         TypeRef account = new TypeRef(TypeRef.Kind.STRUCT, "struct<score:bigint>", Collections.emptyList(),
-            Collections.singletonList(new TypeRef.StructField("score", number)));
+                Collections.singletonList(new TypeRef.StructField("score", number)));
         Map<String, TypeRef> types = new LinkedHashMap<>();
         types.put("id", number);
         types.put("tags", new TypeRef(TypeRef.Kind.ARRAY, "array<string>", Collections.singletonList(string), Collections.emptyList()));
         types.put("attributes", new TypeRef(TypeRef.Kind.MAP, "map<string,string>", Arrays.asList(string, string), Collections.emptyList()));
         types.put("profile", new TypeRef(TypeRef.Kind.STRUCT, "struct<account:struct<score:bigint>>", Collections.emptyList(),
-            Collections.singletonList(new TypeRef.StructField("account", account))));
+                Collections.singletonList(new TypeRef.StructField("account", account))));
         MetadataProvider typed = new MetadataProvider() {
             @Override
             public ProviderCapabilities getCapabilities() {
@@ -162,14 +170,14 @@ public final class GeneratedSqlSupport {
                 List<ColumnMetadata> columns = new ArrayList<>();
                 for (ColumnMetadata column : old.getColumns()) {
                     columns.add(new ColumnMetadata(column.getName(), column.getPosition(), types.get(column.getName()),
-                        column.getRole(), column.getNullability()));
+                            column.getRole(), column.getNullability()));
                 }
                 return LookupResult.found(new RelationMetadata(relation.getObject(), new RelationSchema(old.getState(),
-                    columns, old.getProvenance(), old.getVersion())), loaded.getDiagnostics());
+                        columns, old.getProvenance(), old.getVersion())), loaded.getDiagnostics());
             }
         };
         WorkflowContext workflow = new WorkflowContext(nativeRequest.getTask().getWorkflowId(), nativeRequest.getMetadataContext(),
-            typed, new DefaultMetadataCache());
+                typed, new DefaultMetadataCache());
         return new DefaultScriptLineageAnalyzer().analyzeScript(nativeRequest, workflow);
     }
 
@@ -184,14 +192,14 @@ public final class GeneratedSqlSupport {
         EnumSet<AnalysisCapability> capabilities = EnumSet.copyOf(old.getCapabilities().getCapabilities());
         capabilities.addAll(Arrays.asList(extra));
         AnalysisContract contract = new AnalysisContract(new AnalysisCapabilities(capabilities), old.getVariablePolicy(),
-            old.getDefinitionPolicy(), old.getStarMappingPolicy(), old.getPublicationPolicy(), old.isIncludeTemporaryLineage(),
-            old.isIncludeIgnoredStatements(), old.isExpandViewLineage(), old.getMaxViewExpandDepth(), old.isFailFast(),
-            old.getFallbackVariableValue());
+                old.getDefinitionPolicy(), old.getStarMappingPolicy(), old.getPublicationPolicy(), old.isIncludeTemporaryLineage(),
+                old.isIncludeIgnoredStatements(), old.isExpandViewLineage(), old.getMaxViewExpandDepth(), old.isFailFast(),
+                old.getFallbackVariableValue());
         ScriptAnalysisRequest nativeRequest = new ScriptAnalysisRequest(base.getTask(), base.getSource(), base.getDialect(),
-            base.getInitialSession(), base.getMetadataContext(), contract, base.getResourceLimits());
+                base.getInitialSession(), base.getMetadataContext(), contract, base.getResourceLimits());
         WorkflowContext workflow = new WorkflowContext(base.getTask().getWorkflowId(), base.getMetadataContext(),
-            new DefaultV1MetadataAdapterFactory().adapt(new LegacyMetadataBinding(Optional.of(legacy.getMetadataProvider()),
-                Optional.of(legacy.getMetadataCache()), base.getMetadataContext(), false)), new DefaultMetadataCache());
+                new DefaultV1MetadataAdapterFactory().adapt(new LegacyMetadataBinding(Optional.of(legacy.getMetadataProvider()),
+                        Optional.of(legacy.getMetadataCache()), base.getMetadataContext(), false)), new DefaultMetadataCache());
         return new DefaultScriptLineageAnalyzer().analyzeScript(nativeRequest, workflow);
     }
 
@@ -201,13 +209,13 @@ public final class GeneratedSqlSupport {
 
     public static StatementLineageResult statement(ScriptAnalysisResult result, int index) {
         return project(result).getStatements().stream().filter(statement -> statement.getStatementIndex() == index)
-            .findFirst().orElseThrow(() -> new AssertionError("Missing statement " + index));
+                .findFirst().orElseThrow(() -> new AssertionError("Missing statement " + index));
     }
 
     public static void assertNoFailed(ScriptAnalysisResult result) {
         assertEquals("hive-lineage-v2", result.getEngine().getEngineId());
         String diagnostics = result.getDiagnostics().getDiagnostics().stream()
-            .map(diagnostic -> diagnostic.getCode() + ": " + diagnostic.getMessage()).collect(Collectors.joining("; "));
+                .map(diagnostic -> diagnostic.getCode() + ": " + diagnostic.getMessage()).collect(Collectors.joining("; "));
         assertEquals(diagnostics, 0, result.getCounts().getFailed());
         assertEquals(result.getCounts().getTotal(), result.getStatements().size());
         assertEquals("V1", result.getTask().getTaskVersion());
@@ -227,7 +235,7 @@ public final class GeneratedSqlSupport {
 
     public static void assertInputs(StatementLineageResult statement, String... expected) {
         assertEquals(statement.getRawSql(), names(expected), statement.getInputObjects().stream()
-            .map(object -> object.getQualifiedName()).collect(Collectors.toCollection(TreeSet::new)));
+                .map(object -> object.getQualifiedName()).collect(Collectors.toCollection(TreeSet::new)));
     }
 
     public static void assertColumnSources(StatementLineageResult statement, String target, String... expected) {
@@ -236,10 +244,10 @@ public final class GeneratedSqlSupport {
             return;
         }
         ColumnLineage column = statement.getColumnLineages().stream()
-            .filter(item -> target.equals(item.getTargetColumn().getQualifiedName())).findFirst()
-            .orElseThrow(() -> new AssertionError("Missing column mapping: " + target + " in " + statement.getRawSql()));
+                .filter(item -> target.equals(item.getTargetColumn().getQualifiedName())).findFirst()
+                .orElseThrow(() -> new AssertionError("Missing column mapping: " + target + " in " + statement.getRawSql()));
         assertEquals(target, names(expected), column.getSourceColumns().stream()
-            .map(source -> source.getQualifiedName()).collect(Collectors.toCollection(TreeSet::new)));
+                .map(source -> source.getQualifiedName()).collect(Collectors.toCollection(TreeSet::new)));
     }
 
     public static void assertTableSources(StatementLineageResult statement, String target, String... expected) {

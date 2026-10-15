@@ -1,9 +1,12 @@
 package com.panfan.hivelineage.v2.syntax;
 
 import com.panfan.hivelineage.v2.common.SourceRef;
+
 import java.util.Objects;
 
-/** Preserves each name part and quoting without resolving it to an object. */
+/**
+ * Preserves each name part and quoting without resolving it to an object.
+ */
 public final class IdentifierPart {
     private final String spelling;
     private final String value;

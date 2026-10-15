@@ -1,11 +1,14 @@
 package com.panfan.hivelineage.v2.analysis;
 
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 
-/** Immutable extensions override the built-in rules in the same registry. */
+/**
+ * Immutable extensions override the built-in rules in the same registry.
+ */
 public final class DefaultLineageRuleRegistry implements LineageRuleRegistry {
     private final Map<RuleKey, ExpressionLineageRule> expressions;
     private final Map<RuleKey, RelationLineageRule> relations;

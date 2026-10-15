@@ -16,6 +16,7 @@ import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
 import com.panfan.hivelineage.v2.ir.statement.PartitionScope;
 import com.panfan.hivelineage.v2.ir.statement.VersionRef;
 import com.panfan.hivelineage.v2.ir.statement.WriteAssignment;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -96,6 +98,7 @@ public class ExpressionFactsMemoizationTest {
             public RelationFacts relation(NodeId id) {
                 throw new AssertionError("No upstream relation expected");
             }
+
             @Override
             public ExpressionFacts slot(SlotId id) {
                 throw new AssertionError("No upstream slot expected");

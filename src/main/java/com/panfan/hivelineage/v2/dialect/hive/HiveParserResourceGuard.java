@@ -6,9 +6,12 @@ import com.panfan.hivelineage.v2.lexical.LexToken;
 import com.panfan.hivelineage.v2.lexical.LexedUnit;
 import com.panfan.hivelineage.v2.lexical.TokenChannel;
 import com.panfan.hivelineage.v2.syntax.SyntaxOptions;
+
 import java.util.Optional;
 
-/** Runs before the native recursive parser, using Token structure only. */
+/**
+ * Runs before the native recursive parser, using Token structure only.
+ */
 final class HiveParserResourceGuard {
     Optional<Diagnostic> check(LexedUnit unit, SyntaxOptions options) {
         if (unit.getTokens().size() > options.getMaximumTokenCount()) {

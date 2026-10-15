@@ -2,10 +2,13 @@ package com.panfan.hivelineage.v2.metadata;
 
 import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.common.DiagnosticBag;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** No missing replay read can escape to a live provider. */
+/**
+ * No missing replay read can escape to a live provider.
+ */
 public final class DefaultMetadataReplayProviderFactory implements MetadataReplayProviderFactory {
     @Override
     public MetadataAccess create(MetadataSnapshot snapshot) {
@@ -42,7 +45,7 @@ public final class DefaultMetadataReplayProviderFactory implements MetadataRepla
 
         @SuppressWarnings("unchecked")
         private <T> LookupResult<T> lookup(QualifiedName name, MetadataReadContext scope,
-                                          MetadataFacet facet, Class<T> type) {
+                                           MetadataFacet facet, Class<T> type) {
             if (!context.equals(scope)) {
                 throw new IllegalArgumentException("replay context mismatch");
             }

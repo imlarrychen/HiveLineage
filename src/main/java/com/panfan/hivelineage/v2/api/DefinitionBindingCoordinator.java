@@ -14,11 +14,14 @@ import com.panfan.hivelineage.v2.semantic.SemanticBinder;
 import com.panfan.hivelineage.v2.session.DefinitionRequest;
 import com.panfan.hivelineage.v2.session.SessionSnapshot;
 import com.panfan.hivelineage.v2.syntax.SyntaxStatement;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/** Retries binding only when the definition protocol makes progress. */
+/**
+ * Retries binding only when the definition protocol makes progress.
+ */
 final class DefinitionBindingCoordinator {
     private final SemanticBinder binder;
     private final com.panfan.hivelineage.v2.semantic.FunctionCatalog functions;
@@ -29,12 +32,12 @@ final class DefinitionBindingCoordinator {
     }
 
     BindingResult bind(ScriptAnalysisRequest request, SyntaxStatement syntax, BindingDemand demand, SessionSnapshot session,
-            MetadataAccess access, com.panfan.hivelineage.v2.session.DefinitionCoordinator<PreparedDefinition> coordinator, Map<DefinitionId, PreparedDefinition> prepared,
-            Map<DefinitionId, DiagnosticBag> failedDefinitions) {
+                       MetadataAccess access, com.panfan.hivelineage.v2.session.DefinitionCoordinator<PreparedDefinition> coordinator, Map<DefinitionId, PreparedDefinition> prepared,
+                       Map<DefinitionId, DiagnosticBag> failedDefinitions) {
         List<Diagnostic> definitionDiagnostics = new ArrayList<>();
         for (int attempt = 0; attempt <= request.getResourceLimits().getMaxExpansionDepth(); attempt++) {
             BindingContext context = new BindingContext(session, access, request.getMetadataContext(), prepared,
-                functions, request.getDialect(), request.getContract(), failedDefinitions);
+                    functions, request.getDialect(), request.getContract(), failedDefinitions);
             BindingResult result = binder.bind(syntax, context, demand);
             if (result.getOutcome() != BindingOutcome.NEEDS_DEFINITION) {
                 result.getUnit().ifPresent(unit -> unit.getRelations().forEach(relation -> {
@@ -47,7 +50,7 @@ final class DefinitionBindingCoordinator {
                 }));
                 definitionDiagnostics.addAll(result.getDiagnostics().getDiagnostics());
                 return new BindingResult(result.getOutcome(), result.getUnit(), result.getDefinitionRequests(),
-                    new DiagnosticBag(DiagnosticBag.distinct(definitionDiagnostics)));
+                        new DiagnosticBag(DiagnosticBag.distinct(definitionDiagnostics)));
             }
             boolean progressed = false;
             for (DefinitionRequest definition : result.getDefinitionRequests()) {

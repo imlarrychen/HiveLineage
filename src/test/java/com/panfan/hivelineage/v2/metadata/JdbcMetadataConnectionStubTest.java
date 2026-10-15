@@ -3,6 +3,7 @@ package com.panfan.hivelineage.v2.metadata;
 import com.panfan.hivelineage.metadata.HiveTableMetadata;
 import com.panfan.hivelineage.metadata.JdbcMetadataColumnV2Provider;
 import com.panfan.hivelineage.metadata.TableIdentifier;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -11,7 +12,9 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Arrays;
 import java.util.Objects;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -154,7 +157,7 @@ public class JdbcMetadataConnectionStubTest {
     @Test
     public void oldFixtureDeletesAndTypedPreparedInsertsAffectOnlyTheirMatchedRows() throws Exception {
         try (JdbcMetadataConnectionStub stub = JdbcMetadataConnectionStub.open(); Connection connection = connect(stub);
-                Statement delete = connection.createStatement(); PreparedStatement insert = connection.prepareStatement(COLUMN_INSERT)) {
+             Statement delete = connection.createStatement(); PreparedStatement insert = connection.prepareStatement(COLUMN_INSERT)) {
             stub.putColumn(1, "ods_it", "user_base_it", "obsolete", 0, true);
             stub.putColumn(2, "other", "user_base_it", "keep", 0, true);
             assertEquals(1, delete.executeUpdate("delete from metadata_column_v2 where db_en_name in ('ods_it', 'dwd_it', 'dim_it')"
@@ -208,6 +211,6 @@ public class JdbcMetadataConnectionStubTest {
     }
 
     private static String[] properties() {
-        return new String[] { System.getProperty("lineage.mysql.url"), System.getProperty("lineage.mysql.user"), System.getProperty("lineage.mysql.password") };
+        return new String[]{System.getProperty("lineage.mysql.url"), System.getProperty("lineage.mysql.user"), System.getProperty("lineage.mysql.password")};
     }
 }

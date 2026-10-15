@@ -9,11 +9,14 @@ import com.panfan.hivelineage.v2.api.StatementAnalysisResult;
 import com.panfan.hivelineage.v2.api.StatementStatus;
 import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
 import com.panfan.hivelineage.v2.export.DefaultSourceRenderer;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/** Projects declared facts and renders source attachments; no Parser, Binder or metadata call. */
+/**
+ * Projects declared facts and renders source attachments; no Parser, Binder or metadata call.
+ */
 public final class DefaultLegacyResultProjector implements LegacyResultProjector {
     @Override
     public LegacyProjection project(ScriptAnalysisResult result) {

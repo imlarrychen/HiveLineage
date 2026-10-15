@@ -2,7 +2,9 @@ package com.panfan.hivelineage.v2.ir.statement;
 
 import java.util.Objects;
 
-/** Analysis input carrying an explicit scoped verifier claim; no implicit verify factory. */
+/**
+ * Analysis input carrying an explicit scoped verifier claim; no implicit verify factory.
+ */
 public final class VerifiedAnalysisUnit {
     private final BoundAnalysisUnit unit;
     private final VerificationCertificate certificate;

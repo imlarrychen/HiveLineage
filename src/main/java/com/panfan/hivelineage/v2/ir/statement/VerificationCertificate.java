@@ -3,6 +3,7 @@ package com.panfan.hivelineage.v2.ir.statement;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.ir.quality.BindingRequirement;
+
 import java.util.Objects;
 import java.util.Set;
 import java.util.Collections;
@@ -13,7 +14,8 @@ import java.util.Collections;
  * The exact immutable unit is retained so a claim cannot be reused on a different graph.
  */
 public final class VerificationCertificate {
-    public enum VerificationCheck { STRUCTURE, BINDING }
+    public enum VerificationCheck {STRUCTURE, BINDING}
+
     private final BoundAnalysisUnit unit;
     private final String verifierId;
     private final Set<BindingRequirement> requirements;
@@ -55,7 +57,9 @@ public final class VerificationCertificate {
         return checks;
     }
 
-    /** Empty means the whole analysis unit; otherwise only these declared regions are claimed. */
+    /**
+     * Empty means the whole analysis unit; otherwise only these declared regions are claimed.
+     */
     public Set<NodeId> getRegions() {
         return regions;
     }

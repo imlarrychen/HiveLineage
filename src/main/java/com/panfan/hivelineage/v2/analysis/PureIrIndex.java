@@ -10,6 +10,7 @@ import com.panfan.hivelineage.v2.ir.relation.OutputSlot;
 import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.ir.relation.SlotMapping;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
+
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -18,7 +19,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.LinkedHashSet;
 
-/** Identity-only lookup over a verified graph. No textual name recovery or external access. */
+/**
+ * Identity-only lookup over a verified graph. No textual name recovery or external access.
+ */
 public final class PureIrIndex {
     private final Map<NodeId, BoundRelation> relations = new LinkedHashMap<NodeId, BoundRelation>();
     private final Map<SlotId, OutputSlot> slots = new LinkedHashMap<SlotId, OutputSlot>();

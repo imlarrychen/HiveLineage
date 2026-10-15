@@ -3,10 +3,12 @@ package com.panfan.hivelineage.v2.api;
 import com.panfan.hivelineage.v2.common.DiagnosticBag;
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.Map;
 import java.util.Collections;
+
 import com.panfan.hivelineage.v2.frontend.ExpandedUnit;
 
 public final class ScriptAnalysisResult {

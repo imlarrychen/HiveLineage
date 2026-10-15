@@ -1,9 +1,12 @@
 package com.panfan.hivelineage.v2.ir.expression;
 
 import com.panfan.hivelineage.v2.common.QualifiedName;
+
 import java.util.Objects;
 
-/** Parameters are known but function behavior and possible external sources are opaque. */
+/**
+ * Parameters are known but function behavior and possible external sources are opaque.
+ */
 public final class OpaqueFunctionSymbol implements FunctionSymbol {
     private final QualifiedName name;
     private final String diagnosticCode;

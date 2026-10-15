@@ -3,9 +3,12 @@ package com.panfan.hivelineage.v2.metadata;
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
+
 import java.util.Optional;
 
-/** The light object facet does not require an ordered column list. */
+/**
+ * The light object facet does not require an ordered column list.
+ */
 public final class ObjectDescriptor {
     public enum Kind {
         TABLE,

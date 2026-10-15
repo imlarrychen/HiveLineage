@@ -24,11 +24,13 @@ import com.panfan.hivelineage.v2.syntax.StorageSpecificationSyntax;
 import com.panfan.hivelineage.v2.syntax.SyntaxExpression;
 import com.panfan.hivelineage.v2.syntax.SyntaxName;
 import com.panfan.hivelineage.v2.syntax.UnknownAlterActionSyntax;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 
 final class HiveDefinitionNormalizer {
@@ -191,7 +193,7 @@ final class HiveDefinitionNormalizer {
                 ColumnPositionSyntax position = after != null
                         ? new ColumnPositionSyntax(ColumnPositionKindSyntax.AFTER, ast.part(ast.at(after, 0)))
                         : new ColumnPositionSyntax(ast.child(action, "KW_FIRST") != null
-                                ? ColumnPositionKindSyntax.FIRST : ColumnPositionKindSyntax.UNCHANGED, null);
+                                                   ? ColumnPositionKindSyntax.FIRST : ColumnPositionKindSyntax.UNCHANGED, null);
                 actions.add(new ChangeColumnActionSyntax(ast.part(ast.at(action, 0)),
                         new ColumnDefinitionSyntax(ast.part(ast.at(action, 1)),
                                 queries.expressions().type(ast.at(action, 2)), comment(action)), position));

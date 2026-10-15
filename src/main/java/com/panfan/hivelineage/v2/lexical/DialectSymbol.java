@@ -2,7 +2,9 @@ package com.panfan.hivelineage.v2.lexical;
 
 import java.util.Objects;
 
-/** Symbol identity without Hive or ANTLR integer token codes. */
+/**
+ * Symbol identity without Hive or ANTLR integer token codes.
+ */
 public final class DialectSymbol {
     private final String dialectId;
     private final String symbolName;

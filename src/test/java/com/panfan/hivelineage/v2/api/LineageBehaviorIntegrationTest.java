@@ -30,6 +30,7 @@ import com.panfan.hivelineage.v2.metadata.DefaultV1MetadataAdapterFactory;
 import com.panfan.hivelineage.v2.metadata.LegacyMetadataBinding;
 import com.panfan.hivelineage.v2.metadata.WorkflowContext;
 import com.panfan.hivelineage.v2.semantic.DefaultSemanticBinder;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -38,13 +39,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
-/** Executable semantic assertions for the old OpenSpec, not a parse-success census. */
+/**
+ * Executable semantic assertions for the old OpenSpec, not a parse-success census.
+ */
 public class LineageBehaviorIntegrationTest {
     @Test
     public void defaultDatabaseNormalizesOnPhysicalResolutionAndQualifiedObjectsBypassInvalidDefaults() {
@@ -52,7 +57,7 @@ public class LineageBehaviorIntegrationTest {
         HiveMetadataProvider metadata = table -> HiveTableMetadata.table(table, Collections.singletonList("id"));
         for (String database : Arrays.asList(" `Dw` ", "DW")) {
             LineageAnalyzeResult result = new HiveScriptLineageAdapter().analyzeScript(request(
-                "insert into t(id) select id from a", options, metadata, database));
+                    "insert into t(id) select id from a", options, metadata, database));
             assertEquals(database, 0, result.getFailedStatementCount());
             StatementLineageResult statement = result.getStatements().get(0);
             assertEquals("dw.t", statement.getOutputObject().getQualifiedName());
@@ -61,13 +66,13 @@ public class LineageBehaviorIntegrationTest {
         }
         for (String database : Arrays.asList("db.foo", "d b", "`Dw", "Dw`", "``", "db\u00a0foo")) {
             LineageAnalyzeResult invalidSource = new HiveScriptLineageAdapter().analyzeScript(request(
-                "insert into dwd.t(id) select id from a", options, metadata, database));
+                    "insert into dwd.t(id) select id from a", options, metadata, database));
             assertEquals(database, 1, invalidSource.getFailedStatementCount());
             LineageAnalyzeResult invalidTarget = new HiveScriptLineageAdapter().analyzeScript(request(
-                "insert into t(id) select id from ods.a", options, metadata, database));
+                    "insert into t(id) select id from ods.a", options, metadata, database));
             assertEquals(database, 1, invalidTarget.getFailedStatementCount());
             LineageAnalyzeResult qualified = new HiveScriptLineageAdapter().analyzeScript(request(
-                "insert into dwd.t(id) select id from ods.a", options, metadata, database));
+                    "insert into dwd.t(id) select id from ods.a", options, metadata, database));
             assertEquals(database, 0, qualified.getFailedStatementCount());
             assertEquals("dwd.t", qualified.getStatements().get(0).getOutputObject().getQualifiedName());
             assertSources(column(qualified.getStatements().get(0), "id"), "ods.a.id");
@@ -76,7 +81,7 @@ public class LineageBehaviorIntegrationTest {
             throw new AssertionError("Ignored query must not resolve physical objects");
         };
         LineageAnalyzeResult ignored = new HiveScriptLineageAdapter().analyzeScript(request(
-            "select id from a", options, noReads, "db.foo"));
+                "select id from a", options, noReads, "db.foo"));
         assertEquals(0, ignored.getFailedStatementCount());
         assertEquals(1, ignored.getIgnoredStatementCount());
     }
@@ -84,11 +89,11 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void explicitlyDifferentDatabaseIsNotShadowedByTemporaryBasename() {
         LineageAnalyzeResult result = analyze("create temporary table original_db.tmp as select id from ods.a; "
-            + "insert into dwd.t(id) select id from another_db.tmp; "
-            + "insert into dwd.t(id) select id from original_db.tmp; insert into dwd.t(id) select id from tmp",
-            options(true, LineageParseMode.TABLE_AND_COLUMN, false),
-            table -> table.getQualifiedName().equals("another_db.tmp") ? HiveTableMetadata.table(table, Collections.singletonList("id"))
-                : provider().getTableMetadata(table));
+                        + "insert into dwd.t(id) select id from another_db.tmp; "
+                        + "insert into dwd.t(id) select id from original_db.tmp; insert into dwd.t(id) select id from tmp",
+                options(true, LineageParseMode.TABLE_AND_COLUMN, false),
+                table -> table.getQualifiedName().equals("another_db.tmp") ? HiveTableMetadata.table(table, Collections.singletonList("id"))
+                        : provider().getTableMetadata(table));
         assertEquals(0, result.getFailedStatementCount());
         assertSources(column(result.getStatements().get(1), "id"), "another_db.tmp.id");
         assertSources(column(result.getStatements().get(2), "id"), "ods.a.id");
@@ -98,9 +103,9 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void temporaryNamespaceNormalizesBusinessIdsWithoutChangingTheirIdentity() {
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder().workflowId("  WF-`A` / !! ")
-            .taskId("Task.中文///").taskVersion("V1").defaultDatabase("default")
-            .rawScript("create temporary table source_db.tmp as select id from ods.a")
-            .options(options(true, LineageParseMode.TABLE_AND_COLUMN, false)).metadataProvider(provider()).build();
+                .taskId("Task.中文///").taskVersion("V1").defaultDatabase("default")
+                .rawScript("create temporary table source_db.tmp as select id from ods.a")
+                .options(options(true, LineageParseMode.TABLE_AND_COLUMN, false)).metadataProvider(provider()).build();
         StatementLineageResult result = new HiveScriptLineageAdapter().analyzeScript(request).getStatements().get(0);
         assertEquals("seele_tmp_db_wf_a_task_中文.tmp", result.getOutputObject().getQualifiedName());
         assertEquals("  WF-`A` / !! ", result.getWorkflowId());
@@ -110,8 +115,8 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void correlatedCommaWhereDoesNotCreateAnImplicitJoinCondition() {
         StatementLineageResult result = only("select * from ods.a x join ods.b y on x.id=y.id where exists("
-            + "select 1 from ods.c c,ods.d d where c.id=x.id and c.id=d.id)",
-            options(false, LineageParseMode.TABLE_ONLY, true), provider());
+                        + "select 1 from ods.c c,ods.d d where c.id=x.id and c.id=d.id)",
+                options(false, LineageParseMode.TABLE_ONLY, true), provider());
         assertEquals(2, result.getJoinConditions().size());
         assertEquals("x.id=y.id", result.getJoinConditions().get(0).getJoinExpression());
         assertEquals("c.id=d.id", result.getJoinConditions().get(1).getJoinExpression());
@@ -123,19 +128,19 @@ public class LineageBehaviorIntegrationTest {
     public void specVariablePolicyFulfillsBuiltinUnknownAndEnvironmentRulesTogether() {
         HiveMetadataProvider provider = provider();
         ScriptAnalysisRequest base = new DefaultRequestAdapter().adapt(LineageAnalyzeRequest.builder()
-            .workflowId("wf").taskId("task").taskVersion("business-v1").defaultDatabase("default")
-            .metadataProvider(provider).runtimeVariables(Collections.singletonMap("env:env_name", "actual_supplied_env"))
-            .rawScript("insert into dwd.t(x,y,z) select '${bizdate}','${unknown_var}','@{env_name}' from ods.a")
-            .options(options(false, LineageParseMode.TABLE_AND_COLUMN, false)).build());
+                .workflowId("wf").taskId("task").taskVersion("business-v1").defaultDatabase("default")
+                .metadataProvider(provider).runtimeVariables(Collections.singletonMap("env:env_name", "actual_supplied_env"))
+                .rawScript("insert into dwd.t(x,y,z) select '${bizdate}','${unknown_var}','@{env_name}' from ods.a")
+                .options(options(false, LineageParseMode.TABLE_AND_COLUMN, false)).build());
         AnalysisContract old = base.getContract();
         AnalysisContract contract = new AnalysisContract(old.getCapabilities(), VariablePolicy.SPEC_VARIABLES, old.getDefinitionPolicy(),
-            old.getStarMappingPolicy(), old.getPublicationPolicy(), old.isIncludeTemporaryLineage(), old.isIncludeIgnoredStatements(),
-            old.isExpandViewLineage(), old.getMaxViewExpandDepth(), old.isFailFast(), old.getFallbackVariableValue());
+                old.getStarMappingPolicy(), old.getPublicationPolicy(), old.isIncludeTemporaryLineage(), old.isIncludeIgnoredStatements(),
+                old.isExpandViewLineage(), old.getMaxViewExpandDepth(), old.isFailFast(), old.getFallbackVariableValue());
         ScriptAnalysisRequest request = new ScriptAnalysisRequest(base.getTask(), base.getSource(), base.getDialect(), base.getInitialSession(),
-            base.getMetadataContext(), contract, base.getResourceLimits());
+                base.getMetadataContext(), contract, base.getResourceLimits());
         WorkflowContext workflow = new WorkflowContext("wf", base.getMetadataContext(),
-            new DefaultV1MetadataAdapterFactory().adapt(new LegacyMetadataBinding(Optional.of(provider), Optional.empty(), base.getMetadataContext(), false)),
-            new DefaultMetadataCache());
+                new DefaultV1MetadataAdapterFactory().adapt(new LegacyMetadataBinding(Optional.of(provider), Optional.empty(), base.getMetadataContext(), false)),
+                new DefaultMetadataCache());
         ScriptAnalysisResult result = new DefaultScriptLineageAnalyzer().analyzeScript(request, workflow);
         assertEquals(0, result.getCounts().getFailed());
         String normalized = result.getStatements().get(0).getNormalizedSql().getText();
@@ -147,7 +152,7 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void standaloneJoinRecordsActuallyCarryReadableDirectAndPhysicalPresentation() {
         ScriptAnalysisResult result = new HiveScriptLineageAdapter().analyzeNative(request(
-            "select * from ods.a a join ods.b b on a.id=b.id", options(false, LineageParseMode.TABLE_ONLY, true), provider()));
+                "select * from ods.a a join ods.b b on a.id=b.id", options(false, LineageParseMode.TABLE_ONLY, true), provider()));
         JoinConditionRecord record = new DefaultJoinConditionRecordExporter().export(result.getStatements().get(0)).get(0);
         assertTrue(record.getPresentation().isPresent());
         assertEquals(1, record.getPresentation().get().getTypeCode());
@@ -159,20 +164,20 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void reservedAntiUnknownAndCrossKindsRetainTheirNumericExportContract() {
         ScriptAnalysisResult original = new HiveScriptLineageAdapter().analyzeNative(request(
-            "select * from ods.a a join ods.b b on a.id=b.id", options(false, LineageParseMode.TABLE_ONLY, true), provider()));
+                "select * from ods.a a join ods.b b on a.id=b.id", options(false, LineageParseMode.TABLE_ONLY, true), provider()));
         StatementAnalysisResult statement = original.getStatements().get(0);
         JoinFact existing = statement.getJoins().get().getJoins().get(0);
         JoinKind[] kinds = {JoinKind.UNKNOWN, JoinKind.LEFT_ANTI, JoinKind.CROSS, JoinKind.IMPLICIT};
         int[] codes = {0, 6, 7, 7};
         for (int index = 0; index < kinds.length; index++) {
             JoinFact typed = new JoinFact(existing.getJoinIndex(), existing.getQueryBlockId(), existing.getQueryBlockPath(), kinds[index],
-                existing.getPredicateId(), existing.getDirectReferences(), existing.getPhysicalReferences(), existing.getLexicalReferences(),
-                existing.getDiagnostics(), existing.getConditionSource());
+                    existing.getPredicateId(), existing.getDirectReferences(), existing.getPhysicalReferences(), existing.getLexicalReferences(),
+                    existing.getDiagnostics(), existing.getConditionSource());
             StatementAnalysisResult adapted = new StatementAnalysisResult(statement.getIdentity(), statement.getStatementType(),
-                statement.getRawSql(), statement.getNormalizedSql(), statement.getStatus(), statement.isFormalLineageProduced(),
-                statement.getLineage(), Optional.of(new JoinFacts(Collections.singletonList(typed), statement.getJoins().get().getDiagnostics())),
-                statement.getBoundUnit(), statement.getSkipReason(), statement.getFailureCode(), statement.getFailureMessage(),
-                statement.getDiagnostics(), statement.getFrontendEvidence());
+                    statement.getRawSql(), statement.getNormalizedSql(), statement.getStatus(), statement.isFormalLineageProduced(),
+                    statement.getLineage(), Optional.of(new JoinFacts(Collections.singletonList(typed), statement.getJoins().get().getDiagnostics())),
+                    statement.getBoundUnit(), statement.getSkipReason(), statement.getFailureCode(), statement.getFailureMessage(),
+                    statement.getDiagnostics(), statement.getFrontendEvidence());
             assertEquals(codes[index], new DefaultJoinConditionRecordExporter().export(adapted).get(0).getPresentation().get().getTypeCode());
         }
     }
@@ -180,10 +185,10 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void unavailableExpressionTextDoesNotChangeProvenDependenciesOrClaimExtraction() {
         ScriptAnalysisResult original = new HiveScriptLineageAdapter().analyzeNative(request(
-            "insert into dwd.t(x) select complex_udf(named_struct('k',id),amount) from ods.a",
-            options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider()));
+                "insert into dwd.t(x) select complex_udf(named_struct('k',id),amount) from ods.a",
+                options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider()));
         ScriptAnalysisResult withoutText = new ScriptAnalysisResult(original.getTask(), original.getEngine(), original.getStatements(),
-            original.getCounts(), original.getDiagnostics(), original.getBasis());
+                original.getCounts(), original.getDiagnostics(), original.getBasis());
         StatementLineageResult projected = new DefaultLegacyResultProjector().project(withoutText).getResult().getStatements().get(0);
         ColumnLineage output = column(projected, "x");
         assertSources(output, "ods.a.id", "ods.a.amount");
@@ -210,13 +215,13 @@ public class LineageBehaviorIntegrationTest {
             return provider().getTableMetadata(table);
         };
         HiveScriptLineageAdapter analyzer = new HiveScriptLineageAdapter(new DefaultScriptLineageAnalyzer(counted,
-            new DefaultSemanticBinder(), new DefaultMetadataAccessFactory()), new DefaultRequestAdapter(), new DefaultLegacyResultProjector());
+                new DefaultSemanticBinder(), new DefaultMetadataAccessFactory()), new DefaultRequestAdapter(), new DefaultLegacyResultProjector());
         LineageAnalyzeOptions options = LineageAnalyzeOptions.builder().expandViewLineage(true).build();
         LineageAnalyzeRequest first = request("insert into dwd.t(id,name) select id,name from dim.v; insert into dwd.t(id,name) select id,name from dim.v", options, metadata);
         assertEquals(0, analyzer.analyzeNative(first).getCounts().getFailed());
         LineageAnalyzeRequest second = LineageAnalyzeRequest.builder().workflowId("wf").taskId("another-task").taskVersion("business-v2")
-            .defaultDatabase("default").rawScript(first.getRawScript()).options(options).metadataProvider(metadata)
-            .metadataCache(first.getMetadataCache()).build();
+                .defaultDatabase("default").rawScript(first.getRawScript()).options(options).metadataProvider(metadata)
+                .metadataCache(first.getMetadataCache()).build();
         assertEquals(0, analyzer.analyzeNative(second).getCounts().getFailed());
         assertEquals(1, definitionParses.get());
         assertEquals(1, metadataReads.get());
@@ -230,10 +235,10 @@ public class LineageBehaviorIntegrationTest {
             return new DefaultScriptPreprocessor().preprocess(sourceId, script, options);
         };
         HiveMetadataProvider metadata = table -> table.getQualifiedName().equals("dim.v")
-            ? HiveTableMetadata.view(table, Collections.singletonList("id"), "select id from ods.a") : provider().getTableMetadata(table);
+                ? HiveTableMetadata.view(table, Collections.singletonList("id"), "select id from ods.a") : provider().getTableMetadata(table);
         HiveScriptLineageAdapter analyzer = new HiveScriptLineageAdapter(new DefaultScriptLineageAnalyzer(
-            new DialectSyntaxFrontend<HiveParseArtifact>(new HiveDialectFactory()), new DefaultSemanticBinder(),
-            new DefaultMetadataAccessFactory(), preprocessor), new DefaultRequestAdapter(), new DefaultLegacyResultProjector());
+                new DialectSyntaxFrontend<HiveParseArtifact>(new HiveDialectFactory()), new DefaultSemanticBinder(),
+                new DefaultMetadataAccessFactory(), preprocessor), new DefaultRequestAdapter(), new DefaultLegacyResultProjector());
         String script = "insert into dwd.t(id) select id from dim.v";
         assertEquals(0, analyzer.analyzeNative(request(script, LineageAnalyzeOptions.builder().expandViewLineage(true).build(), metadata)).getCounts().getFailed());
         assertTrue(inputScripts.contains(script));
@@ -243,12 +248,12 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void specWildcardMappingIsNamedAndNeverSilentlyAppliedToPositionalRequests() {
         HiveMetadataProvider metadata = table -> table.getQualifiedName().equals("ods.user")
-            ? HiveTableMetadata.table(table, Arrays.asList("user_id", "user_name", "status", "dt", "source_only"))
-            : HiveTableMetadata.table(table, Arrays.asList("user_id", "user_name", "status", "dt"));
+                ? HiveTableMetadata.table(table, Arrays.asList("user_id", "user_name", "status", "dt", "source_only"))
+                : HiveTableMetadata.table(table, Arrays.asList("user_id", "user_name", "status", "dt"));
         LineageAnalyzeRequest request = request("insert overwrite table dwd.user_snapshot select * from ods.`user`",
-            options(false, LineageParseMode.TABLE_AND_COLUMN, false), metadata);
+                options(false, LineageParseMode.TABLE_AND_COLUMN, false), metadata);
         HiveScriptLineageAdapter spec = new HiveScriptLineageAdapter(new DefaultScriptLineageAnalyzer(),
-            new DefaultRequestAdapter(StarMappingPolicy.SPEC_TARGET_SCHEMA_MAPPING), new DefaultLegacyResultProjector());
+                new DefaultRequestAdapter(StarMappingPolicy.SPEC_TARGET_SCHEMA_MAPPING), new DefaultLegacyResultProjector());
         StatementLineageResult mapped = spec.analyzeScript(request).getStatements().get(0);
         assertEquals(4, mapped.getColumnLineages().size());
         assertSources(column(mapped, "status"), "ods.user.status");
@@ -261,10 +266,10 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void explicitLegacyWildcardMappingUsesNamesAndDoesNotTruncateOrdinaryProjection() {
         StatementLineageResult result = only("insert into dwd.t(amount) select * from ods.a",
-            options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
+                options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
         assertSources(column(result, "amount"), "ods.a.amount");
         ScriptAnalysisResult exact = new HiveScriptLineageAdapter().analyzeNative(request("insert into dwd.t(amount) select id,amount from ods.a",
-            options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider()));
+                options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider()));
         assertEquals(1, exact.getCounts().getFailed());
         assertTrue(exact.getDiagnostics().getDiagnostics().stream().anyMatch(diagnostic -> "COLUMN_COUNT_MISMATCH".equals(diagnostic.getCode())));
     }
@@ -272,24 +277,24 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void viewsKeepBoundaryEdgesAndExpandUnderlyingSourcesWhenEnabled() {
         HiveMetadataProvider metadata = table -> table.getQualifiedName().equals("dim.v_user")
-            ? HiveTableMetadata.view(table, Arrays.asList("id", "name"), "select id,name from ods.a") : provider().getTableMetadata(table);
+                ? HiveTableMetadata.view(table, Arrays.asList("id", "name"), "select id,name from ods.a") : provider().getTableMetadata(table);
         LineageAnalyzeResult result = analyze("insert into dwd.t(id,name) select id,name from dim.v_user",
-            LineageAnalyzeOptions.builder().expandViewLineage(true).includeTemporaryLineage(true).build(), metadata);
+                LineageAnalyzeOptions.builder().expandViewLineage(true).includeTemporaryLineage(true).build(), metadata);
         assertEquals(0, result.getFailedStatementCount());
         StatementLineageResult write = result.getStatements().get(0);
         assertTrue(write.getColumnLineages().stream().anyMatch(value -> value.getTargetColumn().getQualifiedName().equals("dim.v_user.id")
-            && names(value.getSourceColumns()).contains("ods.a.id")));
+                && names(value.getSourceColumns()).contains("ods.a.id")));
         assertTrue(names(column(write, "id").getSourceColumns()).contains("dim.v_user.id")
-            || write.getColumnLineages().stream().anyMatch(value -> value.getTargetColumn().getQualifiedName().equals("dwd.t.id")
+                || write.getColumnLineages().stream().anyMatch(value -> value.getTargetColumn().getQualifiedName().equals("dwd.t.id")
                 && names(value.getSourceColumns()).contains("dim.v_user.id")));
     }
 
     @Test
     public void missingViewDefinitionIsRecoverableWithSpecificWarning() {
         HiveMetadataProvider missing = table -> table.getQualifiedName().equals("dim.v")
-            ? HiveTableMetadata.view(table, Collections.singletonList("id"), null) : provider().getTableMetadata(table);
+                ? HiveTableMetadata.view(table, Collections.singletonList("id"), null) : provider().getTableMetadata(table);
         LineageAnalyzeResult noDefinition = analyze("insert into dwd.t(id) select id from dim.v; insert into dwd.t(id) select id from ods.a",
-            LineageAnalyzeOptions.builder().expandViewLineage(true).build(), missing);
+                LineageAnalyzeOptions.builder().expandViewLineage(true).build(), missing);
         assertEquals(0, noDefinition.getFailedStatementCount());
         assertEquals(2, noDefinition.getStatements().size());
         assertTrue(noDefinition.getWarnings().stream().anyMatch(warning -> "VIEW_METADATA_NOT_FOUND".equals(warning.getWarningCode().name())));
@@ -298,22 +303,23 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void viewCycleAndDepthAreRecoverableWithSpecificWarnings() {
         HiveMetadataProvider cycle = table -> table.getQualifiedName().equals("dim.v")
-            ? HiveTableMetadata.view(table, Collections.singletonList("id"), "select id from dim.w")
-            : table.getQualifiedName().equals("dim.w")
-                ? HiveTableMetadata.view(table, Collections.singletonList("id"), "select id from dim.v") : provider().getTableMetadata(table);
+                ? HiveTableMetadata.view(table, Collections.singletonList("id"), "select id from dim.w")
+                : table.getQualifiedName().equals("dim.w")
+                  ? HiveTableMetadata.view(table, Collections.singletonList("id"), "select id from dim.v") : provider().getTableMetadata(table);
         LineageAnalyzeResult cyclic = analyze("insert into dwd.t(id) select id from dim.v",
-            LineageAnalyzeOptions.builder().expandViewLineage(true).maxViewExpandDepth(5).build(), cycle);
+                LineageAnalyzeOptions.builder().expandViewLineage(true).maxViewExpandDepth(5).build(), cycle);
         assertEquals(0, cyclic.getFailedStatementCount());
         assertTrue(cyclic.getWarnings().stream().anyMatch(warning -> "VIEW_EXPANSION_CYCLE".equals(warning.getWarningCode().name())));
         LineageAnalyzeResult depth = analyze("insert into dwd.t(id) select id from dim.v",
-            LineageAnalyzeOptions.builder().expandViewLineage(true).maxViewExpandDepth(1).build(), cycle);
+                LineageAnalyzeOptions.builder().expandViewLineage(true).maxViewExpandDepth(1).build(), cycle);
         assertEquals(0, depth.getFailedStatementCount());
         assertTrue(depth.getWarnings().stream().anyMatch(warning -> "VIEW_EXPANSION_DEPTH_EXCEEDED".equals(warning.getWarningCode().name())));
     }
+
     @Test
     public void statementPublicationCountsRecoveryAndRawIdentity() {
         String script = "set hivevar:VARI='xx'; select 1; insert into dwd.t(id) select '${hivevar:VARI}' from ods.a; "
-            + "insert into dwd.t(id) select from; insert into dwd.t(id) select id from ods.a;";
+                + "insert into dwd.t(id) select from; insert into dwd.t(id) select id from ods.a;";
         LineageAnalyzeResult result = analyze(script, options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
         assertEquals(5, result.getTotalStatementCount());
         assertEquals(2, result.getIgnoredStatementCount());
@@ -344,9 +350,9 @@ public class LineageBehaviorIntegrationTest {
         HiveScriptLineageAdapter analyzer = new HiveScriptLineageAdapter();
         LineageAnalyzeRequest first = request("insert into dwd.t(id) select id from ods.a", options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
         LineageAnalyzeRequest second = LineageAnalyzeRequest.builder().workflowId("wf").taskId("task").taskVersion("business-v2")
-            .defaultDatabase("default").rawScript(first.getRawScript()).metadataProvider(first.getMetadataProvider()).build();
+                .defaultDatabase("default").rawScript(first.getRawScript()).metadataProvider(first.getMetadataProvider()).build();
         assertNotEquals(analyzer.analyzeScript(first).getStatements().get(0).getStatementId(),
-            analyzer.analyzeScript(second).getStatements().get(0).getStatementId());
+                analyzer.analyzeScript(second).getStatements().get(0).getStatementId());
     }
 
     @Test
@@ -378,7 +384,7 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void arithmeticFunctionConstantAndUnknownUdfKeepExactDependencies() {
         StatementLineageResult result = only("insert into dwd.t(x,y,z,w) select id+amount,nvl(name,'?'),'fixed',my_udf(id,amount) from ods.a",
-            options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
+                options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
         assertSources(column(result, "x"), "ods.a.id", "ods.a.amount");
         assertEquals(LineageType.DERIVED, column(result, "x").getLineageType());
         assertEquals("id+amount", column(result, "x").getExpression());
@@ -395,8 +401,8 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void partitionsKeepStaticAndNoFieldUdfOutputsFreeOfFakeSources() {
         StatementLineageResult result = only("insert overwrite table dwd.partition_target partition(source_system='profile',dt) "
-            + "select id,name,ETL_HQT.bdpdatefunc('20261012',1,'yyyyMMdd',-1) from ods.a where dt='20261011'",
-            options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
+                        + "select id,name,ETL_HQT.bdpdatefunc('20261012',1,'yyyyMMdd',-1) from ods.a where dt='20261011'",
+                options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
         assertSources(column(result, "id"), "ods.a.id");
         assertSources(column(result, "name"), "ods.a.name");
         assertSources(column(result, "dt"));
@@ -408,14 +414,14 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void unionAllDistinctAndConstantsHaveBranchExpressions() {
         StatementLineageResult all = only("insert into dwd.t(x) select a.id from ods.a a union all select b.id from ods.b b",
-            options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
+                options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
         assertSources(column(all, "x"), "ods.a.id", "ods.b.id");
         assertEquals("union_all(ods.a.id, ods.b.id)", column(all, "x").getExpression());
         StatementLineageResult distinct = only("insert into dwd.t(x) select a.id from ods.a a union select b.id from ods.b b",
-            options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
+                options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
         assertEquals("union_distinct(ods.a.id, ods.b.id)", column(distinct, "x").getExpression());
         StatementLineageResult constants = only("insert into dwd.t(x) select 'A' from ods.a union all select 'B' from ods.b",
-            options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
+                options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
         assertSources(column(constants, "x"));
         assertEquals("union_all(constant('A'), constant('B'))", column(constants, "x").getExpression());
         assertEquals(LineageType.CONSTANT, column(constants, "x").getLineageType());
@@ -424,11 +430,11 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void aggregatesAndWindowsExposeOnlyRealFunctions() {
         StatementLineageResult aggregate = only("insert into dwd.t(id,amount) select id,sum(amount) from ods.a group by id",
-            options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
+                options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
         assertSources(column(aggregate, "amount"), "ods.a.amount");
         assertEquals(Collections.singletonList("sum"), column(aggregate, "amount").getFunctionNames());
         StatementLineageResult window = only("insert into dwd.t(id,rn) select id,row_number() over(partition by id order by dt desc) from ods.a",
-            options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
+                options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
         assertSources(column(window, "rn"), "ods.a.id", "ods.a.dt");
         assertEquals(Collections.singletonList("row_number"), column(window, "rn").getFunctionNames());
         assertEquals(LineageType.DERIVED, column(window, "rn").getLineageType());
@@ -437,8 +443,8 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void variableNamespaceFallbackRawTextAndEnvironmentPlaceholder() {
         LineageAnalyzeResult result = analyze("set bizdate=20260629; set hivevar:VARI='xx'; insert into dwd.t(x,y,z,w,day) "
-            + "select '${hiveconf:bizdate}','${hivevar:VARI}','${unknown_var}','@{env_name}','${work_day}' from ods.a",
-            options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
+                        + "select '${hiveconf:bizdate}','${hivevar:VARI}','${unknown_var}','@{env_name}','${work_day}' from ods.a",
+                options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
         StatementLineageResult statement = result.getStatements().get(0);
         assertTrue(statement.getRawSql().contains("${hiveconf:bizdate}"));
         assertTrue(statement.getNormalizedSql().contains("'20260629'"));
@@ -451,10 +457,10 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void temporaryObjectsNormalizeNamesAndTakePriorityOverMetadata() {
         HiveMetadataProvider collision = table -> table.getTableName().equals("tmp_user")
-            ? HiveTableMetadata.view(table, Collections.singletonList("id"), "select id from ods.wrong_source") : provider().getTableMetadata(table);
+                ? HiveTableMetadata.view(table, Collections.singletonList("id"), "select id from ods.wrong_source") : provider().getTableMetadata(table);
         LineageAnalyzeResult result = analyze("create temporary table source_db.tmp_user as select id from ods.a; "
-            + "insert into dwd.t(id) select id from source_db.tmp_user; insert into dwd.t(id) select id from tmp_user",
-            options(true, LineageParseMode.TABLE_AND_COLUMN, false), collision);
+                        + "insert into dwd.t(id) select id from source_db.tmp_user; insert into dwd.t(id) select id from tmp_user",
+                options(true, LineageParseMode.TABLE_AND_COLUMN, false), collision);
         assertEquals("seele_tmp_db_wf_task.tmp_user", result.getStatements().get(0).getOutputObject().getQualifiedName());
         assertSources(column(result.getStatements().get(1), "id"), "ods.a.id");
         assertSources(column(result.getStatements().get(2), "id"), "ods.a.id");
@@ -464,7 +470,7 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void pureQueryCteCanBeReusedWithoutCreatingPhysicalCteObjects() {
         LineageAnalyzeResult result = analyze("with x as(select id from ods.a) select * from x; insert into dwd.t(id) select id from x",
-            options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
+                options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
         assertEquals(1, result.getStatements().size());
         StatementLineageResult write = result.getStatements().get(0);
         assertSources(column(write, "id"), "ods.a.id");
@@ -474,7 +480,7 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void ctasCteExpandsFieldsWithoutPhysicalOrTemporaryCteObject() {
         StatementLineageResult result = only("create table dwd.profile as with x as(select id,name from ods.a) select * from x",
-            options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
+                options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
         assertSources(column(result, "id"), "ods.a.id");
         assertTrue(result.getInputObjects().stream().noneMatch(object -> object.getQualifiedName().equals("default.x") || object.getQualifiedName().contains("seele_tmp_db")));
     }
@@ -482,7 +488,7 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void missingMetadataWarnsButKeepsKnownTableLineage() {
         StatementLineageResult result = only("insert into dwd.t select * from ods.no_metadata",
-            options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
+                options(false, LineageParseMode.TABLE_AND_COLUMN, false), provider());
         assertEquals(Integer.valueOf(0), result.getParseStatusCode());
         assertEquals(1, result.getTableLineages().size());
         assertTrue(result.getWarnings().stream().anyMatch(warning -> "METADATA_NOT_FOUND".equals(warning.getWarningCode().name())));
@@ -506,17 +512,17 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void fullOnFunctionsSingleSidedAndRepeatedFieldsStayInOneRecord() {
         StatementLineageResult result = only("select * from ods.a a left join ods.b b on split(a.name,'_')[1]=cast(b.id as string) "
-            + "and a.id is not null where a.dt='x'", options(false, LineageParseMode.TABLE_ONLY, true), provider());
+                + "and a.id is not null where a.dt='x'", options(false, LineageParseMode.TABLE_ONLY, true), provider());
         JoinCondition join = result.getJoinConditions().get(0);
         assertEquals("LEFT_JOIN", join.getJoinTypeName());
         assertEquals("split(a.name,'_')[1]=cast(b.id as string) and a.id is not null", join.getJoinExpression());
         assertEquals(Arrays.asList("ods.a.name", "ods.b.id", "ods.a.id"), names(join.getJoinColumns()));
         assertFalse(names(join.getJoinColumns()).contains("ods.a.dt"));
         JoinCondition single = only("select * from ods.a a join ods.b b on b.dt='x'",
-            options(false, LineageParseMode.TABLE_ONLY, true), provider()).getJoinConditions().get(0);
+                options(false, LineageParseMode.TABLE_ONLY, true), provider()).getJoinConditions().get(0);
         assertEquals(Collections.singletonList("ods.b.dt"), names(single.getJoinColumns()));
         JoinCondition repeated = only("select * from ods.a a join ods.b b on a.id=b.id and a.id is not null",
-            options(false, LineageParseMode.TABLE_ONLY, true), provider()).getJoinConditions().get(0);
+                options(false, LineageParseMode.TABLE_ONLY, true), provider()).getJoinConditions().get(0);
         assertEquals(Arrays.asList("ods.a.id", "ods.b.id"), names(repeated.getJoinColumns()));
     }
 
@@ -526,7 +532,7 @@ public class LineageBehaviorIntegrationTest {
         int[] codes = {1, 1, 2, 2, 3, 3, 4, 4, 5};
         for (int index = 0; index < types.length; index++) {
             JoinCondition condition = only("select * from ods.a a " + types[index] + " ods.b b on a.id=b.id",
-                options(false, LineageParseMode.TABLE_ONLY, true), provider()).getJoinConditions().get(0);
+                    options(false, LineageParseMode.TABLE_ONLY, true), provider()).getJoinConditions().get(0);
             assertEquals(types[index], codes[index], condition.getJoinType());
         }
         LineageAnalyzeResult cross = analyze("select * from ods.a a cross join ods.b b", options(true, LineageParseMode.TABLE_ONLY, true), provider());
@@ -536,23 +542,23 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void cteDerivedAndExistsJoinsHaveStableGlobalIndicesAndDeclaredPaths() {
         StatementLineageResult cte = only("with x as(select a.id from ods.a a join ods.b b on a.id=b.id), "
-            + "y as(select c.id from ods.c c join ods.d d on c.id=d.id) select * from x join y on x.id=y.id",
-            options(false, LineageParseMode.TABLE_ONLY, true), provider());
+                        + "y as(select c.id from ods.c c join ods.d d on c.id=d.id) select * from x join y on x.id=y.id",
+                options(false, LineageParseMode.TABLE_ONLY, true), provider());
         assertEquals(Arrays.asList("cte.x", "cte.y", "root"), paths(cte));
         for (int index = 0; index < cte.getJoinConditions().size(); index++) {
             assertEquals(index + 1, cte.getJoinConditions().get(index).getJoinIndex());
         }
         StatementLineageResult nested = only("select * from (select a.id from ods.a a join ods.b b on a.id=b.id) x "
-            + "join ods.c c on x.id=c.id where exists(select 1 from ods.d d join ods.e e on d.id=e.id)",
-            options(false, LineageParseMode.TABLE_ONLY, true), provider());
+                        + "join ods.c c on x.id=c.id where exists(select 1 from ods.d d join ods.e e on d.id=e.id)",
+                options(false, LineageParseMode.TABLE_ONLY, true), provider());
         assertEquals(Arrays.asList("root", "root.subquery[1]", "root.where.exists[2]"), paths(nested));
     }
 
     @Test
     public void ambiguousCteRetainsDirectReferenceWithoutInventingPhysicalField() {
         StatementLineageResult result = only("with x as(select * from ods.a a join ods.b b on a.id=b.id), "
-            + "y as(select id from ods.c) select * from x join y on x.id=y.id",
-            options(false, LineageParseMode.TABLE_ONLY, true), provider());
+                        + "y as(select id from ods.c) select * from x join y on x.id=y.id",
+                options(false, LineageParseMode.TABLE_ONLY, true), provider());
         JoinCondition main = result.getJoinConditions().get(result.getJoinConditions().size() - 1);
         assertEquals("x.id=y.id", main.getJoinExpression());
         assertTrue(names(main.getDirectJoinColumns()).contains("x.id"));
@@ -563,7 +569,7 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void temporaryJoinRetainsDirectBoundaryAndDoesNotReplayHistoricalJoins() {
         LineageAnalyzeResult result = analyze("create temporary table tmp as select a.id from ods.a a join ods.b b on a.id=b.id; "
-            + "select * from tmp x join ods.c c on x.id=c.id", options(true, LineageParseMode.TABLE_ONLY, true), provider());
+                + "select * from tmp x join ods.c c on x.id=c.id", options(true, LineageParseMode.TABLE_ONLY, true), provider());
         assertEquals(0, result.getFailedStatementCount());
         assertEquals(2, result.getStatements().size());
         StatementLineageResult query = result.getStatements().get(1);
@@ -577,7 +583,7 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void unknownTemporaryFieldRetainsOnlyProvablePhysicalJoinSource() {
         LineageAnalyzeResult result = analyze("create temporary table tmp as select * from ods.no_metadata; "
-            + "select * from tmp x join ods.c c on x.id=c.id", options(true, LineageParseMode.TABLE_ONLY, true), provider());
+                + "select * from tmp x join ods.c c on x.id=c.id", options(true, LineageParseMode.TABLE_ONLY, true), provider());
         assertEquals(0, result.getFailedStatementCount());
         JoinCondition condition = result.getStatements().get(1).getJoinConditions().get(0);
         assertTrue(names(condition.getDirectJoinColumns()).contains("x.id"));
@@ -593,7 +599,7 @@ public class LineageBehaviorIntegrationTest {
             return provider().getTableMetadata(table);
         };
         JoinCondition condition = only("select * from ods.a a join ods.b b on id=b.id",
-            options(false, LineageParseMode.TABLE_ONLY, true), metadata).getJoinConditions().get(0);
+                options(false, LineageParseMode.TABLE_ONLY, true), metadata).getJoinConditions().get(0);
         assertEquals("id=b.id", condition.getJoinExpression());
         assertTrue(reads.get() >= 2);
         assertEquals(Collections.singletonList("ods.b.id"), names(condition.getJoinColumns()));
@@ -602,7 +608,7 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void sequentialJoinsKeepInnerToOuterOrderAndOneBasedIndices() {
         StatementLineageResult result = only("select * from ods.a a join ods.b b on a.id=b.id left join ods.c c on b.id=c.id",
-            options(false, LineageParseMode.TABLE_ONLY, true), provider());
+                options(false, LineageParseMode.TABLE_ONLY, true), provider());
         assertEquals(2, result.getJoinConditions().size());
         assertEquals("a.id=b.id", result.getJoinConditions().get(0).getJoinExpression());
         assertEquals("b.id=c.id", result.getJoinConditions().get(1).getJoinExpression());
@@ -613,19 +619,19 @@ public class LineageBehaviorIntegrationTest {
     @Test
     public void commaWhereEmitsOnlyCrossSourceConjunctsAndPreservesFullOn() {
         JoinCondition comma = only("select * from ods.a a, ods.b b where a.id=b.id and a.dt='x'",
-            options(false, LineageParseMode.TABLE_ONLY, true), provider()).getJoinConditions().get(0);
+                options(false, LineageParseMode.TABLE_ONLY, true), provider()).getJoinConditions().get(0);
         assertEquals(7, comma.getJoinType());
         assertEquals("IMPLICIT_JOIN", comma.getJoinTypeName());
         assertEquals("root", comma.getQueryBlockPath());
         assertEquals("a.id=b.id", comma.getJoinExpression());
         JoinCondition explicit = only("select * from ods.a a join ods.b b on a.id=b.id and a.dt=b.dt",
-            options(false, LineageParseMode.TABLE_ONLY, true), provider()).getJoinConditions().get(0);
+                options(false, LineageParseMode.TABLE_ONLY, true), provider()).getJoinConditions().get(0);
         assertEquals("a.id=b.id and a.dt=b.dt", explicit.getJoinExpression());
     }
 
     private LineageAnalyzeOptions options(boolean audit, LineageParseMode mode, boolean joins) {
         return LineageAnalyzeOptions.builder().parseMode(mode).parseJoinConditions(joins).includeIgnoredStatements(audit)
-            .includeTemporaryLineage(false).expandViewLineage(false).fallbackVariableValue("fallback_value").build();
+                .includeTemporaryLineage(false).expandViewLineage(false).fallbackVariableValue("fallback_value").build();
     }
 
     private LineageAnalyzeRequest request(String sql, LineageAnalyzeOptions options, HiveMetadataProvider metadata) {
@@ -633,9 +639,9 @@ public class LineageBehaviorIntegrationTest {
     }
 
     private LineageAnalyzeRequest request(String sql, LineageAnalyzeOptions options, HiveMetadataProvider metadata,
-                                         String database) {
+                                          String database) {
         return LineageAnalyzeRequest.builder().workflowId("wf").taskId("task").taskVersion("business-v1")
-            .defaultDatabase(database).rawScript(sql).options(options).metadataProvider(metadata).build();
+                .defaultDatabase(database).rawScript(sql).options(options).metadataProvider(metadata).build();
     }
 
     private LineageAnalyzeResult analyze(String sql, LineageAnalyzeOptions options, HiveMetadataProvider metadata) {

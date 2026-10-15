@@ -4,10 +4,13 @@ import com.panfan.hivelineage.v2.ir.IrTestBuilder;
 import com.panfan.hivelineage.v2.ir.quality.BindingRequirement;
 import com.panfan.hivelineage.v2.ir.relation.BoundRelation;
 import com.panfan.hivelineage.v2.ir.relation.OutputSchema;
+
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;

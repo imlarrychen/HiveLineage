@@ -25,6 +25,7 @@ import com.panfan.hivelineage.v2.ir.relation.OutputSlot;
 import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.ir.relation.SlotMapping;
 import com.panfan.hivelineage.v2.ir.statement.BoundObjectReference;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -34,7 +35,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-/** Includes definition boundaries using their computed facts, without re-running lineage rules. */
+/**
+ * Includes definition boundaries using their computed facts, without re-running lineage rules.
+ */
 final class LegacyBoundaryProjector {
     private final StatementAnalysisResult statement;
     private final BoundNameIndex names;

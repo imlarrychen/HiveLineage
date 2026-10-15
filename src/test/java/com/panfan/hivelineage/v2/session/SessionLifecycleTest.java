@@ -25,6 +25,7 @@ import com.panfan.hivelineage.v2.ir.FieldIdentity;
 import com.panfan.hivelineage.v2.ir.TypeRef;
 import com.panfan.hivelineage.v2.ir.expression.QualifiedFieldHandle;
 import com.panfan.hivelineage.v2.analysis.AnalysisFixtures;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -32,7 +33,9 @@ import java.util.Map;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
@@ -85,14 +88,14 @@ public class SessionLifecycleTest {
         for (Effects.ObjectKind kind : Arrays.asList(Effects.ObjectKind.TABLE, Effects.ObjectKind.TEMPORARY_TABLE)) {
             ObjectId object = new ObjectId("uncertain-object");
             SessionSnapshot created = commit(initial("one"), Collections.<BoundEffect>singletonList(
-                create(object.getValue(), name("old"), kind))).getSnapshot();
+                    create(object.getValue(), name("old"), kind))).getSnapshot();
             DataVersionState version = new DataVersionState(VersionRef.known(new DatasetVersionId("before.unknown.effect")),
-                Collections.singletonList(new DatasetVersionId("predecessor")), DataVersionState.Basis.ASSUMED_PREDECESSOR_SUCCESS);
+                    Collections.singletonList(new DatasetVersionId("predecessor")), DataVersionState.Basis.ASSUMED_PREDECESSOR_SUCCESS);
             SessionSnapshot uncertain = commit(withVersion(created, object, version), Collections.<BoundEffect>singletonList(
-                new Effects.UnknownEffect(new NodeId("unknown"), Effects.Certainty.UNKNOWN, always(),
-                    Collections.singletonList(object), Collections.emptyList(), false, "CATALOG_ACTION_NOT_BOUND"))).getSnapshot();
+                    new Effects.UnknownEffect(new NodeId("unknown"), Effects.Certainty.UNKNOWN, always(),
+                            Collections.singletonList(object), Collections.emptyList(), false, "CATALOG_ACTION_NOT_BOUND"))).getSnapshot();
             SessionCommitResult renamed = commit(uncertain, Collections.<BoundEffect>singletonList(
-                new Effects.RenameObject(new NodeId("rename"), Effects.Certainty.CERTAIN, always(), object, name("new"), name("old"))));
+                    new Effects.RenameObject(new NodeId("rename"), Effects.Certainty.CERTAIN, always(), object, name("new"), name("old"))));
             assertEquals(CommitOutcome.UNCERTAIN, renamed.getOutcome());
             assertTrue(renamed.getSnapshot().getUncertainty().getObjects().contains(object));
             assertFalse(renamed.getSnapshot().getUncertainty().isCatalogUncertain());

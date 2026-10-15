@@ -15,6 +15,7 @@ import com.panfan.hivelineage.v2.metadata.DefaultMetadataCache;
 import com.panfan.hivelineage.v2.metadata.DefaultV1MetadataAdapterFactory;
 import com.panfan.hivelineage.v2.metadata.LegacyMetadataBinding;
 import com.panfan.hivelineage.v2.metadata.WorkflowContext;
+
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -24,9 +25,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+
 import static com.panfan.hivelineage.v2.testing.GeneratedSqlSupport.analyze;
 import static com.panfan.hivelineage.v2.testing.GeneratedSqlSupport.analyzeWithExternalLineage;
 import static com.panfan.hivelineage.v2.testing.GeneratedSqlSupport.assertColumnSources;
@@ -40,7 +43,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
-/** Exercises file-backed statements through the parser, binder, verifier, effects and legacy projection. */
+/**
+ * Exercises file-backed statements through the parser, binder, verifier, effects and legacy projection.
+ */
 @RunWith(Parameterized.class)
 public class StatementLineageIntegrationTest {
     private final LineageParseMode mode;
@@ -51,30 +56,30 @@ public class StatementLineageIntegrationTest {
 
     @Parameterized.Parameters(name = "{0}")
     public static Collection<Object[]> modes() {
-        return Arrays.stream(LineageParseMode.values()).map(mode -> new Object[] { mode }).collect(Collectors.toList());
+        return Arrays.stream(LineageParseMode.values()).map(mode -> new Object[]{mode}).collect(Collectors.toList());
     }
 
     public static Set<String> scenarioFiles() {
         return Collections.unmodifiableSet(new LinkedHashSet<>(Arrays.asList(
-            "v2_statement_insert_explicit_column_order.sql",
-            "v2_statement_partition_static_explicit_columns.sql",
-            "v2_statement_partition_dynamic_nested_source.sql",
-            "v2_statement_partition_mixed_static_dynamic.sql",
-            "v2_statement_multi_insert_shared_nested_union.sql",
-            "v2_statement_ctas_nested_aggregate_chain.sql",
-            "v2_statement_temporary_ctas_two_stage_chain.sql",
-            "v2_statement_create_alter_view_nested_chain.sql",
-            "v2_statement_session_set_use_variable_substitution.sql",
-            "v2_statement_pure_select_cte_session_reuse.sql",
-            "v2_statement_update_multiple_assignments.sql",
-            "v2_statement_delete_predicate_without_column_assignments.sql",
-            "v2_statement_merge_derived_source_three_actions.sql",
-            "v2_statement_catalog_add_replace_rename_drop.sql",
-            "v2_statement_values_directory_ignored_then_insert.sql",
-            "v2_statement_load_data_local_and_distributed.sql",
-            "v2_statement_resource_function_source_commands.sql",
-            "v2_statement_catalog_properties_location_truncate_boundary.sql",
-            "v2_statement_external_table_storage_and_like_ddl.sql")));
+                "v2_statement_insert_explicit_column_order.sql",
+                "v2_statement_partition_static_explicit_columns.sql",
+                "v2_statement_partition_dynamic_nested_source.sql",
+                "v2_statement_partition_mixed_static_dynamic.sql",
+                "v2_statement_multi_insert_shared_nested_union.sql",
+                "v2_statement_ctas_nested_aggregate_chain.sql",
+                "v2_statement_temporary_ctas_two_stage_chain.sql",
+                "v2_statement_create_alter_view_nested_chain.sql",
+                "v2_statement_session_set_use_variable_substitution.sql",
+                "v2_statement_pure_select_cte_session_reuse.sql",
+                "v2_statement_update_multiple_assignments.sql",
+                "v2_statement_delete_predicate_without_column_assignments.sql",
+                "v2_statement_merge_derived_source_three_actions.sql",
+                "v2_statement_catalog_add_replace_rename_drop.sql",
+                "v2_statement_values_directory_ignored_then_insert.sql",
+                "v2_statement_load_data_local_and_distributed.sql",
+                "v2_statement_resource_function_source_commands.sql",
+                "v2_statement_catalog_properties_location_truncate_boundary.sql",
+                "v2_statement_external_table_storage_and_like_ddl.sql")));
     }
 
     @Test
@@ -235,7 +240,7 @@ public class StatementLineageIntegrationTest {
         ScriptAnalysisResult result = successful("v2_statement_merge_derived_source_three_actions.sql");
         List<BoundWrite> writes = unit(result, 0).getWrites();
         assertEquals(Arrays.asList(BoundWrite.WriteMode.UPDATE, BoundWrite.WriteMode.DELETE, BoundWrite.WriteMode.APPEND),
-            writes.stream().map(BoundWrite::getWriteMode).collect(Collectors.toList()));
+                writes.stream().map(BoundWrite::getWriteMode).collect(Collectors.toList()));
         assertEquals(3, writes.stream().map(BoundWrite::getId).distinct().count());
         assertTrue(writes.stream().allMatch(write -> write.getCondition().isPresent()));
         assertTrue(writes.get(1).getAssignments().isEmpty());
@@ -259,15 +264,15 @@ public class StatementLineageIntegrationTest {
         assertEffect(result, 2, Effects.EffectKind.ALTER_OBJECT);
         assertEffect(result, 3, Effects.EffectKind.RENAME_OBJECT);
         assertEffect(result, 5, Effects.EffectKind.DROP_OBJECT);
-        for (int index : new int[] { 0, 1, 2, 3, 5 }) {
+        for (int index : new int[]{0, 1, 2, 3, 5}) {
             assertEquals(StatementStatus.IGNORED, result.getStatements().get(index).getStatus());
             assertFalse(result.getStatements().get(index).isFormalLineageProduced());
             assertTrue(unit(result, index).getWrites().isEmpty());
         }
         Effects.AlterObject added = (Effects.AlterObject) unit(result, 1).getEffects().get(0);
         assertEquals(Arrays.asList("id", "name", "amount"), added.getReplacement().getSchema().getSegments().stream()
-            .filter(segment -> segment instanceof KnownOutputSegment).map(segment -> (KnownOutputSegment) segment)
-            .flatMap(segment -> segment.getSlots().stream()).map(slot -> slot.getDisplayName()).collect(Collectors.toList()));
+                .filter(segment -> segment instanceof KnownOutputSegment).map(segment -> (KnownOutputSegment) segment)
+                .flatMap(segment -> segment.getSlots().stream()).map(slot -> slot.getDisplayName()).collect(Collectors.toList()));
         Effects.RenameObject renamed = (Effects.RenameObject) unit(result, 3).getEffects().get(0);
         assertEquals("dwd.statement_catalog_renamed", renamed.getNewName().getDisplayName());
         assertEquals(StatementStatus.SUCCESS, result.getStatements().get(4).getStatus());
@@ -305,14 +310,14 @@ public class StatementLineageIntegrationTest {
         assertEquals(BoundWrite.WriteMode.OVERWRITE, write(enabled, 0).getWriteMode());
         assertEquals(BoundWrite.WriteMode.APPEND, write(enabled, 1).getWriteMode());
         assertEquals(PartitionScope.Kind.STATIC, write(enabled, 0).getPartitionScope().getKind());
-        String[] paths = { "/tmp/v2_statement_users.tsv", "hdfs:///warehouse/v2_statement_users.tsv" };
-        ExternalDatasetRelation.SourceKind[] kinds = { ExternalDatasetRelation.SourceKind.LOCAL_PATH, ExternalDatasetRelation.SourceKind.DISTRIBUTED_PATH };
+        String[] paths = {"/tmp/v2_statement_users.tsv", "hdfs:///warehouse/v2_statement_users.tsv"};
+        ExternalDatasetRelation.SourceKind[] kinds = {ExternalDatasetRelation.SourceKind.LOCAL_PATH, ExternalDatasetRelation.SourceKind.DISTRIBUTED_PATH};
         for (int index = 0; index < 2; index++) {
             assertEquals("External schema remains unknown", StatementStatus.PARTIAL_SUCCESS, enabled.getStatements().get(index).getStatus());
             assertTrue(enabled.getStatements().get(index).getDiagnostics().getDiagnostics().stream()
-                .anyMatch(diagnostic -> "EXTERNAL_SCHEMA_UNKNOWN".equals(diagnostic.getCode())));
+                    .anyMatch(diagnostic -> "EXTERNAL_SCHEMA_UNKNOWN".equals(diagnostic.getCode())));
             ExternalDatasetRelation input = (ExternalDatasetRelation) unit(enabled, index).getRelations().stream()
-                .filter(relation -> relation instanceof ExternalDatasetRelation).findFirst().get();
+                    .filter(relation -> relation instanceof ExternalDatasetRelation).findFirst().get();
             assertEquals(paths[index], input.getDatasetIdentity());
             assertEquals(kinds[index], input.getSourceKind());
             assertTrue(enabled.getStatements().get(index).isFormalLineageProduced());
@@ -327,7 +332,7 @@ public class StatementLineageIntegrationTest {
     public void resourceFunctionAndSourceCommandsAreAuditedWithoutExecution() {
         ScriptAnalysisResult result = analyze("v2_statement_resource_function_source_commands.sql", mode);
         assertNoFailed(result);
-        String[] types = { "ADD_RESOURCE", "ADD_RESOURCE", "ADD_RESOURCE", "LIST_RESOURCE", "DELETE_RESOURCE", "SOURCE", "CREATE_TEMPORARY_FUNCTION", "DROP_TEMPORARY_FUNCTION" };
+        String[] types = {"ADD_RESOURCE", "ADD_RESOURCE", "ADD_RESOURCE", "LIST_RESOURCE", "DELETE_RESOURCE", "SOURCE", "CREATE_TEMPORARY_FUNCTION", "DROP_TEMPORARY_FUNCTION"};
         for (int index = 0; index < types.length; index++) {
             assertEquals(types[index], result.getStatements().get(index).getStatementType());
             assertIgnored(result, index, types[index]);
@@ -343,7 +348,7 @@ public class StatementLineageIntegrationTest {
         ScriptAnalysisResult result = analyzeWithCatalog("v2_statement_catalog_properties_location_truncate_boundary.sql");
         assertNoFailed(result);
         assertEffect(result, 0, Effects.EffectKind.CREATE_OBJECT);
-        String[] codes = { "CATALOG_ACTION_NOT_BOUND", "CATALOG_ACTION_NOT_BOUND", "TRUNCATE_VERSION_UNKNOWN" };
+        String[] codes = {"CATALOG_ACTION_NOT_BOUND", "CATALOG_ACTION_NOT_BOUND", "TRUNCATE_VERSION_UNKNOWN"};
         for (int index = 1; index < 4; index++) {
             assertEquals(StatementStatus.IGNORED, result.getStatements().get(index).getStatus());
             assertFalse(result.getStatements().get(index).isFormalLineageProduced());
@@ -364,10 +369,10 @@ public class StatementLineageIntegrationTest {
         Effects.CreateObject external = (Effects.CreateObject) unit(result, 0).getEffects().get(0);
         assertEquals("dwd.statement_external", external.getShape().getName().getDisplayName());
         assertEquals(5, external.getShape().getSchema().getSegments().stream()
-            .map(segment -> ((KnownOutputSegment) segment).getSlots().size()).mapToInt(Integer::intValue).sum());
+                .map(segment -> ((KnownOutputSegment) segment).getSlots().size()).mapToInt(Integer::intValue).sum());
         Effects.CreateObject like = (Effects.CreateObject) unit(result, 1).getEffects().get(0);
         assertEquals("CREATE LIKE must retain unknown width until its source schema is inferred",
-            com.panfan.hivelineage.v2.ir.quality.SchemaState.UNKNOWN, like.getShape().getSchema().getState());
+                com.panfan.hivelineage.v2.ir.quality.SchemaState.UNKNOWN, like.getShape().getSchema().getState());
         assertTrue(unit(result, 1).getWrites().isEmpty());
     }
 
@@ -388,13 +393,13 @@ public class StatementLineageIntegrationTest {
         EnumSet<AnalysisCapability> capabilities = EnumSet.copyOf(old.getCapabilities().getCapabilities());
         capabilities.add(AnalysisCapability.CATALOG_SIMULATION);
         AnalysisContract contract = new AnalysisContract(new AnalysisCapabilities(capabilities), old.getVariablePolicy(), old.getDefinitionPolicy(),
-            old.getStarMappingPolicy(), old.getPublicationPolicy(), old.isIncludeTemporaryLineage(), old.isIncludeIgnoredStatements(),
-            old.isExpandViewLineage(), old.getMaxViewExpandDepth(), old.isFailFast(), old.getFallbackVariableValue());
+                old.getStarMappingPolicy(), old.getPublicationPolicy(), old.isIncludeTemporaryLineage(), old.isIncludeIgnoredStatements(),
+                old.isExpandViewLineage(), old.getMaxViewExpandDepth(), old.isFailFast(), old.getFallbackVariableValue());
         ScriptAnalysisRequest nativeRequest = new ScriptAnalysisRequest(base.getTask(), base.getSource(), base.getDialect(), base.getInitialSession(),
-            base.getMetadataContext(), contract, base.getResourceLimits());
+                base.getMetadataContext(), contract, base.getResourceLimits());
         WorkflowContext workflow = new WorkflowContext(base.getTask().getWorkflowId(), base.getMetadataContext(),
-            new DefaultV1MetadataAdapterFactory().adapt(new LegacyMetadataBinding(Optional.of(legacy.getMetadataProvider()),
-                Optional.of(legacy.getMetadataCache()), base.getMetadataContext(), false)), new DefaultMetadataCache());
+                new DefaultV1MetadataAdapterFactory().adapt(new LegacyMetadataBinding(Optional.of(legacy.getMetadataProvider()),
+                        Optional.of(legacy.getMetadataCache()), base.getMetadataContext(), false)), new DefaultMetadataCache());
         return new DefaultScriptLineageAnalyzer().analyzeScript(nativeRequest, workflow);
     }
 
@@ -402,7 +407,7 @@ public class StatementLineageIntegrationTest {
         assertEquals(1, unit(result, index).getWrites().size());
         assertEquals(writeMode, write(result, index).getWriteMode());
         assertEquals(mode == LineageParseMode.TABLE_ONLY ? Collections.emptyList() : Arrays.asList(columns),
-            write(result, index).getAssignments().stream().map(assignment -> assignment.getTargetField().getDisplayName()).collect(Collectors.toList()));
+                write(result, index).getAssignments().stream().map(assignment -> assignment.getTargetField().getDisplayName()).collect(Collectors.toList()));
     }
 
     private void assertPartition(ScriptAnalysisResult result, PartitionScope.Kind kind, PartitionScope.AssignmentKind... assignments) {

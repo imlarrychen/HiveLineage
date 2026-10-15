@@ -1,9 +1,12 @@
 package com.panfan.hivelineage.v2.session;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
+
 import java.util.Objects;
 
-/** Namespace is explicit; lookup precedence is outside this immutable identity. */
+/**
+ * Namespace is explicit; lookup precedence is outside this immutable identity.
+ */
 public final class VariableKey {
     public enum Namespace {
         UNQUALIFIED(""),

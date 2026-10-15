@@ -6,23 +6,30 @@ import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.ir.identity.DefinitionId;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
 import com.panfan.hivelineage.v2.ir.relation.OutputSchema;
+
 import java.util.List;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Typed proposals only; no mutation, parser callbacks or arbitrary semantic payload. */
+/**
+ * Typed proposals only; no mutation, parser callbacks or arbitrary semantic payload.
+ */
 public final class Effects {
     private Effects() {
     }
 
-    public enum EffectKind { SET_DATABASE, SET_VARIABLE, SET_OPTION, CREATE_OBJECT, DROP_OBJECT, ALTER_OBJECT, RENAME_OBJECT, REGISTER_DEFINITION, UNKNOWN }
-    public enum Certainty { CERTAIN, CONDITIONAL, UNKNOWN }
-    public enum ObjectKind { TABLE, TEMPORARY_TABLE, VIEW, LOGICAL_DEFINITION }
-    public enum Namespace { HIVEVAR, HIVECONF, CONFIGURATION, SYSTEM_PROPERTY, ENVIRONMENT }
+    public enum EffectKind {SET_DATABASE, SET_VARIABLE, SET_OPTION, CREATE_OBJECT, DROP_OBJECT, ALTER_OBJECT, RENAME_OBJECT, REGISTER_DEFINITION, UNKNOWN}
+
+    public enum Certainty {CERTAIN, CONDITIONAL, UNKNOWN}
+
+    public enum ObjectKind {TABLE, TEMPORARY_TABLE, VIEW, LOGICAL_DEFINITION}
+
+    public enum Namespace {HIVEVAR, HIVECONF, CONFIGURATION, SYSTEM_PROPERTY, ENVIRONMENT}
 
     public static final class Precondition {
-        public enum Kind { ALWAYS, OBJECT_PRESENT, OBJECT_ABSENT, UNKNOWN }
+        public enum Kind {ALWAYS, OBJECT_PRESENT, OBJECT_ABSENT, UNKNOWN}
+
         private final Kind kind;
         private final ObjectId object;
 

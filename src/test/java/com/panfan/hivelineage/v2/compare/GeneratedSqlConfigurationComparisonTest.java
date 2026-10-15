@@ -25,6 +25,7 @@ import com.panfan.hivelineage.v2.metadata.ProviderCapabilities;
 import com.panfan.hivelineage.v2.metadata.RelationMetadata;
 import com.panfan.hivelineage.v2.metadata.WorkflowContext;
 import com.panfan.hivelineage.v2.testing.LegacyCorpusMetadataFixture;
+
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,10 +35,13 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
 import org.junit.Assert;
 import org.junit.Test;
 
-/** Reuses the original fixture and configuration, independently of the broader mode matrix. */
+/**
+ * Reuses the original fixture and configuration, independently of the broader mode matrix.
+ */
 public class GeneratedSqlConfigurationComparisonTest {
     @Test
     public void originalConfigurationsKeepCountsAndCompleteSinkProducts() throws Exception {
@@ -61,7 +65,9 @@ public class GeneratedSqlConfigurationComparisonTest {
         }
     }
 
-    /** Produces unmodified full-differ reports; it never accepts or updates expected results. */
+    /**
+     * Produces unmodified full-differ reports; it never accepts or updates expected results.
+     */
     public static void main(String[] args) throws Exception {
         new GeneratedSqlConfigurationComparisonTest().originalConfigurationsKeepCountsAndCompleteSinkProducts();
         Path directory = Paths.get("target/lineage-v2/comparison");

@@ -15,6 +15,7 @@ import com.panfan.hivelineage.v2.syntax.SyntaxName;
 import com.panfan.hivelineage.v2.syntax.SyntaxStatement;
 import com.panfan.hivelineage.v2.syntax.UseCommandSyntax;
 import com.panfan.hivelineage.v2.syntax.OtherStatementSyntax;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;

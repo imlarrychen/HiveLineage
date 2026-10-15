@@ -2,10 +2,13 @@ package com.panfan.hivelineage.v2.analysis;
 
 import com.panfan.hivelineage.v2.ir.expression.BoundExpression;
 import com.panfan.hivelineage.v2.ir.identity.SlotId;
+
 import java.util.ArrayList;
 import java.util.List;
 
-/** Local operator/cast rule: compose known children without rebinding their identities. */
+/**
+ * Local operator/cast rule: compose known children without rebinding their identities.
+ */
 public final class CompositionalExpressionRule implements ExpressionLineageRule {
     private final String ruleId;
 

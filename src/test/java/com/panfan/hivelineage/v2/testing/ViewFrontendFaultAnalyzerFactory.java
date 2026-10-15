@@ -10,9 +10,12 @@ import com.panfan.hivelineage.v2.dialect.hive.HiveDialectFactory;
 import com.panfan.hivelineage.v2.dialect.hive.HiveParseArtifact;
 import com.panfan.hivelineage.v2.metadata.DefaultMetadataAccessFactory;
 import com.panfan.hivelineage.v2.semantic.DefaultSemanticBinder;
+
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** Test-only semantic counterpart of the original view parser fault fixture. */
+/**
+ * Test-only semantic counterpart of the original view parser fault fixture.
+ */
 public final class ViewFrontendFaultAnalyzerFactory {
     private ViewFrontendFaultAnalyzerFactory() {
     }

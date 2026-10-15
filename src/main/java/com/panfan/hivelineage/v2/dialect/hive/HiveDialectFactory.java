@@ -5,6 +5,7 @@ import com.panfan.hivelineage.v2.dialect.DialectProfile;
 import com.panfan.hivelineage.v2.lexical.SqlLexer;
 import com.panfan.hivelineage.v2.syntax.SqlSyntaxParser;
 import com.panfan.hivelineage.v2.syntax.SyntaxNormalizer;
+
 import java.util.Collections;
 
 public final class HiveDialectFactory implements DialectFactory<HiveParseArtifact> {

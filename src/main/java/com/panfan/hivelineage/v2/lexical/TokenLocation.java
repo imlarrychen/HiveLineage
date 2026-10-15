@@ -1,6 +1,7 @@
 package com.panfan.hivelineage.v2.lexical;
 
 import com.panfan.hivelineage.v2.common.SourceRef;
+
 import java.util.Objects;
 
 public final class TokenLocation {

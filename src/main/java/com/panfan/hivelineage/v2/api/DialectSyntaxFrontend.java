@@ -11,6 +11,7 @@ import com.panfan.hivelineage.v2.lexical.LexicalOptions;
 import com.panfan.hivelineage.v2.syntax.ParseResult;
 import com.panfan.hivelineage.v2.syntax.SyntaxOptions;
 import com.panfan.hivelineage.v2.syntax.SyntaxResult;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,7 +25,7 @@ public final class DialectSyntaxFrontend<P> implements SyntaxFrontend {
     @Override
     public SyntaxResult parse(ExpandedUnit unit, DialectProfile dialect) {
         if (!factory.getProfile().getDialectId().equals(dialect.getDialectId())
-            || !factory.getProfile().getParserVersion().equals(dialect.getParserVersion())) {
+                || !factory.getProfile().getParserVersion().equals(dialect.getParserVersion())) {
             throw new IllegalArgumentException("requested dialect does not match frontend factory");
         }
         LexResult lexed = factory.createLexer().tokenize(unit, new LexicalOptions(dialect, true));

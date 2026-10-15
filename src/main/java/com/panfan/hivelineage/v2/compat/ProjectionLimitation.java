@@ -2,6 +2,7 @@ package com.panfan.hivelineage.v2.compat;
 
 import com.panfan.hivelineage.v2.api.StatementIdentity;
 import com.panfan.hivelineage.v2.common.ModelChecks;
+
 import java.util.Optional;
 
 public final class ProjectionLimitation {

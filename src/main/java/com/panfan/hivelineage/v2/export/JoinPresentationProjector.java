@@ -4,6 +4,7 @@ import com.panfan.hivelineage.v2.analysis.JoinFact;
 import com.panfan.hivelineage.v2.analysis.JoinKind;
 import com.panfan.hivelineage.v2.analysis.LineageEndpoint;
 import com.panfan.hivelineage.v2.common.QualifiedName;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;

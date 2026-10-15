@@ -17,6 +17,7 @@ import com.panfan.hivelineage.v2.ir.relation.OutputSlot;
 import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
 import com.panfan.hivelineage.v2.ir.statement.PartitionScope;
 import com.panfan.hivelineage.v2.ir.statement.WriteAssignment;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -24,7 +25,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-/** Exact position binding and explicitly selected compatibility assumptions. */
+/**
+ * Exact position binding and explicitly selected compatibility assumptions.
+ */
 public final class DefaultSinkPlanner implements SinkPlanner {
     @Override
     public SinkPlanningResult plan(BoundRelation query, SinkBindingRequest request) {
@@ -50,9 +53,9 @@ public final class DefaultSinkPlanner implements SinkPlanner {
         targets.addAll(dynamic);
         List<OutputSlot> sources = BindingWork.slots(query.getOutputSchema());
         if (query.getOutputSchema().getState() == SchemaState.NOT_REQUESTED
-            && request.getTargetSchema().getState() == SchemaState.NOT_REQUESTED) {
+                && request.getTargetSchema().getState() == SchemaState.NOT_REQUESTED) {
             return result(query, request, staticAssignments, MappingCoverage.NOT_REQUESTED,
-                Collections.<UnknownMapping>emptyList(), DiagnosticBag.empty());
+                    Collections.<UnknownMapping>emptyList(), DiagnosticBag.empty());
         }
         if (query.getOutputSchema().getState() != SchemaState.KNOWN) {
             for (int index = 0; index < targets.size(); index++) {
@@ -60,14 +63,14 @@ public final class DefaultSinkPlanner implements SinkPlanner {
             }
             assignments.addAll(staticAssignments);
             return result(query, request, assignments, MappingCoverage.UNKNOWN,
-                Collections.singletonList(new UnknownMapping(request.getWriteId(), UnknownMapping.Reason.SOURCE_WIDTH_UNKNOWN,
-                    "SOURCE_WIDTH_UNKNOWN")), DiagnosticBag.empty());
+                    Collections.singletonList(new UnknownMapping(request.getWriteId(), UnknownMapping.Reason.SOURCE_WIDTH_UNKNOWN,
+                            "SOURCE_WIDTH_UNKNOWN")), DiagnosticBag.empty());
         }
         boolean currentApi = request.getMappingPolicy() == StarMappingPolicy.CURRENT_API_TARGET_MAPPING;
         boolean inferred = currentApi && request.getExplicitTargetFields().isEmpty()
-            && request.getTargetSchema().getState() != SchemaState.KNOWN;
+                && request.getTargetSchema().getState() != SchemaState.KNOWN;
         boolean prefix = currentApi && request.getExplicitTargetFields().isEmpty() && !request.isSourceContainsStar()
-            && request.getTargetSchema().getState() == SchemaState.KNOWN && sources.size() < targets.size();
+                && request.getTargetSchema().getState() == SchemaState.KNOWN && sources.size() < targets.size();
         if (inferred) {
             targets.clear();
             int dataFields = Math.max(0, sources.size() - dynamic.size());
@@ -81,39 +84,39 @@ public final class DefaultSinkPlanner implements SinkPlanner {
         }
         if (targets.isEmpty()) {
             return result(query, request, staticAssignments, MappingCoverage.UNKNOWN,
-                Collections.singletonList(new UnknownMapping(request.getWriteId(), UnknownMapping.Reason.TARGET_SCHEMA_UNKNOWN,
-                    "TARGET_SCHEMA_UNKNOWN")), DiagnosticBag.empty());
+                    Collections.singletonList(new UnknownMapping(request.getWriteId(), UnknownMapping.Reason.TARGET_SCHEMA_UNKNOWN,
+                            "TARGET_SCHEMA_UNKNOWN")), DiagnosticBag.empty());
         }
         boolean namedStar = request.isSourceContainsStar()
-            && (((request.getMappingPolicy() == StarMappingPolicy.EXPLICIT_LEGACY_TARGET_MAPPING || currentApi)
-                    && !request.getExplicitTargetFields().isEmpty())
+                && (((request.getMappingPolicy() == StarMappingPolicy.EXPLICIT_LEGACY_TARGET_MAPPING || currentApi)
+                && !request.getExplicitTargetFields().isEmpty())
                 || (request.getMappingPolicy() == StarMappingPolicy.SPEC_TARGET_SCHEMA_MAPPING && request.getTargetSchema().getState() == SchemaState.KNOWN));
         if (sources.size() != targets.size() && !namedStar) {
             Diagnostic diagnostic = new Diagnostic(AnalysisStage.BINDING, "COLUMN_COUNT_MISMATCH",
-                "Query has " + sources.size() + " fields but sink requires " + targets.size(), query.getSourceRef().orElse(null));
+                    "Query has " + sources.size() + " fields but sink requires " + targets.size(), query.getSourceRef().orElse(null));
             return new SinkPlanningResult(Optional.<BoundWrite>empty(), new DiagnosticBag(Collections.singletonList(diagnostic)));
         }
         for (int index = 0; index < targets.size(); index++) {
             OutputSlot source = namedStar ? namedSource(sources, targets.get(index)) : sources.get(index);
             assignments.add(source == null ? unknown(query, request, targets.get(index), index, "LEGACY_TARGET_NAME_UNRESOLVED")
-                : new WriteAssignment(targets.get(index), new Expressions.SlotRef(new NodeId(request.getWriteId().getValue() + "/source-" + index),
+                    : new WriteAssignment(targets.get(index), new Expressions.SlotRef(new NodeId(request.getWriteId().getValue() + "/source-" + index),
                     source.getType(), query.getSourceRef().orElse(null), source.getId(), Collections.<String>emptyList())));
         }
         assignments.addAll(staticAssignments);
         if (namedStar || inferred || prefix) {
             String code = request.getMappingPolicy().name();
             Diagnostic diagnostic = new Diagnostic(AnalysisStage.BINDING, code,
-                "Sink fields use an explicitly selected naming, inference or prefix mapping assumption", query.getSourceRef().orElse(null));
+                    "Sink fields use an explicitly selected naming, inference or prefix mapping assumption", query.getSourceRef().orElse(null));
             return result(query, request, assignments, MappingCoverage.PARTIAL,
-                Collections.singletonList(new UnknownMapping(request.getWriteId(), UnknownMapping.Reason.UNSUPPORTED_RULE, code)),
-                new DiagnosticBag(Collections.singletonList(diagnostic)));
+                    Collections.singletonList(new UnknownMapping(request.getWriteId(), UnknownMapping.Reason.UNSUPPORTED_RULE, code)),
+                    new DiagnosticBag(Collections.singletonList(diagnostic)));
         }
         return result(query, request, assignments, MappingCoverage.COMPLETE, Collections.<UnknownMapping>emptyList(), DiagnosticBag.empty());
     }
 
     private WriteAssignment unknown(BoundRelation query, SinkBindingRequest request, FieldIdentity field, int index, String code) {
         return new WriteAssignment(field, new Expressions.UnknownExpression(new NodeId(request.getWriteId().getValue() + "/unknown-" + index),
-            TypeRef.unknown(), query.getSourceRef().orElse(null), Collections.<BoundExpression>emptyList(), code));
+                TypeRef.unknown(), query.getSourceRef().orElse(null), Collections.<BoundExpression>emptyList(), code));
     }
 
     private OutputSlot namedSource(List<OutputSlot> sources, FieldIdentity target) {
@@ -132,8 +135,8 @@ public final class DefaultSinkPlanner implements SinkPlanner {
     private SinkPlanningResult result(BoundRelation query, SinkBindingRequest request, List<WriteAssignment> assignments,
                                       MappingCoverage coverage, List<UnknownMapping> unknown, DiagnosticBag diagnostics) {
         BoundWrite write = new BoundWrite(request.getWriteId(), request.getTargetObject(), request.getBeforeVersion(),
-            request.getAfterVersion(), request.getWriteMode(), assignments, request.getPartitionScope(), null,
-            coverage, unknown, query.getId());
+                request.getAfterVersion(), request.getWriteMode(), assignments, request.getPartitionScope(), null,
+                coverage, unknown, query.getId());
         return new SinkPlanningResult(Optional.of(write), diagnostics);
     }
 }

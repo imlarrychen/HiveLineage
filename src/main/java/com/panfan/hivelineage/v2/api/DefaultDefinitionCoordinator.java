@@ -27,6 +27,7 @@ import com.panfan.hivelineage.v2.session.DefinitionCoordinator;
 import com.panfan.hivelineage.v2.session.DefinitionRequest;
 import com.panfan.hivelineage.v2.syntax.SyntaxResult;
 import com.panfan.hivelineage.v2.syntax.SyntaxTemplate;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -36,7 +37,9 @@ import java.util.UUID;
 import java.util.ArrayList;
 import java.util.List;
 
-/** External definition SQL always crosses the same explicit frontend stages. */
+/**
+ * External definition SQL always crosses the same explicit frontend stages.
+ */
 public final class DefaultDefinitionCoordinator implements DefinitionCoordinator<PreparedDefinition> {
     private final SyntaxFrontend frontend;
     private final ScriptSourceProvider sourceProvider;
@@ -52,8 +55,8 @@ public final class DefaultDefinitionCoordinator implements DefinitionCoordinator
     }
 
     public DefaultDefinitionCoordinator(SyntaxFrontend frontend, ScriptSourceProvider sourceProvider,
-            ViewTemplateCache cache, Map<String, SourceDocument> sources, ResourceLimits limits,
-            com.panfan.hivelineage.v2.frontend.ScriptPreprocessor preprocessor) {
+                                        ViewTemplateCache cache, Map<String, SourceDocument> sources, ResourceLimits limits,
+                                        com.panfan.hivelineage.v2.frontend.ScriptPreprocessor preprocessor) {
         this.preprocessor = java.util.Objects.requireNonNull(preprocessor, "preprocessor");
         this.frontend = frontend;
         this.sourceProvider = sourceProvider;
@@ -71,14 +74,14 @@ public final class DefaultDefinitionCoordinator implements DefinitionCoordinator
             throw failure;
         } catch (RuntimeException failure) {
             return failed("VIEW_PREPARATION_FAILED", failure.getMessage() == null ? failure.getClass().getSimpleName()
-                : failure.getMessage(), request.getReference().getSource());
+                    : failure.getMessage(), request.getReference().getSource());
         }
     }
 
     private LookupResult<PreparedDefinition> prepareDefinition(DefinitionRequest request) {
         DefinitionRef definition = request.getReference();
         if (request.getRemainingDepth() == 0 || request.getExpansionPath().contains(definition.getDefinitionId())
-            || request.getExpansionPath().size() >= limits.getMaxExpansionDepth()) {
+                || request.getExpansionPath().size() >= limits.getMaxExpansionDepth()) {
             return failed("VIEW_EXPANSION_LIMIT", "Definition depth limit or cycle: " + definition.getDefinitionId(), definition.getSource());
         }
         LookupResult<SourceDocument> read = sourceProvider.read(definition);
@@ -91,7 +94,7 @@ public final class DefaultDefinitionCoordinator implements DefinitionCoordinator
         }
         sources.put(document.getSourceId(), document);
         DialectProfile dialect = new DialectProfile(definition.getDefinitionContext().getDialectId(),
-            definition.getDefinitionContext().getParserVersion(), definition.getDefinitionContext().getRuleVersion(), Collections.<String>emptySet());
+                definition.getDefinitionContext().getParserVersion(), definition.getDefinitionContext().getRuleVersion(), Collections.<String>emptySet());
         String digest = UUID.nameUUIDFromBytes(document.getText().getBytes(StandardCharsets.UTF_8)).toString();
         ScriptPreprocessResult script = preprocessor.preprocess(document.getSourceId(), document.getText(), ScriptOptions.defaults());
         if (script.getUnits().size() != 1 || script.getOutcome() == StageOutcome.FAILED) {
@@ -101,7 +104,7 @@ public final class DefaultDefinitionCoordinator implements DefinitionCoordinator
         }
         Map<String, Map<String, String>> variables = variables(definition.getDefinitionContext().getVariables());
         ExpansionResult expanded = new DefaultVariableResolver().expand(script.getUnits().get(0), new VariableContext(variables),
-            new VariableOptions(VariableResolutionPolicy.PRESERVE_AND_WARN, null, limits.getMaxScriptCharacters()));
+                new VariableOptions(VariableResolutionPolicy.PRESERVE_AND_WARN, null, limits.getMaxScriptCharacters()));
         if (expanded.getUnit() == null) {
             if (expanded.getDiagnostics().stream().anyMatch(diagnostic -> "EXPANSION_SIZE_LIMIT".equals(diagnostic.getCode()))) {
                 throw new com.panfan.hivelineage.v2.common.ResourceLimitException("Expanded definition exceeds configured source size");
@@ -119,15 +122,15 @@ public final class DefaultDefinitionCoordinator implements DefinitionCoordinator
         diagnostics.addAll(script.getDiagnostics());
         diagnostics.addAll(expanded.getDiagnostics());
         ViewTemplateKey key = new ViewTemplateKey(definition.getDefinitionId(), digest,
-            dialect.getDialectId() + ":" + dialect.getParserVersion() + ":" + dialect.getSemanticRuleVersion(),
-            DefinitionContextFingerprint.of(definition.getDefinitionContext(), document.getSourceId(),
-                    expanded.getUnit().getExpandedText()),
-            definition.getDefinitionContext().getReadContext());
+                dialect.getDialectId() + ":" + dialect.getParserVersion() + ":" + dialect.getSemanticRuleVersion(),
+                DefinitionContextFingerprint.of(definition.getDefinitionContext(), document.getSourceId(),
+                        expanded.getUnit().getExpandedText()),
+                definition.getDefinitionContext().getReadContext());
         Optional<SyntaxTemplate> cached = cache.get(key);
         if (cached.isPresent()) {
             diagnostics.addAll(cached.get().getDiagnostics());
             return LookupResult.found(new PreparedDefinition(definition.getDefinitionId(), cached,
-                    Optional.<BoundRelation>empty(), definition.getSource()),
+                            Optional.<BoundRelation>empty(), definition.getSource()),
                     new DiagnosticBag(distinct(diagnostics)));
         }
         SyntaxResult parsed = frontend.parse(expanded.getUnit(), dialect);
@@ -142,8 +145,8 @@ public final class DefaultDefinitionCoordinator implements DefinitionCoordinator
                 definition.getSource(), distinct(templateDiagnostics), Optional.of(expanded.getUnit()));
         cache.put(key, template);
         return LookupResult.found(new PreparedDefinition(definition.getDefinitionId(), Optional.of(template),
-                Optional.<BoundRelation>empty(), definition.getSource()),
-            new DiagnosticBag(distinct(diagnostics)));
+                        Optional.<BoundRelation>empty(), definition.getSource()),
+                new DiagnosticBag(distinct(diagnostics)));
     }
 
     public Map<String, ExpandedUnit> getFrontendEvidence() {

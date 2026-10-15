@@ -2,7 +2,9 @@ package com.panfan.hivelineage.v2.analysis;
 
 import java.util.Optional;
 
-/** Join predicate evaluation uses the same compositional expression rule vocabulary. */
+/**
+ * Join predicate evaluation uses the same compositional expression rule vocabulary.
+ */
 public final class DefaultJoinRuleRegistry implements LineageRuleRegistry {
     private final DefaultLineageRuleRegistry delegate = new DefaultLineageRuleRegistry();
 

@@ -2,6 +2,7 @@ package com.panfan.hivelineage.v2.analysis;
 
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.ir.relation.BoundRelation;
+
 import java.util.List;
 import java.util.Map;
 

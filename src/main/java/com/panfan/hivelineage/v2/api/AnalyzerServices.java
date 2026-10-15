@@ -18,10 +18,13 @@ import com.panfan.hivelineage.v2.session.DefaultSessionEffectCommitter;
 import com.panfan.hivelineage.v2.session.DefaultSessionEffectPlanner;
 import com.panfan.hivelineage.v2.session.SessionEffectCommitter;
 import com.panfan.hivelineage.v2.session.SessionEffectPlanner;
+
 import java.util.Objects;
 import java.util.function.IntFunction;
 
-/** Default assembly and replaceable stage capabilities, outside statement execution. */
+/**
+ * Default assembly and replaceable stage capabilities, outside statement execution.
+ */
 public final class AnalyzerServices {
     final VariableResolver variables;
     final AnalysisDemandPlanner demands;
@@ -48,6 +51,7 @@ public final class AnalyzerServices {
     public static AnalyzerServices defaults() {
         return builder().build();
     }
+
     public static Builder builder() {
         return new Builder();
     }
@@ -67,38 +71,47 @@ public final class AnalyzerServices {
             variables = value;
             return this;
         }
+
         public Builder demands(AnalysisDemandPlanner value) {
             demands = value;
             return this;
         }
+
         public Builder functions(FunctionCatalog value) {
             functions = value;
             return this;
         }
+
         public Builder verifier(IrVerifier value) {
             verifier = value;
             return this;
         }
+
         public Builder lineage(IntFunction<LineageEngine> value) {
             lineage = value;
             return this;
         }
+
         public Builder joins(IntFunction<JoinConditionAnalysis> value) {
             joins = value;
             return this;
         }
+
         public Builder rules(LineageRuleRegistry value) {
             rules = value;
             return this;
         }
+
         public Builder effects(SessionEffectPlanner value) {
             effects = value;
             return this;
         }
+
         public Builder committer(SessionEffectCommitter value) {
             committer = value;
             return this;
         }
+
         public AnalyzerServices build() {
             return new AnalyzerServices(this);
         }

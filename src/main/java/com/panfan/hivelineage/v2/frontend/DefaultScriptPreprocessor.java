@@ -3,10 +3,13 @@ package com.panfan.hivelineage.v2.frontend;
 import com.panfan.hivelineage.v2.common.AnalysisStage;
 import com.panfan.hivelineage.v2.common.Diagnostic;
 import com.panfan.hivelineage.v2.common.SourceRef;
+
 import java.util.ArrayList;
 import java.util.List;
 
-/** Preserves raw SQL and source positions; comments are handled as lexer trivia. */
+/**
+ * Preserves raw SQL and source positions; comments are handled as lexer trivia.
+ */
 public final class DefaultScriptPreprocessor implements ScriptPreprocessor {
     @Override
     public ScriptPreprocessResult preprocess(String sourceId, String script, ScriptOptions options) {

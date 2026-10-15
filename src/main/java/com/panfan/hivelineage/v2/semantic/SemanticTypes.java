@@ -3,6 +3,7 @@ package com.panfan.hivelineage.v2.semantic;
 import com.panfan.hivelineage.v2.ir.TypeRef;
 import com.panfan.hivelineage.v2.syntax.DataTypeSyntax;
 import com.panfan.hivelineage.v2.syntax.TypeFieldSyntax;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -13,7 +14,7 @@ final class SemanticTypes {
 
     static TypeRef type(TypeRef.Kind kind) {
         return new TypeRef(kind, kind.name().toLowerCase(java.util.Locale.ROOT),
-            Collections.<TypeRef>emptyList(), Collections.<TypeRef.StructField>emptyList());
+                Collections.<TypeRef>emptyList(), Collections.<TypeRef.StructField>emptyList());
     }
 
     static TypeRef declared(DataTypeSyntax syntax) {
@@ -68,7 +69,7 @@ final class SemanticTypes {
                 return TypeRef.unknown();
             } else if (type.getKind() != result.getKind()) {
                 if ((type.getKind() == TypeRef.Kind.INTEGER && result.getKind() == TypeRef.Kind.DECIMAL)
-                    || (type.getKind() == TypeRef.Kind.DECIMAL && result.getKind() == TypeRef.Kind.INTEGER)) {
+                        || (type.getKind() == TypeRef.Kind.DECIMAL && result.getKind() == TypeRef.Kind.INTEGER)) {
                     result = type(TypeRef.Kind.DECIMAL);
                 } else {
                     return TypeRef.unknown();

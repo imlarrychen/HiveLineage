@@ -18,6 +18,7 @@ import com.panfan.hivelineage.v2.syntax.ChangeColumnActionSyntax;
 import com.panfan.hivelineage.v2.syntax.ColumnPositionKindSyntax;
 import com.panfan.hivelineage.v2.syntax.DefinitionStatementSyntax;
 import com.panfan.hivelineage.v2.syntax.UnknownAlterActionSyntax;
+
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -25,9 +26,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+
 import static com.panfan.hivelineage.v2.testing.GeneratedSqlSupport.analyzeWithCatalog;
 import static com.panfan.hivelineage.v2.testing.GeneratedSqlSupport.assertColumnSources;
 import static com.panfan.hivelineage.v2.testing.GeneratedSqlSupport.assertNoFailed;
@@ -37,7 +40,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** File-backed DDL tests inspect catalog proposals and later reads, including explicit uncertainty. */
+/**
+ * File-backed DDL tests inspect catalog proposals and later reads, including explicit uncertainty.
+ */
 @RunWith(Parameterized.class)
 public class DdlCatalogEffectsIntegrationTest {
     private final LineageParseMode mode;
@@ -48,27 +53,27 @@ public class DdlCatalogEffectsIntegrationTest {
 
     @Parameterized.Parameters(name = "{0}")
     public static Collection<Object[]> modes() {
-        return Arrays.stream(LineageParseMode.values()).map(mode -> new Object[] { mode }).collect(Collectors.toList());
+        return Arrays.stream(LineageParseMode.values()).map(mode -> new Object[]{mode}).collect(Collectors.toList());
     }
 
     public static Set<String> scenarioFiles() {
         return Collections.unmodifiableSet(new LinkedHashSet<>(Arrays.asList(
-            "v2_ddl_effect_change_column_first_after_comments.sql",
-            "v2_ddl_effect_replace_preserves_partition_roles.sql",
-            "v2_ddl_effect_partition_scoped_column_changes_unknown.sql",
-            "v2_ddl_effect_partition_add_drop_rename_unknown.sql",
-            "v2_ddl_effect_serde_fileformat_bucket_unknown.sql",
-            "v2_ddl_effect_maintenance_touch_compact_stats_unknown.sql",
-            "v2_ddl_effect_temporary_shadow_alter_drop.sql",
-            "v2_ddl_effect_rename_chain_identity_then_drop.sql",
-            "v2_ddl_effect_view_rename_drop_if_exists.sql",
-            "v2_ddl_effect_if_not_exists_known_noop_and_recreate.sql",
-            "v2_ddl_effect_if_not_exists_unknown_precondition.sql",
-            "v2_ddl_effect_create_like_unknown_schema.sql",
-            "v2_ddl_effect_truncate_partition_unknown.sql",
-            "v2_ddl_effect_change_column_invalid_keeps_schema.sql",
-            "v2_ddl_effect_temporary_rename_alter_drop_aliases.sql",
-            "v2_ddl_effect_replace_partition_name_collision.sql")));
+                "v2_ddl_effect_change_column_first_after_comments.sql",
+                "v2_ddl_effect_replace_preserves_partition_roles.sql",
+                "v2_ddl_effect_partition_scoped_column_changes_unknown.sql",
+                "v2_ddl_effect_partition_add_drop_rename_unknown.sql",
+                "v2_ddl_effect_serde_fileformat_bucket_unknown.sql",
+                "v2_ddl_effect_maintenance_touch_compact_stats_unknown.sql",
+                "v2_ddl_effect_temporary_shadow_alter_drop.sql",
+                "v2_ddl_effect_rename_chain_identity_then_drop.sql",
+                "v2_ddl_effect_view_rename_drop_if_exists.sql",
+                "v2_ddl_effect_if_not_exists_known_noop_and_recreate.sql",
+                "v2_ddl_effect_if_not_exists_unknown_precondition.sql",
+                "v2_ddl_effect_create_like_unknown_schema.sql",
+                "v2_ddl_effect_truncate_partition_unknown.sql",
+                "v2_ddl_effect_change_column_invalid_keeps_schema.sql",
+                "v2_ddl_effect_temporary_rename_alter_drop_aliases.sql",
+                "v2_ddl_effect_replace_partition_name_collision.sql")));
     }
 
     @Test
@@ -143,7 +148,7 @@ public class DdlCatalogEffectsIntegrationTest {
         assertFalse(addition.getCatalogMayChange());
         uncertainRead(result, 8, "SESSION_OBJECT_UNCERTAIN");
         assertEquals(SchemaState.UNKNOWN, unit(result, 8).getRelations().stream()
-            .filter(relation -> relation instanceof Relations.Scan).findFirst().get().getOutputSchema().getState());
+                .filter(relation -> relation instanceof Relations.Scan).findFirst().get().getOutputSchema().getState());
         success(result, 9);
         assertColumnSources(statement(result, 9), "dwd.result.id", "ods.users.id");
     }
@@ -240,16 +245,16 @@ public class DdlCatalogEffectsIntegrationTest {
     @Test
     public void createLikeRetainsUnknownWidthForKnownAndUnknownSources() {
         ScriptAnalysisResult result = catalog("v2_ddl_effect_create_like_unknown_schema.sql", 4, 0);
-        for (int index : new int[] { 0, 2 }) {
+        for (int index : new int[]{0, 2}) {
             assertIgnored(result, index);
             assertEquals(SchemaState.UNKNOWN, shape(result, index).getSchema().getState());
             diagnostic(result, index, "CREATE_LIKE_SCHEMA_UNKNOWN");
             assertTrue(unit(result, index).getWrites().isEmpty());
             assertTrue(slots(shape(result, index)).isEmpty());
         }
-        for (int index : new int[] { 1, 3 }) {
+        for (int index : new int[]{1, 3}) {
             assertEquals(mode == LineageParseMode.TABLE_ONLY ? StatementStatus.SUCCESS : StatementStatus.PARTIAL_SUCCESS,
-                result.getStatements().get(index).getStatus());
+                    result.getStatements().get(index).getStatus());
         }
     }
 
@@ -268,7 +273,7 @@ public class DdlCatalogEffectsIntegrationTest {
     @Test
     public void rejectedColumnChangesKeepTheCommittedSchema() {
         ScriptAnalysisResult result = catalog("v2_ddl_effect_change_column_invalid_keeps_schema.sql", 6, 4);
-        String[] codes = { "DUPLICATE_COLUMN", "COLUMN_NOT_FOUND", "INVALID_PARTITION_COLUMN_CHANGE", "INVALID_COLUMN_POSITION" };
+        String[] codes = {"DUPLICATE_COLUMN", "COLUMN_NOT_FOUND", "INVALID_PARTITION_COLUMN_CHANGE", "INVALID_COLUMN_POSITION"};
         for (int index = 1; index < 5; index++) {
             failed(result, index, codes[index - 1]);
         }
@@ -334,22 +339,22 @@ public class DdlCatalogEffectsIntegrationTest {
     private static Effects.ObjectShape shape(ScriptAnalysisResult result, int index) {
         BoundEffect effect = unit(result, index).getEffects().get(0);
         return effect instanceof Effects.CreateObject ? ((Effects.CreateObject) effect).getShape()
-            : ((Effects.AlterObject) effect).getReplacement();
+                : ((Effects.AlterObject) effect).getReplacement();
     }
 
     private static List<OutputSlot> slots(Effects.ObjectShape shape) {
         return shape.getSchema().getSegments().stream().filter(segment -> segment instanceof KnownOutputSegment)
-            .flatMap(segment -> ((KnownOutputSegment) segment).getSlots().stream()).collect(Collectors.toList());
+                .flatMap(segment -> ((KnownOutputSegment) segment).getSlots().stream()).collect(Collectors.toList());
     }
 
     private void assertScanSchema(ScriptAnalysisResult result, int index, String... columns) {
         Relations.Scan scan = (Relations.Scan) unit(result, index).getRelations().stream()
-            .filter(relation -> relation instanceof Relations.Scan).findFirst().orElseThrow(() -> new AssertionError("No scan"));
+                .filter(relation -> relation instanceof Relations.Scan).findFirst().orElseThrow(() -> new AssertionError("No scan"));
         // Derived SELECT * is bound to resolve its enclosing projection even in TABLE_ONLY mode.
         assertEquals(SchemaState.KNOWN, scan.getOutputSchema().getState());
         assertEquals(Arrays.asList(columns), scan.getOutputSchema().getSegments().stream()
-            .flatMap(segment -> ((KnownOutputSegment) segment).getSlots().stream())
-            .map(OutputSlot::getDisplayName).collect(Collectors.toList()));
+                .flatMap(segment -> ((KnownOutputSegment) segment).getSlots().stream())
+                .map(OutputSlot::getDisplayName).collect(Collectors.toList()));
     }
 
     private static void assertNames(Effects.ObjectShape shape, String... names) {
@@ -384,7 +389,7 @@ public class DdlCatalogEffectsIntegrationTest {
 
     private static void success(ScriptAnalysisResult result, int index) {
         assertEquals(result.getStatements().get(index).getDiagnostics().getDiagnostics().toString(),
-            StatementStatus.SUCCESS, result.getStatements().get(index).getStatus());
+                StatementStatus.SUCCESS, result.getStatements().get(index).getStatus());
         assertTrue(result.getStatements().get(index).isFormalLineageProduced());
     }
 
@@ -402,6 +407,6 @@ public class DdlCatalogEffectsIntegrationTest {
 
     private static void diagnostic(ScriptAnalysisResult result, int index, String code) {
         assertTrue(code + ": " + result.getStatements().get(index).getDiagnostics().getDiagnostics(),
-            result.getStatements().get(index).getDiagnostics().getDiagnostics().stream().anyMatch(item -> code.equals(item.getCode())));
+                result.getStatements().get(index).getDiagnostics().getDiagnostics().stream().anyMatch(item -> code.equals(item.getCode())));
     }
 }

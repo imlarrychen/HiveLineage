@@ -1,9 +1,12 @@
 package com.panfan.hivelineage.v2.metadata;
 
 import com.panfan.hivelineage.v2.api.SourceDocument;
+
 import java.util.Objects;
 
-/** Counts source-service calls against the same request budget as metadata reads. */
+/**
+ * Counts source-service calls against the same request budget as metadata reads.
+ */
 public final class BudgetedScriptSourceProvider implements ScriptSourceProvider {
     private final ScriptSourceProvider delegate;
     private final ExternalReadBudget budget;

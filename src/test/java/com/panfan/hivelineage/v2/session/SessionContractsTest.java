@@ -16,6 +16,7 @@ import com.panfan.hivelineage.v2.metadata.MetadataReadContext;
 import com.panfan.hivelineage.v2.metadata.MetadataVersion;
 import com.panfan.hivelineage.v2.metadata.ObjectDescriptor;
 import com.panfan.hivelineage.v2.metadata.RelationSchema;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;

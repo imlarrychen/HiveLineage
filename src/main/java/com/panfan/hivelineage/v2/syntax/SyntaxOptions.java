@@ -1,6 +1,7 @@
 package com.panfan.hivelineage.v2.syntax;
 
 import com.panfan.hivelineage.v2.dialect.DialectProfile;
+
 import java.util.Objects;
 
 public final class SyntaxOptions {

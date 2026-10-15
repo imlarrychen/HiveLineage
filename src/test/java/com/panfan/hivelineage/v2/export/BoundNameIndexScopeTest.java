@@ -37,12 +37,14 @@ import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
 import com.panfan.hivelineage.v2.ir.statement.PartitionScope;
 import com.panfan.hivelineage.v2.ir.statement.VersionRef;
 import com.panfan.hivelineage.v2.ir.statement.WriteAssignment;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -164,7 +166,7 @@ public class BoundNameIndexScopeTest {
         return new Relations.DefinitionInstance(new NodeId(id), output, BLOCK, 1, null,
                 input.getId(), new DefinitionId(id + "-definition"), new RelationInstanceId(id + "-instance"),
                 VersionRef.notRequested(), Collections.singletonList(new SlotMapping(new SlotId(id + "-slot"),
-                        new SlotId(input.getId().getValue() + "-slot"))), object);
+                new SlotId(input.getId().getValue() + "-slot"))), object);
     }
 
     private static BoundRelationReference reference(Relations.DefinitionInstance relation, String alias) {
@@ -178,14 +180,14 @@ public class BoundNameIndexScopeTest {
     }
 
     private static BoundWrite write(NodeId source, String display, QualifiedFieldHandle condition, PartitionScope partition,
-                                   com.panfan.hivelineage.v2.ir.expression.BoundExpression expression) {
+                                    com.panfan.hivelineage.v2.ir.expression.BoundExpression expression) {
         return new BoundWrite(new NodeId("write"), new ObjectId("target-object"), VersionRef.notRequested(), VersionRef.notRequested(),
                 BoundWrite.WriteMode.APPEND, Collections.singletonList(new WriteAssignment(new FieldIdentity(SHARED_FIELD, display), expression)),
                 partition, condition, MappingCoverage.COMPLETE, Collections.emptyList(), source);
     }
 
     private static BoundAnalysisUnit copy(BoundAnalysisUnit base, Map<ObjectId, BoundObjectReference> objects,
-                                         Map<RelationInstanceId, BoundRelationReference> references) {
+                                          Map<RelationInstanceId, BoundRelationReference> references) {
         return new BoundAnalysisUnit(base.getStatementId(), base.getRelations(), base.getQueryResults(), base.getWrites(), base.getEffects(),
                 base.getBindingCoverage(), base.getDiagnostics(), base.getNotRequestedRegions(), base.getExecutionAssumption(),
                 objects, base.getScopes(), references);

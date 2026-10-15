@@ -8,9 +8,11 @@ import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
 import com.panfan.hivelineage.v2.ir.quality.SchemaState;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -22,8 +24,8 @@ public class SnapshotMetadataServicesRegressionTest {
 
     @Test
     public void bundledAbsentStatusesAndDiagnosticsSurviveFacetDerivation() {
-        for (LookupStatus status : new LookupStatus[] { LookupStatus.UNKNOWN, LookupStatus.NOT_FOUND,
-                LookupStatus.CAPABILITY_MISSING, LookupStatus.ACCESS_ERROR }) {
+        for (LookupStatus status : new LookupStatus[]{LookupStatus.UNKNOWN, LookupStatus.NOT_FOUND,
+                LookupStatus.CAPABILITY_MISSING, LookupStatus.ACCESS_ERROR}) {
             SnapshotMetadataServices services = services(relation(new LookupResult<RelationMetadata>(status, Optional.empty(), diagnostics)));
             Assert.assertEquals(status, services.lookupObject(name, context).getStatus());
             Assert.assertEquals(status, services.lookupSchema(name, context).getStatus());

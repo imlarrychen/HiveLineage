@@ -3,9 +3,12 @@ package com.panfan.hivelineage.v2.metadata;
 import com.panfan.hivelineage.metadata.HiveMetadataCache;
 import com.panfan.hivelineage.metadata.HiveMetadataProvider;
 import com.panfan.hivelineage.v2.common.ModelChecks;
+
 import java.util.Optional;
 
-/** Adapter input pins the caller cache to one provider source and access context. */
+/**
+ * Adapter input pins the caller cache to one provider source and access context.
+ */
 public final class LegacyMetadataBinding {
     private final Optional<HiveMetadataProvider> provider;
     private final Optional<HiveMetadataCache> cache;

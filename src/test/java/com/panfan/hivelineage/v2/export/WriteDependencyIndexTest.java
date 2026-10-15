@@ -15,6 +15,7 @@ import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
 import com.panfan.hivelineage.v2.ir.statement.PartitionScope;
 import com.panfan.hivelineage.v2.ir.statement.VersionRef;
 import com.panfan.hivelineage.v2.ir.statement.WriteAssignment;
+
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -22,6 +23,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -48,6 +50,7 @@ public class WriteDependencyIndexTest {
                 visits.incrementAndGet();
                 return values.get(index);
             }
+
             @Override
             public int size() {
                 return values.size();

@@ -26,6 +26,7 @@ import com.panfan.hivelineage.v2.semantic.BindingOutcome;
 import com.panfan.hivelineage.v2.semantic.BindingResult;
 import com.panfan.hivelineage.v2.semantic.VerificationOutcome;
 import com.panfan.hivelineage.v2.semantic.VerificationResult;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -69,7 +71,7 @@ public class ModelContractsTest {
     public void sourceReferencesRejectCrossDocumentSpans() {
         Assert.assertThrows(IllegalArgumentException.class, () -> new SourceSpan("s", 5, 3));
         Assert.assertThrows(IllegalArgumentException.class,
-            () -> new SourceRef("one", new SourceSpan("two", 0, 1)));
+                () -> new SourceRef("one", new SourceSpan("two", 0, 1)));
         Assert.assertEquals(0, SourceRef.synthetic("fixture").getSpan().getEnd());
     }
 
@@ -90,7 +92,7 @@ public class ModelContractsTest {
         items.clear();
         Assert.assertEquals(AnalysisStage.BINDING, bag.getDiagnostics().get(0).getStage());
         AnalysisQuality quality = new AnalysisQuality(Validity.UNDETERMINED, Coverage.PARTIAL,
-            DependencyPrecision.UNKNOWN, EffectState.NOT_APPLIED);
+                DependencyPrecision.UNKNOWN, EffectState.NOT_APPLIED);
         ExpressionFacts facts = new ExpressionFacts(new NodeId("expr"), Collections.emptyList(), quality, bag);
         Assert.assertTrue(facts.getDependencies().isEmpty());
         Assert.assertEquals(DependencyPrecision.UNKNOWN, facts.getQuality().getPrecision());
@@ -103,18 +105,18 @@ public class ModelContractsTest {
         AnalysisCapabilities capabilities = new AnalysisCapabilities(Collections.singleton(AnalysisCapability.JOIN_CONDITION));
         Assert.assertEquals(Collections.singleton(AnalysisCapability.JOIN_CONDITION), capabilities.getCapabilities());
         Assert.assertThrows(UnsupportedOperationException.class,
-            () -> capabilities.getCapabilities().add(AnalysisCapability.TABLE_LINEAGE));
+                () -> capabilities.getCapabilities().add(AnalysisCapability.TABLE_LINEAGE));
     }
 
     @Test
     public void noBindingOrVerificationResultCanImplyUnperformedWork() {
         Assert.assertThrows(IllegalArgumentException.class, () -> new BindingResult(BindingOutcome.COMPLETE,
-            Optional.empty(), Collections.emptyList(), DiagnosticBag.empty()));
+                Optional.empty(), Collections.emptyList(), DiagnosticBag.empty()));
         Assert.assertThrows(IllegalArgumentException.class, () -> new BindingResult(BindingOutcome.NEEDS_DEFINITION,
-            Optional.empty(), Collections.emptyList(), DiagnosticBag.empty()));
+                Optional.empty(), Collections.emptyList(), DiagnosticBag.empty()));
         BindingDemand demand = new BindingDemand(Collections.emptySet(), Collections.emptySet());
         Assert.assertThrows(IllegalArgumentException.class, () -> new VerificationResult(VerificationOutcome.ACCEPTED,
-            Optional.empty(), demand, DiagnosticBag.empty()));
+                Optional.empty(), demand, DiagnosticBag.empty()));
     }
 
     @Test

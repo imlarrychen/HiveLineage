@@ -1,9 +1,12 @@
 package com.panfan.hivelineage.v2.ir.statement;
 
 import com.panfan.hivelineage.v2.ir.identity.QueryBlockId;
+
 import java.util.Objects;
 
-/** Stable display path declared by binding structure, independent of opaque identities. */
+/**
+ * Stable display path declared by binding structure, independent of opaque identities.
+ */
 public final class BoundQueryBlockReference {
     private final QueryBlockId id;
     private final String path;

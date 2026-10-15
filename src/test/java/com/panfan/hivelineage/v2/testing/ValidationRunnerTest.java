@@ -7,7 +7,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -18,14 +20,14 @@ public class ValidationRunnerTest {
     @Test
     public void deliberateFailureFixturesCannotBeDiscoveredFromTheProjectTestClasspath() throws Exception {
         ClassLoader application = ValidationRunnerTest.class.getClassLoader();
-        for (String name : new String[] { "MixedFixture", "UnavailableFixture", "BrokenFixture" }) {
+        for (String name : new String[]{"MixedFixture", "UnavailableFixture", "BrokenFixture"}) {
             assertNull(application.getResource("com/panfan/hivelineage/v2/testing/ValidationRunnerTest$" + name + ".class"));
         }
         assertNull(application.getResource("com/panfan/hivelineage/LegacyOracleJdbcMetadataColumnV2ProviderIntegrationTest.class"));
         assertNull(application.getResource("com/panfan/hivelineage/v2/testing/runnerfixtures/JdbcMetadataFixture.class"));
         try (RuntimeRunnerFixtures fixtures = RuntimeRunnerFixtures.open("MixedFixture")) {
             assertThrows(ClassNotFoundException.class,
-                () -> Class.forName(fixtures.getFixture().getName(), false, application));
+                    () -> Class.forName(fixtures.getFixture().getName(), false, application));
             assertEquals(1, ValidationRunner.run(fixtures.getFixture()).getResult().getFailureCount());
         }
     }
@@ -34,7 +36,7 @@ public class ValidationRunnerTest {
     public void temporaryJdbcSubclassRunsUnchangedOriginalAssertionsWithItsOwnRule() throws Exception {
         try (RuntimeRunnerFixtures fixtures = RuntimeRunnerFixtures.open("JdbcMetadataFixture")) {
             assertEquals("com.panfan.hivelineage.JdbcMetadataColumnV2ProviderIntegrationTest",
-                fixtures.getFixture().getSuperclass().getName());
+                    fixtures.getFixture().getSuperclass().getName());
             assertEquals(0, fixtures.getFixture().getDeclaredMethods().length);
             ArrayList<String> command = new ArrayList<>();
             command.add(Paths.get(System.getProperty("java.home"), "bin", "java").toString());

@@ -31,12 +31,15 @@ import com.panfan.hivelineage.v2.metadata.ScriptSourceProvider;
 import com.panfan.hivelineage.v2.metadata.WorkflowContext;
 import com.panfan.hivelineage.v2.semantic.DefaultSemanticBinder;
 import com.panfan.hivelineage.v2.semantic.DefaultViewTemplateCache;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -52,9 +55,9 @@ public class ExternalDefinitionSourceIntegrationTest {
         assertEquals(3, fixture.metadataReads.get());
         assertEquals("select id from db.src", result.getSources().get("opaque-view-source").getText());
         assertTrue(result.getFrontendEvidence().values().stream()
-            .anyMatch(unit -> unit.getExpandedText().equals("select id from db.src")));
+                .anyMatch(unit -> unit.getExpandedText().equals("select id from db.src")));
         assertTrue(result.getStatements().get(0).getBoundUnit().get().getObjects().values().stream()
-            .anyMatch(object -> object.getName().getDisplayName().equals("db.src")));
+                .anyMatch(object -> object.getName().getDisplayName().equals("db.src")));
     }
 
     @Test
@@ -69,8 +72,8 @@ public class ExternalDefinitionSourceIntegrationTest {
         fixture.warmMetadata();
         ScriptAnalysisRequest request = fixture.request(0);
         request = new ScriptAnalysisRequest(request.getTask(), new SourceDocument("recovery",
-            "insert into db.dest(id) select id from db.v; insert into db.dest(id) select id from db.src"),
-            request.getDialect(), request.getInitialSession(), request.getMetadataContext(), request.getContract(), request.getResourceLimits());
+                "insert into db.dest(id) select id from db.v; insert into db.dest(id) select id from db.src"),
+                request.getDialect(), request.getInitialSession(), request.getMetadataContext(), request.getContract(), request.getResourceLimits());
         ScriptAnalysisResult result = fixture.analyzer.analyzeScript(request, fixture.workflow);
         assertEquals(0, fixture.sourceReads.get());
         assertEquals(1, result.getCounts().getFailed());
@@ -87,9 +90,9 @@ public class ExternalDefinitionSourceIntegrationTest {
         ScriptAnalysisResult result = analyzer.analyzeScript(fixture.request(0), fixture.workflow);
         assertEquals(0, result.getCounts().getFailed());
         assertTrue(result.getDiagnostics().getDiagnostics().stream()
-            .anyMatch(diagnostic -> diagnostic.getCode().equals("VIEW_DEFINITION_NOT_FOUND")));
+                .anyMatch(diagnostic -> diagnostic.getCode().equals("VIEW_DEFINITION_NOT_FOUND")));
         assertTrue(result.getStatements().get(0).getBoundUnit().get().getObjects().values().stream()
-            .anyMatch(object -> object.getName().getDisplayName().equals("db.v")));
+                .anyMatch(object -> object.getName().getDisplayName().equals("db.v")));
         assertEquals(0, fixture.sourceReads.get());
     }
 
@@ -101,7 +104,7 @@ public class ExternalDefinitionSourceIntegrationTest {
         ScriptAnalysisRequest request = fixture.request(1);
         ResourceLimits old = request.getResourceLimits();
         request = new ScriptAnalysisRequest(request.getTask(), request.getSource(), request.getDialect(), request.getInitialSession(),
-            request.getMetadataContext(), request.getContract(), new ResourceLimits(100, old.getMaxExpansionDepth(), old.getMaxIrNodes(),
+                request.getMetadataContext(), request.getContract(), new ResourceLimits(100, old.getMaxExpansionDepth(), old.getMaxIrNodes(),
                 old.getMaxEvidenceEdges(), 1, old.getMaxIrDepth()));
         ScriptAnalysisResult result = fixture.analyzer.analyzeScript(request, fixture.workflow);
         assertEquals(1, result.getCounts().getFailed());
@@ -113,9 +116,9 @@ public class ExternalDefinitionSourceIntegrationTest {
 
     private static final class Fixture {
         private final ScriptAnalysisRequest base = new DefaultRequestAdapter().adapt(LineageAnalyzeRequest.builder()
-            .workflowId("wf").taskId("external-definition").taskVersion("1")
-            .rawScript("insert into db.dest(id) select id from db.v")
-            .options(LineageAnalyzeOptions.builder().expandViewLineage(true).build()).build());
+                .workflowId("wf").taskId("external-definition").taskVersion("1")
+                .rawScript("insert into db.dest(id) select id from db.v")
+                .options(LineageAnalyzeOptions.builder().expandViewLineage(true).build()).build());
         private final AtomicInteger metadataReads = new AtomicInteger();
         private final AtomicInteger sourceReads = new AtomicInteger();
         private String definitionSql = "select id from db.src";
@@ -135,17 +138,17 @@ public class ExternalDefinitionSourceIntegrationTest {
                 public LookupResult<RelationMetadata> lookupRelation(QualifiedName name, MetadataReadContext context) {
                     metadataReads.incrementAndGet();
                     MetadataProvenance provenance = new MetadataProvenance(context.getSourceId(), MetadataProvenance.Origin.TEST_FIXTURE,
-                        Optional.empty(), Optional.empty());
+                            Optional.empty(), Optional.empty());
                     boolean view = name.getDisplayName().equals("db.v");
                     DefinitionRef definition = new DefinitionRef(new DefinitionId("opaque-view"), Optional.empty(),
-                        new DefinitionContext(Optional.of(new QualifiedName(Collections.singletonList("db"))), Collections.emptyMap(),
-                            base.getDialect().getDialectId(), base.getDialect().getParserVersion(), base.getDialect().getSemanticRuleVersion(), context),
-                        provenance, MetadataVersion.unknown(), SourceRef.synthetic("opaque-view-source"));
+                            new DefinitionContext(Optional.of(new QualifiedName(Collections.singletonList("db"))), Collections.emptyMap(),
+                                    base.getDialect().getDialectId(), base.getDialect().getParserVersion(), base.getDialect().getSemanticRuleVersion(), context),
+                            provenance, MetadataVersion.unknown(), SourceRef.synthetic("opaque-view-source"));
                     ObjectDescriptor object = new ObjectDescriptor(new ObjectId(name.getDisplayName()), name,
-                        view ? ObjectDescriptor.Kind.VIEW : ObjectDescriptor.Kind.TABLE, view ? Optional.of(definition) : Optional.empty(),
-                        provenance, MetadataVersion.unknown());
+                            view ? ObjectDescriptor.Kind.VIEW : ObjectDescriptor.Kind.TABLE, view ? Optional.of(definition) : Optional.empty(),
+                            provenance, MetadataVersion.unknown());
                     RelationSchema schema = new RelationSchema(SchemaState.KNOWN, Collections.singletonList(new ColumnMetadata("id", 0,
-                        TypeRef.unknown(), ColumnMetadata.Role.DATA, ColumnMetadata.Nullability.UNKNOWN)), provenance, MetadataVersion.unknown());
+                            TypeRef.unknown(), ColumnMetadata.Role.DATA, ColumnMetadata.Nullability.UNKNOWN)), provenance, MetadataVersion.unknown());
                     return LookupResult.found(new RelationMetadata(object, schema));
                 }
             };
@@ -157,7 +160,7 @@ public class ExternalDefinitionSourceIntegrationTest {
                 return LookupResult.found(new SourceDocument(reference.getSource().getSourceId(), definitionSql));
             };
             analyzer = new DefaultScriptLineageAnalyzer(frontend, new DefaultSemanticBinder(), metadata, new DefaultScriptPreprocessor(),
-                new DefaultViewTemplateCache(), sources);
+                    new DefaultViewTemplateCache(), sources);
         }
 
         private void warmMetadata() {
@@ -169,7 +172,7 @@ public class ExternalDefinitionSourceIntegrationTest {
         private ScriptAnalysisRequest request(int reads) {
             ResourceLimits limits = base.getResourceLimits();
             return new ScriptAnalysisRequest(base.getTask(), base.getSource(), base.getDialect(), base.getInitialSession(), base.getMetadataContext(),
-                base.getContract(), new ResourceLimits(limits.getMaxScriptCharacters(), limits.getMaxExpansionDepth(), limits.getMaxIrNodes(),
+                    base.getContract(), new ResourceLimits(limits.getMaxScriptCharacters(), limits.getMaxExpansionDepth(), limits.getMaxIrNodes(),
                     limits.getMaxEvidenceEdges(), reads, limits.getMaxIrDepth()));
         }
     }

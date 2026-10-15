@@ -17,7 +17,9 @@ public final class DiagnosticBag {
         return new DiagnosticBag(Collections.<Diagnostic>emptyList());
     }
 
-    /** Keeps first occurrence order at an orchestration boundary. */
+    /**
+     * Keeps first occurrence order at an orchestration boundary.
+     */
     public static List<Diagnostic> distinct(List<Diagnostic> diagnostics) {
         Map<DiagnosticKey, Diagnostic> unique = new LinkedHashMap<>();
         diagnostics.forEach(diagnostic -> unique.putIfAbsent(new DiagnosticKey(diagnostic), diagnostic));

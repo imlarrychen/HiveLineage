@@ -2,7 +2,9 @@ package com.panfan.hivelineage.v2.syntax;
 
 import java.util.Objects;
 
-/** A null static value denotes a syntactically dynamic partition. */
+/**
+ * A null static value denotes a syntactically dynamic partition.
+ */
 public final class PartitionEntrySyntax {
     private final IdentifierPart column;
     private final SyntaxExpression staticValue;

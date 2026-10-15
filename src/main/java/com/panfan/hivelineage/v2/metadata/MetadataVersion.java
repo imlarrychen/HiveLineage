@@ -1,6 +1,7 @@
 package com.panfan.hivelineage.v2.metadata;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
+
 import java.util.Optional;
 
 public final class MetadataVersion {

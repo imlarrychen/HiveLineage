@@ -6,6 +6,7 @@ import com.panfan.hivelineage.v2.common.DiagnosticBag;
 import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.common.ResourceLimitException;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -14,7 +15,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-/** Serializes only reads in a batch. Payloads, failures and negative results are pinned. */
+/**
+ * Serializes only reads in a batch. Payloads, failures and negative results are pinned.
+ */
 public final class CapturedMetadataAccess implements WorkflowMetadataAccess {
     private final MetadataReadContext context;
     private final MetadataCache cache;
@@ -84,15 +87,15 @@ public final class CapturedMetadataAccess implements WorkflowMetadataAccess {
                 if (result.getValue().isPresent()) {
                     RelationMetadata relation = result.getValue().get();
                     seed(name, MetadataFacet.OBJECT_DESCRIPTOR, ObjectDescriptor.class,
-                        LookupResult.found(relation.getObject(), result.getDiagnostics()), provider.get().getLookupShape(name, MetadataFacet.RELATION_METADATA));
+                            LookupResult.found(relation.getObject(), result.getDiagnostics()), provider.get().getLookupShape(name, MetadataFacet.RELATION_METADATA));
                     seed(name, MetadataFacet.RELATION_SCHEMA, RelationSchema.class,
-                        LookupResult.found(relation.getSchema(), result.getDiagnostics()), provider.get().getLookupShape(name, MetadataFacet.RELATION_METADATA));
+                            LookupResult.found(relation.getSchema(), result.getDiagnostics()), provider.get().getLookupShape(name, MetadataFacet.RELATION_METADATA));
                 }
                 return result;
             }
             if (objectProvider.isPresent() && schemaProvider.isPresent()
-                && objectProvider.get().getCapabilities().supports(MetadataFacet.OBJECT_DESCRIPTOR)
-                && schemaProvider.get().getCapabilities().supports(MetadataFacet.RELATION_SCHEMA)) {
+                    && objectProvider.get().getCapabilities().supports(MetadataFacet.OBJECT_DESCRIPTOR)
+                    && schemaProvider.get().getCapabilities().supports(MetadataFacet.RELATION_SCHEMA)) {
                 LookupResult<ObjectDescriptor> object = lookupObject(name, scope, budget);
                 shapes.put(key(name, MetadataFacet.RELATION_METADATA), ProviderCapabilities.LookupShape.FACET_LOOKUP);
                 if (!object.getValue().isPresent()) {
@@ -114,7 +117,7 @@ public final class CapturedMetadataAccess implements WorkflowMetadataAccess {
         for (RecordedLookup<?> read : pinned.values()) {
             Object payload = read.getResult().getValue().orElse(null);
             MetadataProvenance provenance = new MetadataProvenance(context.getSourceId(),
-                MetadataProvenance.Origin.PROVIDER_DEFINED, Optional.<String>empty(), Optional.<Long>empty());
+                    MetadataProvenance.Origin.PROVIDER_DEFINED, Optional.<String>empty(), Optional.<Long>empty());
             MetadataVersion version = MetadataVersion.unknown();
             if (payload instanceof RelationMetadata) {
                 provenance = ((RelationMetadata) payload).getObject().getProvenance();
@@ -127,10 +130,10 @@ public final class CapturedMetadataAccess implements WorkflowMetadataAccess {
                 version = ((RelationSchema) payload).getVersion();
             }
             records.add(new MetadataReadRecord(read.getKey(), read.getResult().getStatus(), provenance,
-                shapes.getOrDefault(read.getKey(), ProviderCapabilities.LookupShape.FACET_LOOKUP), version, Optional.<String>empty()));
+                    shapes.getOrDefault(read.getKey(), ProviderCapabilities.LookupShape.FACET_LOOKUP), version, Optional.<String>empty()));
         }
         return new MetadataReadManifest(context, records, context.getSnapshotId().isPresent()
-            ? MetadataReadManifest.Consistency.PROVIDER_SNAPSHOT : MetadataReadManifest.Consistency.PER_OBJECT_CAPTURE);
+                ? MetadataReadManifest.Consistency.PROVIDER_SNAPSHOT : MetadataReadManifest.Consistency.PER_OBJECT_CAPTURE);
     }
 
     private static void consume(ExternalReadBudget budget) {
@@ -160,7 +163,7 @@ public final class CapturedMetadataAccess implements WorkflowMetadataAccess {
 
     @SuppressWarnings("unchecked")
     private <T> LookupResult<T> load(QualifiedName name, MetadataReadContext scope, MetadataFacet facet,
-                                    Class<T> type, Supplier<LookupResult<T>> reader) {
+                                     Class<T> type, Supplier<LookupResult<T>> reader) {
         if (!context.equals(scope)) {
             throw new IllegalArgumentException("workflow read context mismatch");
         }
@@ -185,7 +188,7 @@ public final class CapturedMetadataAccess implements WorkflowMetadataAccess {
                     throw failure;
                 }
                 Diagnostic diagnostic = new Diagnostic(AnalysisStage.METADATA, "METADATA_ACCESS_ERROR",
-                    failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage(), SourceRef.synthetic("metadata"));
+                        failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage(), SourceRef.synthetic("metadata"));
                 result = LookupResult.accessError(new DiagnosticBag(Collections.singletonList(diagnostic)));
             }
             cache.put(key, type, result, ttlMillis, shape(name, facet));

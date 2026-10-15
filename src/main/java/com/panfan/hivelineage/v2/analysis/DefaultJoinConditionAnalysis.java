@@ -20,6 +20,7 @@ import com.panfan.hivelineage.v2.ir.quality.BindingRequirement;
 import com.panfan.hivelineage.v2.ir.relation.BoundRelation;
 import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.ir.statement.VerifiedAnalysisUnit;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -30,7 +31,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-/** Reads bound predicate structure and owner annotations; never extracts keywords from text. */
+/**
+ * Reads bound predicate structure and owner annotations; never extracts keywords from text.
+ */
 public final class DefaultJoinConditionAnalysis implements JoinConditionAnalysis {
     private final int maxEvidenceEdges;
 
@@ -210,7 +213,7 @@ public final class DefaultJoinConditionAnalysis implements JoinConditionAnalysis
     }
 
     private void postorder(BoundRelation relation, QueryBlockId block, PureIrIndex index,
-            Set<NodeId> seen, List<Relations.Join> result) {
+                           Set<NodeId> seen, List<Relations.Join> result) {
         if (!relation.getQueryBlockId().equals(block) || !seen.add(relation.getId())) {
             return;
         }

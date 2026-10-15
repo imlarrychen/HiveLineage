@@ -1,10 +1,13 @@
 package com.panfan.hivelineage.v2.frontend;
 
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.List;
 import java.util.Objects;
 
-/** Source mapping data only; resolving an offset is delegated to SourceMapper. */
+/**
+ * Source mapping data only; resolving an offset is delegated to SourceMapper.
+ */
 public final class SourceMap {
     private final String originalSourceId;
     private final String expandedSourceId;

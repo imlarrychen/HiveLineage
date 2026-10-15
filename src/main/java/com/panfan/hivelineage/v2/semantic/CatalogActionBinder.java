@@ -25,11 +25,14 @@ import com.panfan.hivelineage.v2.syntax.ColumnPositionKindSyntax;
 import com.panfan.hivelineage.v2.syntax.ColumnsActionSyntax;
 import com.panfan.hivelineage.v2.syntax.DefinitionBodySyntax;
 import com.panfan.hivelineage.v2.syntax.RenameActionSyntax;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/** Structural ALTER changes use a known local/read schema, otherwise retain uncertainty. */
+/**
+ * Structural ALTER changes use a known local/read schema, otherwise retain uncertainty.
+ */
 final class CatalogActionBinder {
     private final BindingContext context;
 
@@ -38,27 +41,27 @@ final class CatalogActionBinder {
     }
 
     List<BoundEffect> alter(DefinitionBodySyntax body, QualifiedName name, ObjectId object,
-                           NodeId id, Effects.Precondition precondition) {
+                            NodeId id, Effects.Precondition precondition) {
         List<BoundEffect> effects = new ArrayList<>();
         List<ColumnMetadata> columns = null;
         CatalogEntry local = local(name, object);
         Effects.ObjectKind objectKind = local != null && local.getObject().getKind() == ObjectDescriptor.Kind.TEMPORARY_TABLE
-            ? Effects.ObjectKind.TEMPORARY_TABLE : local != null && local.getObject().getKind() == ObjectDescriptor.Kind.VIEW
-                ? Effects.ObjectKind.VIEW : body.getKind() == com.panfan.hivelineage.v2.syntax.DefinitionKindSyntax.ALTER_VIEW
-                    ? Effects.ObjectKind.VIEW : Effects.ObjectKind.TABLE;
+                ? Effects.ObjectKind.TEMPORARY_TABLE : local != null && local.getObject().getKind() == ObjectDescriptor.Kind.VIEW
+                                                       ? Effects.ObjectKind.VIEW : body.getKind() == com.panfan.hivelineage.v2.syntax.DefinitionKindSyntax.ALTER_VIEW
+                                                                                   ? Effects.ObjectKind.VIEW : Effects.ObjectKind.TABLE;
         int actionIndex = 0;
         for (AlterActionSyntax action : body.getAlterActions()) {
             NodeId actionId = new NodeId(id.getValue() + "/" + actionIndex++);
             if (action instanceof RenameActionSyntax) {
                 effects.add(new Effects.RenameObject(actionId, Effects.Certainty.CERTAIN, precondition, object,
-                    SemanticNames.qualify(((RenameActionSyntax) action).getNewName(), context,
-                        objectKind == Effects.ObjectKind.TEMPORARY_TABLE), name));
+                        SemanticNames.qualify(((RenameActionSyntax) action).getNewName(), context,
+                                objectKind == Effects.ObjectKind.TEMPORARY_TABLE), name));
                 continue;
             }
             if (!(action instanceof ColumnsActionSyntax) && !(action instanceof ChangeColumnActionSyntax)) {
                 effects.add(new Effects.UnknownEffect(actionId, Effects.Certainty.UNKNOWN, precondition,
-                    Collections.singletonList(object), Collections.<Effects.SessionKey>emptyList(), false,
-                    "CATALOG_ACTION_NOT_BOUND"));
+                        Collections.singletonList(object), Collections.<Effects.SessionKey>emptyList(), false,
+                        "CATALOG_ACTION_NOT_BOUND"));
                 continue;
             }
             if (columns == null) {
@@ -69,7 +72,7 @@ final class CatalogActionBinder {
             }
             if (columns == null) {
                 effects.add(new Effects.UnknownEffect(actionId, Effects.Certainty.UNKNOWN, precondition,
-                    Collections.singletonList(object), Collections.<Effects.SessionKey>emptyList(), false, "CATALOG_SCHEMA_UNKNOWN"));
+                        Collections.singletonList(object), Collections.<Effects.SessionKey>emptyList(), false, "CATALOG_SCHEMA_UNKNOWN"));
                 continue;
             }
             if (action instanceof ColumnsActionSyntax) {
@@ -113,7 +116,7 @@ final class CatalogActionBinder {
                     position = preceding + 1;
                 }
                 ColumnMetadata replacement = new ColumnMetadata(SemanticNames.normalize(change.getNewDefinition().getName().getValue()),
-                    position, SemanticTypes.declared(change.getNewDefinition().getType()), previous.getRole(), previous.getNullability());
+                        position, SemanticTypes.declared(change.getNewDefinition().getType()), previous.getRole(), previous.getNullability());
                 columns.add(Math.min(position, columns.size()), replacement);
             }
             List<OutputSlot> slots = new ArrayList<>();
@@ -128,8 +131,8 @@ final class CatalogActionBinder {
                 slots.add(new OutputSlot(new SlotId(actionId.getValue() + "/column-" + position++), columnName, column.getType(), field));
             }
             effects.add(new Effects.AlterObject(actionId, Effects.Certainty.CERTAIN, precondition,
-                new Effects.ObjectShape(object, name, objectKind, OutputSchema.known(slots), VersionRef.notRequested(),
-                    local == null ? Collections.singletonList(name) : local.getLookupNames(), partitions)));
+                    new Effects.ObjectShape(object, name, objectKind, OutputSchema.known(slots), VersionRef.notRequested(),
+                            local == null ? Collections.singletonList(name) : local.getLookupNames(), partitions)));
         }
         return effects;
     }
@@ -158,7 +161,7 @@ final class CatalogActionBinder {
                 }
             }
             columns.add(position, new ColumnMetadata(name, position, SemanticTypes.declared(addition.getType()),
-                ColumnMetadata.Role.DATA, ColumnMetadata.Nullability.UNKNOWN));
+                    ColumnMetadata.Role.DATA, ColumnMetadata.Nullability.UNKNOWN));
         }
     }
 

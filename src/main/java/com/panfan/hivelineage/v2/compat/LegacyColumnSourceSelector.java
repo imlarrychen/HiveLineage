@@ -19,6 +19,7 @@ import com.panfan.hivelineage.v2.ir.relation.OutputSlot;
 import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -28,7 +29,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-/** Chooses display boundaries over proven dependencies, without producing or changing lineage facts. */
+/**
+ * Chooses display boundaries over proven dependencies, without producing or changing lineage facts.
+ */
 final class LegacyColumnSourceSelector {
     private final BoundAnalysisUnit unit;
     private final BoundNameIndex names;

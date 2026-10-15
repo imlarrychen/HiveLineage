@@ -28,12 +28,15 @@ import com.panfan.hivelineage.v2.metadata.RelationSchema;
 import com.panfan.hivelineage.v2.metadata.RelationSchemaProvider;
 import com.panfan.hivelineage.v2.metadata.WorkflowContext;
 import com.panfan.hivelineage.v2.testing.LegacyCorpusMetadataFixture;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -61,7 +64,7 @@ public class DefaultScriptLineageAnalyzerIntegrationTest {
     @Test
     public void tableOnlyStarAndSubqueryTraverseObjectsWithoutSchema() {
         ScriptAnalysisRequest request = request("insert into db.output_target select a.* from db.t a where exists(select 1 from db.u b where b.id=a.id)",
-            LineageParseMode.TABLE_ONLY, null, false);
+                LineageParseMode.TABLE_ONLY, null, false);
         AtomicInteger schemas = new AtomicInteger();
         ScriptAnalysisResult result = new DefaultScriptLineageAnalyzer().analyzeScript(request, light(request, schemas));
         assertEquals(diagnostics(result), 0, result.getCounts().getFailed());
@@ -74,17 +77,17 @@ public class DefaultScriptLineageAnalyzerIntegrationTest {
     @Test
     public void metadataViewUsesCreationDatabaseAndFailuresRecover() {
         HiveMetadataProvider provider = table -> table.getTableName().equals("v")
-            ? HiveTableMetadata.view(table, Collections.singletonList("id"), "select id from base")
-            : HiveTableMetadata.table(table, Collections.singletonList("id"));
+                ? HiveTableMetadata.view(table, Collections.singletonList("id"), "select id from base")
+                : HiveTableMetadata.table(table, Collections.singletonList("id"));
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder().workflowId("wf").taskId("task").taskVersion("V1")
-            .defaultDatabase("wrong_database").metadataProvider(provider).rawScript("insert into output_target(id) select id from viewdb.v")
-            .options(LineageAnalyzeOptions.builder().expandViewLineage(true).includeIgnoredStatements(true).build()).build();
+                .defaultDatabase("wrong_database").metadataProvider(provider).rawScript("insert into output_target(id) select id from viewdb.v")
+                .options(LineageAnalyzeOptions.builder().expandViewLineage(true).includeIgnoredStatements(true).build()).build();
         ScriptAnalysisResult result = new HiveScriptLineageAdapter().analyzeNative(request);
         assertEquals(diagnostics(result), 0, result.getCounts().getFailed());
         assertTrue(result.getStatements().get(0).getBoundUnit().get().getObjects().values().stream()
-            .anyMatch(object -> object.getName().getDisplayName().equals("viewdb.base")));
+                .anyMatch(object -> object.getName().getDisplayName().equals("viewdb.base")));
         assertFalse(result.getStatements().get(0).getBoundUnit().get().getObjects().values().stream()
-            .anyMatch(object -> object.getName().getDisplayName().equals("wrong_database.base")));
+                .anyMatch(object -> object.getName().getDisplayName().equals("wrong_database.base")));
     }
 
     @Test
@@ -92,15 +95,15 @@ public class DefaultScriptLineageAnalyzerIntegrationTest {
         HiveScriptLineageAdapter analyzer = new HiveScriptLineageAdapter();
         HiveMetadataProvider provider = LegacyCorpusMetadataFixture.provider();
         LineageAnalyzeRequest first = LineageAnalyzeRequest.builder().workflowId("wf").taskId("task").taskVersion("V1")
-            .defaultDatabase("default").runtimeVariables(Collections.singletonMap("day", "old")).metadataProvider(provider)
-            .rawScript("set day='new'; insert into test_a(a1) select '${hiveconf:day}' from test_b")
-            .options(LineageAnalyzeOptions.builder().includeIgnoredStatements(true).build()).build();
+                .defaultDatabase("default").runtimeVariables(Collections.singletonMap("day", "old")).metadataProvider(provider)
+                .rawScript("set day='new'; insert into test_a(a1) select '${hiveconf:day}' from test_b")
+                .options(LineageAnalyzeOptions.builder().includeIgnoredStatements(true).build()).build();
         ScriptAnalysisResult firstResult = analyzer.analyzeNative(first);
         assertEquals(0, firstResult.getCounts().getFailed());
         assertTrue(firstResult.getStatements().get(1).getNormalizedSql().getText(), firstResult.getStatements().get(1).getNormalizedSql().getText().contains("'new'"));
         LineageAnalyzeRequest second = LineageAnalyzeRequest.builder().workflowId("wf").taskId("task").taskVersion("V2")
-            .defaultDatabase("default").runtimeVariables(Collections.singletonMap("day", "old")).metadataProvider(provider)
-            .rawScript("insert into test_a(a1) select '${day}' from test_b").build();
+                .defaultDatabase("default").runtimeVariables(Collections.singletonMap("day", "old")).metadataProvider(provider)
+                .rawScript("insert into test_a(a1) select '${day}' from test_b").build();
         assertTrue(analyzer.analyzeNative(second).getStatements().get(0).getNormalizedSql().getText().contains("'old'"));
     }
 
@@ -109,7 +112,7 @@ public class DefaultScriptLineageAnalyzerIntegrationTest {
         HiveMetadataProvider provider = LegacyCorpusMetadataFixture.provider();
         String script = "insert into test_a(a1) select from; insert into test_a(a1) select b1 from test_b";
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder().workflowId("wf").taskId("task").taskVersion("V1")
-            .defaultDatabase("default").rawScript(script).metadataProvider(provider).options(LineageAnalyzeOptions.builder().failFast(true).build()).build();
+                .defaultDatabase("default").rawScript(script).metadataProvider(provider).options(LineageAnalyzeOptions.builder().failFast(true).build()).build();
         ScriptAnalysisResult result = new HiveScriptLineageAdapter().analyzeNative(request);
         assertEquals(2, result.getCounts().getTotal());
         assertEquals(1, result.getStatements().size());
@@ -139,15 +142,15 @@ public class DefaultScriptLineageAnalyzerIntegrationTest {
 
     private static ScriptAnalysisRequest request(String sql, LineageParseMode mode, HiveMetadataProvider provider, boolean join) {
         return new DefaultRequestAdapter().adapt(LineageAnalyzeRequest.builder().workflowId("wf").taskId("task").taskVersion("V1")
-            .defaultDatabase("default").rawScript(sql).metadataProvider(provider).options(LineageAnalyzeOptions.builder().parseMode(mode)
-                .parseJoinConditions(join).includeIgnoredStatements(true).expandViewLineage(true).build()).build());
+                .defaultDatabase("default").rawScript(sql).metadataProvider(provider).options(LineageAnalyzeOptions.builder().parseMode(mode)
+                        .parseJoinConditions(join).includeIgnoredStatements(true).expandViewLineage(true).build()).build());
     }
 
     private static ScriptAnalysisRequest capabilities(ScriptAnalysisRequest base, EnumSet<AnalysisCapability> capabilities) {
         AnalysisContract original = base.getContract();
         AnalysisContract contract = new AnalysisContract(new AnalysisCapabilities(capabilities), original.getVariablePolicy(), original.getDefinitionPolicy(),
-            original.getStarMappingPolicy(), original.getPublicationPolicy(), original.isIncludeTemporaryLineage(), original.isIncludeIgnoredStatements(),
-            original.isExpandViewLineage(), original.getMaxViewExpandDepth(), original.isFailFast(), original.getFallbackVariableValue());
+                original.getStarMappingPolicy(), original.getPublicationPolicy(), original.isIncludeTemporaryLineage(), original.isIncludeIgnoredStatements(),
+                original.isExpandViewLineage(), original.getMaxViewExpandDepth(), original.isFailFast(), original.getFallbackVariableValue());
         return new ScriptAnalysisRequest(base.getTask(), base.getSource(), base.getDialect(), base.getInitialSession(), base.getMetadataContext(), contract, base.getResourceLimits());
     }
 
@@ -161,7 +164,7 @@ public class DefaultScriptLineageAnalyzerIntegrationTest {
             @Override
             public LookupResult<ObjectDescriptor> lookupObject(QualifiedName name, MetadataReadContext context) {
                 return LookupResult.found(new ObjectDescriptor(new ObjectId(name.getDisplayName()), name, ObjectDescriptor.Kind.TABLE,
-                    Optional.<DefinitionRef>empty(), new MetadataProvenance(context.getSourceId(), MetadataProvenance.Origin.TEST_FIXTURE,
+                        Optional.<DefinitionRef>empty(), new MetadataProvenance(context.getSourceId(), MetadataProvenance.Origin.TEST_FIXTURE,
                         Optional.<String>empty(), Optional.<Long>empty()), MetadataVersion.unknown()));
             }
         };

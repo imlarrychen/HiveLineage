@@ -3,6 +3,7 @@ package com.panfan.hivelineage.v2.syntax;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
+
 import java.util.List;
 
 public final class CaseSyntax extends SyntaxExpression {

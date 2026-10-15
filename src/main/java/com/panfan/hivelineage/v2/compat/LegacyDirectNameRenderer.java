@@ -9,9 +9,12 @@ import com.panfan.hivelineage.v2.ir.IrTraversal;
 import com.panfan.hivelineage.v2.ir.expression.BoundExpression;
 import com.panfan.hivelineage.v2.ir.expression.Expressions;
 import com.panfan.hivelineage.v2.ir.expression.QualifiedFieldHandle;
+
 import java.util.Optional;
 
-/** Retains an unqualified spelling for an already bound direct condition reference. */
+/**
+ * Retains an unqualified spelling for an already bound direct condition reference.
+ */
 final class LegacyDirectNameRenderer {
     private final BoundNameIndex names;
     private final SourceRenderer renderer;

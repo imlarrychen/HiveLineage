@@ -35,6 +35,7 @@ import com.panfan.hivelineage.v2.ir.statement.VersionRef;
 import com.panfan.hivelineage.v2.semantic.BindingDemand;
 import com.panfan.hivelineage.v2.semantic.DefaultIrVerifier;
 import com.panfan.hivelineage.v2.semantic.VerificationResult;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -44,7 +45,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** SQL-free graphs with explicit object declarations and real verification. */
+/**
+ * SQL-free graphs with explicit object declarations and real verification.
+ */
 public final class AnalysisFixtures {
     private AnalysisFixtures() {
     }

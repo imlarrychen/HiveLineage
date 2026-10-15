@@ -2,6 +2,7 @@ package com.panfan.hivelineage.v2.analysis;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.ir.expression.BoundExpression;
+
 import java.util.Optional;
 
 public final class Dependency {

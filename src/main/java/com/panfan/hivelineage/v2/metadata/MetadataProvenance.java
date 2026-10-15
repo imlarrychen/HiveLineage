@@ -1,9 +1,12 @@
 package com.panfan.hivelineage.v2.metadata;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
+
 import java.util.Optional;
 
-/** Describes recorded evidence; it does not claim global snapshot consistency. */
+/**
+ * Describes recorded evidence; it does not claim global snapshot consistency.
+ */
 public final class MetadataProvenance {
     public enum Origin {
         ORIGINAL_DEFINITION,

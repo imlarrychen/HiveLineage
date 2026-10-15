@@ -10,6 +10,7 @@ import com.panfan.hivelineage.v2.ir.relation.BoundRelation;
 import com.panfan.hivelineage.v2.ir.relation.UnknownOutputSegment;
 import com.panfan.hivelineage.v2.ir.relation.OutputSegment;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -17,7 +18,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/** One-analysis memoized relation algebra; state never escapes into a shared Session. */
+/**
+ * One-analysis memoized relation algebra; state never escapes into a shared Session.
+ */
 final class RelationFactsEngine implements ExpressionFactsResolver.Upstream {
     private final PureIrIndex index;
     private final FactSupport support;
@@ -53,7 +56,7 @@ final class RelationFactsEngine implements ExpressionFactsResolver.Upstream {
             }
         }
         List<Dependency> unknown = Collections.singletonList(support.dependency(new UnknownEndpoint(
-                FactSupport.diagnostic("SLOT_FACTS_UNKNOWN", "No proven facts for bound slot", null)), new SlotEndpoint(id),
+                        FactSupport.diagnostic("SLOT_FACTS_UNKNOWN", "No proven facts for bound slot", null)), new SlotEndpoint(id),
                 DependencyRole.VALUE, DependencyPrecision.UNKNOWN, new NodeId("unknown-slot:" + id.getValue()),
                 "unknown.slot", Collections.emptyList(), Optional.empty()));
         return facts(new NodeId("unknown-slot:" + id.getValue()), unknown);

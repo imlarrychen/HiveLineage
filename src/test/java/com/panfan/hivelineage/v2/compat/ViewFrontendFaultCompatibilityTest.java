@@ -9,8 +9,10 @@ import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.result.WarningCode;
 import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
 import com.panfan.hivelineage.v2.testing.ViewFrontendFaultAnalyzerFactory;
+
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -21,7 +23,7 @@ public class ViewFrontendFaultCompatibilityTest {
         HiveScriptLineageAdapter analyzer = ViewFrontendFaultAnalyzerFactory.createWithViewFrontendFault(faults);
         HiveMetadataProvider provider = table -> "dim.v_broken_user".equals(table.getQualifiedName())
                 ? HiveTableMetadata.view(table, Collections.singletonList("user_id"),
-                        "select bad_view_marker as user_id from ods.user_base")
+                "select bad_view_marker as user_id from ods.user_base")
                 : HiveTableMetadata.table(table, Collections.singletonList("user_id"));
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder().workflowId("wf_001")
                 .taskId("task_view_expansion_failed").taskVersion("V1").defaultDatabase("default")

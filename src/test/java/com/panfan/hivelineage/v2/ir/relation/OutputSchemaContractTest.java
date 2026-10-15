@@ -5,13 +5,16 @@ import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.ir.quality.BindingCoverage;
 import com.panfan.hivelineage.v2.ir.quality.BindingRequirement;
 import com.panfan.hivelineage.v2.ir.quality.SchemaState;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertSame;

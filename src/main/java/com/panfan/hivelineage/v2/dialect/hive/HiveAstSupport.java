@@ -14,6 +14,7 @@ import com.panfan.hivelineage.v2.syntax.QuoteKind;
 import com.panfan.hivelineage.v2.syntax.SyntaxName;
 import com.panfan.hivelineage.v2.syntax.SyntaxOptions;
 import com.panfan.hivelineage.v2.syntax.InsertModeSyntax;
+
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.ArrayList;
@@ -24,6 +25,7 @@ import java.util.HashMap;
 import java.util.Collections;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
 

@@ -3,10 +3,13 @@ package com.panfan.hivelineage.v2.ir.relation;
 import com.panfan.hivelineage.v2.ir.FieldIdentity;
 import com.panfan.hivelineage.v2.ir.TypeRef;
 import com.panfan.hivelineage.v2.ir.identity.SlotId;
+
 import java.util.Objects;
 import java.util.Optional;
 
-/** Ordered output identity; displayName is not an identity key. */
+/**
+ * Ordered output identity; displayName is not an identity key.
+ */
 public final class OutputSlot {
     private final SlotId id;
     private final String displayName;

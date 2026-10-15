@@ -11,11 +11,13 @@ import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.result.TableLineage;
 import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
 import com.panfan.hivelineage.v2.export.DefaultFormalLineageRecordExporter;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.junit.Assert;
 import org.junit.Test;
 

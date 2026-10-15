@@ -11,13 +11,18 @@ import com.panfan.hivelineage.v2.analysis.Validity;
 import com.panfan.hivelineage.v2.api.DefaultScriptLineageAnalyzer;
 import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
 import com.panfan.hivelineage.v2.api.StarMappingPolicy;
+
 import java.util.Arrays;
 import java.util.Collections;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/** V1 input/expected semantics copied from the original tests, with native assumptions exposed. */
+/**
+ * V1 input/expected semantics copied from the original tests, with native assumptions exposed.
+ */
 public class LegacyTargetMappingRegressionTest {
     @Test
     public void noTargetMetadataInfersProjectionAndPartitionsOnlyUnderCurrentApiPolicy() {
@@ -32,22 +37,22 @@ public class LegacyTargetMappingRegressionTest {
         assertEquals(Validity.UNDETERMINED, assumed.getStatements().get(0).getLineage().get().getQuality().getValidity());
         assertTrue(assumed.getDiagnostics().getDiagnostics().stream().anyMatch(diagnostic -> "CURRENT_API_TARGET_MAPPING".equals(diagnostic.getCode())));
         ScriptAnalysisResult exact = new HiveScriptLineageAdapter(new DefaultScriptLineageAnalyzer(),
-            new DefaultRequestAdapter(StarMappingPolicy.POSITIONAL_EXACT), new DefaultLegacyResultProjector())
-            .analyzeNative(request("insert into dwd.user_profile select user_id from ods.user_base", null));
+                new DefaultRequestAdapter(StarMappingPolicy.POSITIONAL_EXACT), new DefaultLegacyResultProjector())
+                .analyzeNative(request("insert into dwd.user_profile select user_id from ods.user_base", null));
         assertTrue(exact.getStatements().get(0).getBoundUnit().get().getWrites().get(0).getAssignments().isEmpty());
     }
 
     @Test
     public void nonStarKnownTargetPrefixIsNamedAssumptionWhileNativePositionsRemainExact() {
         HiveMetadataProvider provider = table -> HiveTableMetadata.table(table, table.getQualifiedName().equals("whc.c")
-            ? Arrays.asList("field1", "id", "name", "value") : Arrays.asList("id", "field1"));
+                ? Arrays.asList("field1", "id", "name", "value") : Arrays.asList("id", "field1"));
         StatementLineageResult current = analyze("insert into whc.c select whc.a.field1 from whc.a", provider);
         assertEquals(1, current.getColumnLineages().size());
         assertEquals("whc.c.field1", current.getColumnLineages().get(0).getTargetColumn().getQualifiedName());
         assertEquals("whc.a.field1", current.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName());
         ScriptAnalysisResult strict = new HiveScriptLineageAdapter(new DefaultScriptLineageAnalyzer(),
-            new DefaultRequestAdapter(StarMappingPolicy.POSITIONAL_EXACT), new DefaultLegacyResultProjector())
-            .analyzeNative(request("insert into whc.c select whc.a.field1 from whc.a", provider));
+                new DefaultRequestAdapter(StarMappingPolicy.POSITIONAL_EXACT), new DefaultLegacyResultProjector())
+                .analyzeNative(request("insert into whc.c select whc.a.field1 from whc.a", provider));
         assertEquals(1, strict.getCounts().getFailed());
     }
 
@@ -55,8 +60,8 @@ public class LegacyTargetMappingRegressionTest {
     public void unknownQualifiedStarsKeepDeclaredTargetsWithoutBorrowingAnySource() {
         HiveMetadataProvider provider = table -> HiveTableMetadata.table(table, Collections.singletonList("id"));
         for (String projection : Arrays.asList("missing.* from db1.a a",
-            "x.* from db1.a a union all select x.* from db2.b x",
-            "a.* from db1.a a union all select missing.* from db2.b b")) {
+                "x.* from db1.a a union all select x.* from db2.b x",
+                "a.* from db1.a a union all select missing.* from db2.b b")) {
             StatementLineageResult current = analyze("insert into target.c select " + projection, provider);
             assertEquals(1, current.getColumnLineages().size());
             assertTrue(current.getColumnLineages().get(0).getSourceColumns().isEmpty());
@@ -83,7 +88,7 @@ public class LegacyTargetMappingRegressionTest {
     @Test
     public void unknownStructPathDoesNotInventAFieldWithALongerQualifiedOwner() {
         HiveMetadataProvider provider = table -> HiveTableMetadata.table(table,
-            table.getQualifiedName().equals("target.c") ? Collections.singletonList("id") : Collections.singletonList("payload"));
+                table.getQualifiedName().equals("target.c") ? Collections.singletonList("id") : Collections.singletonList("payload"));
         StatementLineageResult result = analyze("insert into target.c select a.payload.value+1 from db1.a a", provider);
         assertEquals(1, result.getColumnLineages().size());
         assertTrue(result.getColumnLineages().get(0).getSourceColumns().isEmpty());
@@ -99,7 +104,7 @@ public class LegacyTargetMappingRegressionTest {
 
     private LineageAnalyzeRequest request(String sql, HiveMetadataProvider provider) {
         return LineageAnalyzeRequest.builder().workflowId("wf").taskId("legacy-target").taskVersion("V1")
-            .defaultDatabase("default").rawScript(sql).metadataProvider(provider)
-            .options(LineageAnalyzeOptions.builder().parseMode(LineageParseMode.TABLE_AND_COLUMN).build()).build();
+                .defaultDatabase("default").rawScript(sql).metadataProvider(provider)
+                .options(LineageAnalyzeOptions.builder().parseMode(LineageParseMode.TABLE_AND_COLUMN).build()).build();
     }
 }

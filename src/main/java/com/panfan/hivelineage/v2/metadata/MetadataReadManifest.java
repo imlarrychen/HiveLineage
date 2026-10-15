@@ -2,9 +2,12 @@ package com.panfan.hivelineage.v2.metadata;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.List;
 
-/** Immutable captured read evidence; creation does not perform or freeze any lookup. */
+/**
+ * Immutable captured read evidence; creation does not perform or freeze any lookup.
+ */
 public final class MetadataReadManifest {
     public enum Consistency {
         PROVIDER_SNAPSHOT,

@@ -18,11 +18,14 @@ import com.panfan.hivelineage.v2.ir.statement.BoundEffect;
 import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
 import com.panfan.hivelineage.v2.ir.statement.QueryResult;
 import com.panfan.hivelineage.v2.ir.statement.VersionRef;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-/** Manual model fixture. It neither parses SQL nor verifies a graph. */
+/**
+ * Manual model fixture. It neither parses SQL nor verifies a graph.
+ */
 public final class IrTestBuilder {
     private IrTestBuilder() {
     }

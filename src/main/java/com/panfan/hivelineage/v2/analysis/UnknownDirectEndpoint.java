@@ -3,10 +3,13 @@ package com.panfan.hivelineage.v2.analysis;
 import com.panfan.hivelineage.v2.common.DiagnosticBag;
 import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.ir.identity.RelationInstanceId;
+
 import java.util.Objects;
 import java.util.Optional;
 
-/** Display-only unresolved reference; it is never a physical field assertion. */
+/**
+ * Display-only unresolved reference; it is never a physical field assertion.
+ */
 public final class UnknownDirectEndpoint implements LineageEndpoint {
     private final Optional<RelationInstanceId> owner;
     private final QualifiedName displayName;

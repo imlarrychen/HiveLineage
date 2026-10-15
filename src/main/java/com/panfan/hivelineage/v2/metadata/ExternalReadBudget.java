@@ -2,7 +2,9 @@ package com.panfan.hivelineage.v2.metadata;
 
 import com.panfan.hivelineage.v2.common.ResourceLimitException;
 
-/** Request-owned counter for actual provider invocations; zero forbids external calls. */
+/**
+ * Request-owned counter for actual provider invocations; zero forbids external calls.
+ */
 public final class ExternalReadBudget {
     private final int maximumReads;
     private int consumed;

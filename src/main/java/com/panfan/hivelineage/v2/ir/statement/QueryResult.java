@@ -3,10 +3,12 @@ package com.panfan.hivelineage.v2.ir.statement;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.ir.identity.QueryBlockId;
 import com.panfan.hivelineage.v2.ir.relation.OutputSchema;
+
 import java.util.Objects;
 
 public final class QueryResult {
-    public enum Role { MAIN, CTE, SUBQUERY, DEFINITION }
+    public enum Role {MAIN, CTE, SUBQUERY, DEFINITION}
+
     private final NodeId relationRoot;
     private final QueryBlockId queryBlockId;
     private final OutputSchema outputSchema;

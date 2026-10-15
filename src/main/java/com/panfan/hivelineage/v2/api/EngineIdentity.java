@@ -9,6 +9,7 @@ public final class EngineIdentity {
     public static EngineIdentity v2(String rulesVersion) {
         return new EngineIdentity(V2_ENGINE_ID, V2_ENGINE_VERSION, rulesVersion);
     }
+
     private final String engineId;
     private final String engineVersion;
     private final String rulesVersion;

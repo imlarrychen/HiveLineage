@@ -7,6 +7,7 @@ import com.panfan.hivelineage.v2.ir.quality.BindingRequirement;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 import com.panfan.hivelineage.v2.ir.statement.VerificationCertificate;
 import com.panfan.hivelineage.v2.ir.statement.VerifiedAnalysisUnit;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -14,7 +15,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Issues a scoped certificate only after both real verifier stages accept the exact unit. */
+/**
+ * Issues a scoped certificate only after both real verifier stages accept the exact unit.
+ */
 public final class DefaultIrVerifier implements IrVerifier {
     private final StructuralVerifier structural;
     private final BindingVerifier binding;

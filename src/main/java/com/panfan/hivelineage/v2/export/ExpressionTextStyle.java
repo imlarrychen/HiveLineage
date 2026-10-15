@@ -5,7 +5,9 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 
-/** Presentation-only keyword spelling; quoted strings and identifiers retain their bytes. */
+/**
+ * Presentation-only keyword spelling; quoted strings and identifiers retain their bytes.
+ */
 final class ExpressionTextStyle {
     private static final Set<String> CASE_KEYWORDS = new HashSet<String>(Arrays.asList("CASE", "WHEN", "THEN", "ELSE", "END",
             "BETWEEN", "AND", "OR", "NOT", "IN", "LIKE", "RLIKE", "REGEXP", "IS", "NULL"));

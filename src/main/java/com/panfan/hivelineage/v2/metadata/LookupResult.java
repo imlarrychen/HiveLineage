@@ -2,9 +2,12 @@ package com.panfan.hivelineage.v2.metadata;
 
 import com.panfan.hivelineage.v2.common.DiagnosticBag;
 import com.panfan.hivelineage.v2.common.ModelChecks;
+
 import java.util.Optional;
 
-/** Immutable result distinguishing lack of knowledge, authority and access failures. */
+/**
+ * Immutable result distinguishing lack of knowledge, authority and access failures.
+ */
 public final class LookupResult<T> {
     private final LookupStatus status;
     private final Optional<T> value;

@@ -3,10 +3,13 @@ package com.panfan.hivelineage.v2.session;
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.common.QualifiedName;
+
 import java.util.Map;
 import java.util.Optional;
 
-/** Request-owned initial state; never changes JVM environment or shared workflow state. */
+/**
+ * Request-owned initial state; never changes JVM environment or shared workflow state.
+ */
 public final class InitialSessionContext {
     private final String sessionId;
     private final String workflowId;

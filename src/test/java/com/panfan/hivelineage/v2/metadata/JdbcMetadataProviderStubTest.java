@@ -16,6 +16,7 @@ import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.compat.DefaultLegacyResultProjector;
 import com.panfan.hivelineage.v2.compat.HiveScriptLineageAdapter;
 import com.panfan.hivelineage.v2.export.DefaultFormalLineageRecordExporter;
+
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.Collection;
@@ -23,15 +24,19 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
-/** Uses the unchanged JDBC provider over real DriverManager/Connection/PreparedStatement calls. */
+/**
+ * Uses the unchanged JDBC provider over real DriverManager/Connection/PreparedStatement calls.
+ */
 @RunWith(Parameterized.class)
 public class JdbcMetadataProviderStubTest {
-    private enum Engine { V1, V2 }
+    private enum Engine {V1, V2}
+
     private final Engine engine;
 
     public JdbcMetadataProviderStubTest(Engine engine) {
@@ -40,7 +45,7 @@ public class JdbcMetadataProviderStubTest {
 
     @Parameterized.Parameters(name = "{0}")
     public static Collection<Object[]> engines() {
-        return Arrays.asList(new Object[] { Engine.V1 }, new Object[] { Engine.V2 });
+        return Arrays.asList(new Object[]{Engine.V1}, new Object[]{Engine.V2});
     }
 
     @Test
@@ -130,7 +135,7 @@ public class JdbcMetadataProviderStubTest {
                 Assert.assertEquals(Arrays.asList("ods_it.user_base_it.user_id", "ods_it.user_other_it.user_id"),
                         sources(column(result.legacy.getStatements().get(0), "dim_it.v_user_it.user_id")));
                 List<String> physical = new DefaultFormalLineageRecordExporter().exportColumns(
-                        result.nativeResult.get().getStatements().get(0)).stream()
+                                result.nativeResult.get().getStatements().get(0)).stream()
                         .filter(field -> "dwd_it.user_profile_it".equals(field.getTarget().getObject().getDisplayName()))
                         .filter(field -> field.getTarget().getFieldPath().equals(Collections.singletonList("user_id")))
                         .flatMap(field -> field.getSources().stream()).map(field -> field.getObject().getDisplayName()).collect(Collectors.toList());

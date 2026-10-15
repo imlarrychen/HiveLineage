@@ -1,12 +1,16 @@
 package com.panfan.hivelineage.v2.ir.statement;
 
 import com.panfan.hivelineage.v2.ir.identity.DatasetVersionId;
+
 import java.util.Objects;
 import java.util.Optional;
 
-/** Missing version demand differs from an unknown requested data version. */
+/**
+ * Missing version demand differs from an unknown requested data version.
+ */
 public final class VersionRef {
-    public enum State { NOT_REQUESTED, KNOWN, UNKNOWN }
+    public enum State {NOT_REQUESTED, KNOWN, UNKNOWN}
+
     private final State state;
     private final DatasetVersionId id;
     private final String diagnosticCode;

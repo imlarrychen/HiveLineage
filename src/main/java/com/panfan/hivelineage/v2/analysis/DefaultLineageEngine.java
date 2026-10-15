@@ -13,6 +13,7 @@ import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
 import com.panfan.hivelineage.v2.ir.statement.PartitionScope;
 import com.panfan.hivelineage.v2.ir.statement.VerifiedAnalysisUnit;
 import com.panfan.hivelineage.v2.ir.statement.WriteAssignment;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -20,7 +21,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Pure verified-IR dependency propagation. Every invocation owns its memoized state. */
+/**
+ * Pure verified-IR dependency propagation. Every invocation owns its memoized state.
+ */
 public final class DefaultLineageEngine implements LineageEngine {
     private final int maxEvidenceEdges;
 
@@ -92,7 +95,7 @@ public final class DefaultLineageEngine implements LineageEngine {
             }
             for (UnknownMapping unknown : write.getUnknownMappings()) {
                 dependencies.add(engine.support().dependency(new UnknownEndpoint(FactSupport.diagnostic(unknown.getDiagnosticCode(),
-                        "Write field mapping has an unknown interval", null)), writeRows, DependencyRole.SCHEMA, DependencyPrecision.UNKNOWN,
+                                "Write field mapping has an unknown interval", null)), writeRows, DependencyRole.SCHEMA, DependencyPrecision.UNKNOWN,
                         write.getId(), "write.mapping.unknown", Collections.emptyList(), java.util.Optional.empty()));
             }
         }

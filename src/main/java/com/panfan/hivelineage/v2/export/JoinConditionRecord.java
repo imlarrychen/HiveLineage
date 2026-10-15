@@ -4,6 +4,7 @@ import com.panfan.hivelineage.v2.analysis.JoinFact;
 import com.panfan.hivelineage.v2.api.SourceDocument;
 import com.panfan.hivelineage.v2.api.StatementIdentity;
 import com.panfan.hivelineage.v2.common.ModelChecks;
+
 import java.util.Optional;
 
 public final class JoinConditionRecord {

@@ -9,6 +9,7 @@ import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
 import com.panfan.hivelineage.v2.ir.statement.WriteAssignment;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -16,7 +17,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/** Formal export is derived from typed sink contributions, without SQL parsing or metadata access. */
+/**
+ * Formal export is derived from typed sink contributions, without SQL parsing or metadata access.
+ */
 public final class DefaultFormalLineageRecordExporter implements FormalLineageRecordExporter {
     private final SourceRenderer renderer;
     private final boolean includeTemporary;

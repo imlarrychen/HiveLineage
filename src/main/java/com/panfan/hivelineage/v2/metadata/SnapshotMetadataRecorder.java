@@ -4,7 +4,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Thread-safe read capture. The first value pins every facet within this batch. */
+/**
+ * Thread-safe read capture. The first value pins every facet within this batch.
+ */
 public final class SnapshotMetadataRecorder implements MetadataRecorder {
     private final MetadataReadContext context;
     private final Map<MetadataCacheKey, RecordedLookup<?>> reads = new LinkedHashMap<>();

@@ -25,9 +25,11 @@ import com.panfan.hivelineage.v2.syntax.ValuesRowSyntax;
 import com.panfan.hivelineage.v2.common.AnalysisStage;
 import com.panfan.hivelineage.v2.common.Diagnostic;
 import com.panfan.hivelineage.v2.frontend.StageOutcome;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 
 public final class HiveSyntaxNormalizer implements SyntaxNormalizer<HiveParseArtifact> {

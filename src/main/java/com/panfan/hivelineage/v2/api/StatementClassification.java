@@ -18,7 +18,9 @@ import com.panfan.hivelineage.v2.syntax.SyntaxStatement;
 import com.panfan.hivelineage.v2.syntax.UseCommandSyntax;
 import com.panfan.hivelineage.v2.syntax.ValuesInsertSourceSyntax;
 
-/** Publication names are semantic values supplied by syntax, never parser token names. */
+/**
+ * Publication names are semantic values supplied by syntax, never parser token names.
+ */
 final class StatementClassification {
     final String type;
     final String skipReason;

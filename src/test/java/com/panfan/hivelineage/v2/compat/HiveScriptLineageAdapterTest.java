@@ -11,9 +11,12 @@ import com.panfan.hivelineage.request.LineageParseMode;
 import com.panfan.hivelineage.result.LineageAnalyzeResult;
 import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.result.StatementParseStatus;
+
 import java.util.Arrays;
 import java.util.List;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -57,7 +60,7 @@ public class HiveScriptLineageAdapterTest {
         HiveMetadataCache cache = new HiveMetadataCache();
         for (LineageParseMode mode : LineageParseMode.values()) {
             LineageAnalyzeResult result = analyzer.analyzeScript(request(provider, cache, "V1")
-                .options(LineageAnalyzeOptions.builder().parseMode(mode).build()).build());
+                    .options(LineageAnalyzeOptions.builder().parseMode(mode).build()).build());
             assertEquals(0, result.getFailedStatementCount());
             StatementLineageResult statement = result.getStatements().get(0);
             assertEquals(mode, statement.getParseMode());
@@ -116,14 +119,14 @@ public class HiveScriptLineageAdapterTest {
 
     private static LineageAnalyzeRequest.Builder request(HiveMetadataProvider provider, HiveMetadataCache cache, String version) {
         return LineageAnalyzeRequest.builder()
-            .workflowId("wf_001")
-            .taskId("task_001")
-            .taskVersion(version)
-            .defaultDatabase("default")
-            .metadataProvider(provider)
-            .metadataCache(cache)
-            .rawScript(SQL)
-            .options(LineageAnalyzeOptions.builder().parseMode(LineageParseMode.TABLE_AND_COLUMN).build());
+                .workflowId("wf_001")
+                .taskId("task_001")
+                .taskVersion(version)
+                .defaultDatabase("default")
+                .metadataProvider(provider)
+                .metadataCache(cache)
+                .rawScript(SQL)
+                .options(LineageAnalyzeOptions.builder().parseMode(LineageParseMode.TABLE_AND_COLUMN).build());
     }
 
     private static void assertColumns(StatementLineageResult statement, String firstSource, String secondSource) {
@@ -132,9 +135,9 @@ public class HiveScriptLineageAdapterTest {
         assertEquals("dwd.user_profile.id", statement.getColumnLineages().get(0).getTargetColumn().getQualifiedName());
         assertEquals("dwd.user_profile.name", statement.getColumnLineages().get(1).getTargetColumn().getQualifiedName());
         assertEquals("ods.user_base." + firstSource,
-            statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName());
+                statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName());
         assertEquals("ods.user_base." + secondSource,
-            statement.getColumnLineages().get(1).getSourceColumns().get(0).getQualifiedName());
+                statement.getColumnLineages().get(1).getSourceColumns().get(0).getQualifiedName());
     }
 
     private static final class MutableMetadataProvider implements HiveMetadataProvider {

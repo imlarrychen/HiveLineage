@@ -1,6 +1,7 @@
 package com.panfan.hivelineage.v2.api;
 
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.Set;
 
 public final class AnalysisCapabilities {

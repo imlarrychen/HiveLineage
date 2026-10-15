@@ -21,9 +21,12 @@ import com.panfan.hivelineage.v2.syntax.UnarySyntax;
 import com.panfan.hivelineage.v2.syntax.UnknownExpressionSyntax;
 import com.panfan.hivelineage.v2.syntax.WindowCallSyntax;
 import com.panfan.hivelineage.v2.syntax.WindowSpecificationSyntax;
+
 import java.util.List;
 
-/** Traverses object dependencies without demanding output schema or field metadata. */
+/**
+ * Traverses object dependencies without demanding output schema or field metadata.
+ */
 final class SyntaxSubqueryCollector {
     private final BindingWork work;
     private final QueryBinder queries;
@@ -39,7 +42,7 @@ final class SyntaxSubqueryCollector {
             String suffix = subquery.getSubqueryKind().name().toLowerCase(java.util.Locale.ROOT);
             String path = scope.displayPath + "." + scope.clauseLocation + "." + suffix + "[" + (++scope.childSequence) + "]";
             BoundRelation relation = queries.query(subquery.getQuery(), scope, false, QueryResult.Role.SUBQUERY,
-                scope.prefix, null, path);
+                    scope.prefix, null, path);
             roots.add(relation.getId());
             collect(subquery.getProbe(), scope, roots);
         } else if (expression instanceof BinarySyntax) {

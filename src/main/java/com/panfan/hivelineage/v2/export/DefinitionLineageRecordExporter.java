@@ -16,6 +16,7 @@ import com.panfan.hivelineage.v2.ir.relation.OutputSlot;
 import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.ir.relation.SlotMapping;
 import com.panfan.hivelineage.v2.ir.statement.BoundObjectReference;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -25,7 +26,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-/** Publishes already analyzed definition inputs; it does not compute new dependencies. */
+/**
+ * Publishes already analyzed definition inputs; it does not compute new dependencies.
+ */
 final class DefinitionLineageRecordExporter {
     private final StatementAnalysisResult statement;
     private final BoundNameIndex names;
@@ -34,7 +37,7 @@ final class DefinitionLineageRecordExporter {
     private final Map<NodeId, RelationFacts> facts = new LinkedHashMap<NodeId, RelationFacts>();
 
     DefinitionLineageRecordExporter(StatementAnalysisResult statement, BoundNameIndex names,
-                                   BoundExpressionFormatter expressions, boolean includeTemporary) {
+                                    BoundExpressionFormatter expressions, boolean includeTemporary) {
         this.statement = statement;
         this.names = names;
         this.expressions = expressions;

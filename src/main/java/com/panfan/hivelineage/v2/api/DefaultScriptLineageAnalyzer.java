@@ -43,13 +43,16 @@ import com.panfan.hivelineage.v2.session.SessionSnapshot;
 import com.panfan.hivelineage.v2.session.VariableKey;
 import com.panfan.hivelineage.v2.syntax.SyntaxResult;
 import com.panfan.hivelineage.v2.syntax.SyntaxStatement;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/** Stage composition and request lifecycle; semantic rules remain in their own components. */
+/**
+ * Stage composition and request lifecycle; semantic rules remain in their own components.
+ */
 public final class DefaultScriptLineageAnalyzer implements ScriptLineageAnalyzer, WorkflowBatchAnalyzer {
     private final SyntaxFrontend frontend;
     private final WorkflowMetadataAccessFactory metadata;
@@ -63,26 +66,34 @@ public final class DefaultScriptLineageAnalyzer implements ScriptLineageAnalyzer
         this(new DialectSyntaxFrontend<HiveParseArtifact>(new HiveDialectFactory()), new DefaultSemanticBinder(), new DefaultMetadataAccessFactory());
     }
 
-    /** Compatibility constructor; stage execution depends on capabilities. */
+    /**
+     * Compatibility constructor; stage execution depends on capabilities.
+     */
     public DefaultScriptLineageAnalyzer(SyntaxFrontend frontend, SemanticBinder binder, DefaultMetadataAccessFactory metadata) {
         this(frontend, binder, (WorkflowMetadataAccessFactory) metadata);
     }
 
-    /** Compatibility constructor; stage execution depends on capabilities. */
+    /**
+     * Compatibility constructor; stage execution depends on capabilities.
+     */
     public DefaultScriptLineageAnalyzer(SyntaxFrontend frontend, SemanticBinder binder, DefaultMetadataAccessFactory metadata,
-            com.panfan.hivelineage.v2.frontend.ScriptPreprocessor preprocessor) {
+                                        com.panfan.hivelineage.v2.frontend.ScriptPreprocessor preprocessor) {
         this(frontend, binder, (WorkflowMetadataAccessFactory) metadata, preprocessor);
     }
 
-    /** Compatibility constructor; stage execution depends on capabilities. */
+    /**
+     * Compatibility constructor; stage execution depends on capabilities.
+     */
     public DefaultScriptLineageAnalyzer(SyntaxFrontend frontend, SemanticBinder binder, DefaultMetadataAccessFactory metadata,
-            com.panfan.hivelineage.v2.frontend.ScriptPreprocessor preprocessor, ViewTemplateCache templates) {
+                                        com.panfan.hivelineage.v2.frontend.ScriptPreprocessor preprocessor, ViewTemplateCache templates) {
         this(frontend, binder, (WorkflowMetadataAccessFactory) metadata, preprocessor, templates);
     }
 
-    /** Compatibility constructor; stage execution depends on capabilities. */
+    /**
+     * Compatibility constructor; stage execution depends on capabilities.
+     */
     public DefaultScriptLineageAnalyzer(SyntaxFrontend frontend, SemanticBinder binder, DefaultMetadataAccessFactory metadata,
-            com.panfan.hivelineage.v2.frontend.ScriptPreprocessor preprocessor, ViewTemplateCache templates, ScriptSourceProvider sourceProvider) {
+                                        com.panfan.hivelineage.v2.frontend.ScriptPreprocessor preprocessor, ViewTemplateCache templates, ScriptSourceProvider sourceProvider) {
         this(frontend, binder, (WorkflowMetadataAccessFactory) metadata, preprocessor, templates, sourceProvider);
     }
 
@@ -91,24 +102,24 @@ public final class DefaultScriptLineageAnalyzer implements ScriptLineageAnalyzer
     }
 
     public DefaultScriptLineageAnalyzer(SyntaxFrontend frontend, SemanticBinder binder, WorkflowMetadataAccessFactory metadata,
-            com.panfan.hivelineage.v2.frontend.ScriptPreprocessor preprocessor) {
+                                        com.panfan.hivelineage.v2.frontend.ScriptPreprocessor preprocessor) {
         this(frontend, binder, metadata, preprocessor, new DefaultViewTemplateCache());
     }
 
     public DefaultScriptLineageAnalyzer(SyntaxFrontend frontend, SemanticBinder binder, WorkflowMetadataAccessFactory metadata,
-            com.panfan.hivelineage.v2.frontend.ScriptPreprocessor preprocessor, ViewTemplateCache templates) {
+                                        com.panfan.hivelineage.v2.frontend.ScriptPreprocessor preprocessor, ViewTemplateCache templates) {
         this(frontend, binder, metadata, preprocessor, templates, new DefinitionTextSourceProvider());
     }
 
     public DefaultScriptLineageAnalyzer(SyntaxFrontend frontend, SemanticBinder binder, WorkflowMetadataAccessFactory metadata,
-            com.panfan.hivelineage.v2.frontend.ScriptPreprocessor preprocessor, ViewTemplateCache templates,
-            ScriptSourceProvider sourceProvider) {
+                                        com.panfan.hivelineage.v2.frontend.ScriptPreprocessor preprocessor, ViewTemplateCache templates,
+                                        ScriptSourceProvider sourceProvider) {
         this(frontend, binder, metadata, preprocessor, templates, sourceProvider, AnalyzerServices.defaults());
     }
 
     public DefaultScriptLineageAnalyzer(SyntaxFrontend frontend, SemanticBinder binder, WorkflowMetadataAccessFactory metadata,
-            com.panfan.hivelineage.v2.frontend.ScriptPreprocessor preprocessor, ViewTemplateCache templates,
-            ScriptSourceProvider sourceProvider, AnalyzerServices services) {
+                                        com.panfan.hivelineage.v2.frontend.ScriptPreprocessor preprocessor, ViewTemplateCache templates,
+                                        ScriptSourceProvider sourceProvider, AnalyzerServices services) {
         this.services = java.util.Objects.requireNonNull(services, "services");
         this.bindingCoordinator = new DefinitionBindingCoordinator(binder, services.functions);
         this.sourceProvider = java.util.Objects.requireNonNull(sourceProvider, "sourceProvider");
@@ -121,7 +132,7 @@ public final class DefaultScriptLineageAnalyzer implements ScriptLineageAnalyzer
     @Override
     public ScriptAnalysisResult analyzeScript(ScriptAnalysisRequest request, WorkflowContext workflow) {
         if (!request.getTask().getWorkflowId().equals(workflow.getWorkflowId())
-            || !request.getMetadataContext().equals(workflow.getReadContext())) {
+                || !request.getMetadataContext().equals(workflow.getReadContext())) {
             throw new IllegalArgumentException("request and workflow identities/read contexts differ");
         }
         if (request.getSource().getText().length() > request.getResourceLimits().getMaxScriptCharacters()) {
@@ -133,7 +144,7 @@ public final class DefaultScriptLineageAnalyzer implements ScriptLineageAnalyzer
         Map<String, SourceDocument> sources = new LinkedHashMap<>();
         sources.put(request.getSource().getSourceId(), request.getSource());
         DefaultDefinitionCoordinator definitions = new DefaultDefinitionCoordinator(frontend,
-            new BudgetedScriptSourceProvider(sourceProvider, readBudget), templates, sources, request.getResourceLimits(), preprocessor);
+                new BudgetedScriptSourceProvider(sourceProvider, readBudget), templates, sources, request.getResourceLimits(), preprocessor);
         Map<DefinitionId, PreparedDefinition> prepared = new LinkedHashMap<>();
         Map<DefinitionId, DiagnosticBag> failedDefinitions = new LinkedHashMap<>();
         SessionSnapshot session = SessionSnapshot.initial(request.getInitialSession());
@@ -151,7 +162,7 @@ public final class DefaultScriptLineageAnalyzer implements ScriptLineageAnalyzer
             run.result.getBoundUnit().ifPresent(unit -> run.session.getDatasetVersions().forEach((objectId, state) -> {
                 if (previous.getDatasetVersions().get(objectId) != state) {
                     versions.add(new DatasetVersionRecord(run.result.getIdentity(), objectId,
-                        Optional.ofNullable(unit.getObjects().get(objectId)).map(object -> object.getName()), state, unit.getExecutionAssumption()));
+                            Optional.ofNullable(unit.getObjects().get(objectId)).map(object -> object.getName()), state, unit.getExecutionAssumption()));
                 }
             }));
             session = run.session;
@@ -164,14 +175,14 @@ public final class DefaultScriptLineageAnalyzer implements ScriptLineageAnalyzer
         AnalysisBasis basis = new AnalysisBasis(request.getDialect(), request.getInitialSession(), captured.manifest(), request.getContract());
         Map<String, ExpandedUnit> frontendEvidence = new LinkedHashMap<>(definitions.getFrontendEvidence());
         statements.forEach(statement -> statement.getFrontendEvidence().ifPresent(evidence ->
-            frontendEvidence.put(evidence.getExpandedSourceId(), evidence)));
+                frontendEvidence.put(evidence.getExpandedSourceId(), evidence)));
         return new ScriptAnalysisResult(request.getTask(), EngineIdentity.v2(request.getDialect().getSemanticRuleVersion()),
-            statements, new StatementCounts(script.getUnits().size(), ignored, failed), new DiagnosticBag(diagnostics), Optional.of(basis), sources, frontendEvidence, versions);
+                statements, new StatementCounts(script.getUnits().size(), ignored, failed), new DiagnosticBag(diagnostics), Optional.of(basis), sources, frontendEvidence, versions);
     }
 
     private StatementRun analyzeStatement(ScriptAnalysisRequest request, ScriptUnit raw, SessionSnapshot session,
-            MetadataAccess access, com.panfan.hivelineage.v2.session.DefinitionCoordinator<PreparedDefinition> coordinator, Map<DefinitionId, PreparedDefinition> prepared,
-            Map<DefinitionId, DiagnosticBag> failedDefinitions, Map<String, SourceDocument> sources) {
+                                          MetadataAccess access, com.panfan.hivelineage.v2.session.DefinitionCoordinator<PreparedDefinition> coordinator, Map<DefinitionId, PreparedDefinition> prepared,
+                                          Map<DefinitionId, DiagnosticBag> failedDefinitions, Map<String, SourceDocument> sources) {
         int index = raw.getStatementIndex();
         TaskIdentity task = request.getTask();
         StatementIdentity identity = StatementIdentity.forTask(task, index);
@@ -198,8 +209,8 @@ public final class DefaultScriptLineageAnalyzer implements ScriptLineageAnalyzer
             StatementPublicationDecision publication = new StatementPublicationDecision(syntax, contract, classification);
             if (publication.ignoreBeforeBinding()) {
                 return new StatementRun(new StatementAnalysisResult(identity, type, rawSql, normalized, StatementStatus.IGNORED, false,
-                    Optional.<LineageFacts>empty(), Optional.<JoinFacts>empty(), Optional.<BoundAnalysisUnit>empty(), Optional.ofNullable(classification.skipReason),
-                    Optional.<String>empty(), Optional.<String>empty(), new DiagnosticBag(diagnostics), frontendEvidence), session);
+                        Optional.<LineageFacts>empty(), Optional.<JoinFacts>empty(), Optional.<BoundAnalysisUnit>empty(), Optional.ofNullable(classification.skipReason),
+                        Optional.<String>empty(), Optional.<String>empty(), new DiagnosticBag(diagnostics), frontendEvidence), session);
             }
             BindingDemand demand = services.demands.plan(syntax, contract);
             stage = AnalysisStage.BINDING;
@@ -232,32 +243,32 @@ public final class DefaultScriptLineageAnalyzer implements ScriptLineageAnalyzer
             boolean published = publication.published(formal, lineage, joins);
             StatementStatus status = !published ? StatementStatus.IGNORED : binding.getOutcome() == BindingOutcome.PARTIAL ? StatementStatus.PARTIAL_SUCCESS : StatementStatus.SUCCESS;
             com.panfan.hivelineage.v2.session.SessionCommitResult committed = services.committer.commit(session,
-                services.effects.plan(session, unit).withDefinitions(SyntaxDefinitionTemplates.prepare(syntax, unit)));
+                    services.effects.plan(session, unit).withDefinitions(SyntaxDefinitionTemplates.prepare(syntax, unit)));
             diagnostics.addAll(committed.getDiagnostics().getDiagnostics());
             SessionSnapshot next = committed.getSnapshot();
             if (published && committed.getOutcome() == com.panfan.hivelineage.v2.session.CommitOutcome.UNCERTAIN) {
                 status = StatementStatus.PARTIAL_SUCCESS;
             }
             return new StatementRun(new StatementAnalysisResult(identity, type, rawSql, normalized, status, formal, lineage, joins, Optional.of(unit),
-                published ? Optional.<String>empty() : Optional.ofNullable(classification.skipReason), Optional.<String>empty(), Optional.<String>empty(), new DiagnosticBag(diagnostics), frontendEvidence), next);
+                    published ? Optional.<String>empty() : Optional.ofNullable(classification.skipReason), Optional.<String>empty(), Optional.<String>empty(), new DiagnosticBag(diagnostics), frontendEvidence), next);
         } catch (RuntimeException failure) {
             String code = failure instanceof ResourceLimitException ? PipelineDiagnosticCode.RESOURCE_LIMIT.getValue()
-                : failure instanceof AnalysisFailure ? ((AnalysisFailure) failure).code : stage.name() + "_ERROR";
+                    : failure instanceof AnalysisFailure ? ((AnalysisFailure) failure).code : stage.name() + "_ERROR";
             String message = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
             diagnostics.add(new Diagnostic(stage, code, message, raw.getSourceRef()));
             return new StatementRun(new StatementAnalysisResult(identity, type, rawSql, normalized, StatementStatus.FAILED, false,
-                Optional.<LineageFacts>empty(), Optional.<JoinFacts>empty(), Optional.<BoundAnalysisUnit>empty(), Optional.<String>empty(),
-                Optional.of(code), Optional.of(message), new DiagnosticBag(DiagnosticBag.distinct(diagnostics)), frontendEvidence, Optional.of(failure)), session);
+                    Optional.<LineageFacts>empty(), Optional.<JoinFacts>empty(), Optional.<BoundAnalysisUnit>empty(), Optional.<String>empty(),
+                    Optional.of(code), Optional.of(message), new DiagnosticBag(DiagnosticBag.distinct(diagnostics)), frontendEvidence, Optional.of(failure)), session);
         }
     }
 
     private ExpandedUnit expand(ScriptAnalysisRequest request, ScriptUnit raw, SessionSnapshot session,
-            List<Diagnostic> diagnostics) {
+                                List<Diagnostic> diagnostics) {
         AnalysisContract contract = request.getContract();
         ExpansionResult expansion = services.variables.expand(raw, variables(session, contract), new VariableOptions(
-            contract.getVariablePolicy() == VariablePolicy.CURRENT_API_FALLBACK ? VariableResolutionPolicy.LEGACY_FALLBACK : contract.getVariablePolicy() == VariablePolicy.SPEC_VARIABLES
-                ? VariableResolutionPolicy.SPEC_VARIABLES : VariableResolutionPolicy.PRESERVE_AND_WARN,
-            contract.getFallbackVariableValue(), request.getResourceLimits().getMaxScriptCharacters()));
+                contract.getVariablePolicy() == VariablePolicy.CURRENT_API_FALLBACK ? VariableResolutionPolicy.LEGACY_FALLBACK : contract.getVariablePolicy() == VariablePolicy.SPEC_VARIABLES
+                                                                                                                                 ? VariableResolutionPolicy.SPEC_VARIABLES : VariableResolutionPolicy.PRESERVE_AND_WARN,
+                contract.getFallbackVariableValue(), request.getResourceLimits().getMaxScriptCharacters()));
         diagnostics.addAll(expansion.getDiagnostics());
         if (expansion.getUnit() == null) {
             if (expansion.getDiagnostics().stream().anyMatch(diagnostic -> "EXPANSION_SIZE_LIMIT".equals(diagnostic.getCode()))) {
@@ -280,7 +291,7 @@ public final class DefaultScriptLineageAnalyzer implements ScriptLineageAnalyzer
     private void validateSyntax(SyntaxStatement syntax, StatementClassification classification) {
         String type = classification.type;
         if (syntax instanceof com.panfan.hivelineage.v2.syntax.OtherStatementSyntax
-            && "INVALID_USE_DATABASE".equals(((com.panfan.hivelineage.v2.syntax.OtherStatementSyntax) syntax).getUnsupportedReason())) {
+                && "INVALID_USE_DATABASE".equals(((com.panfan.hivelineage.v2.syntax.OtherStatementSyntax) syntax).getUnsupportedReason())) {
             throw new AnalysisFailure(PipelineDiagnosticCode.INVALID_USE_DATABASE, "USE requires one unquoted or backtick-quoted database identifier");
         }
         if (syntax instanceof com.panfan.hivelineage.v2.syntax.OtherStatementSyntax && classification.formalCandidate) {
@@ -293,8 +304,8 @@ public final class DefaultScriptLineageAnalyzer implements ScriptLineageAnalyzer
             List<Diagnostic> bindingDiagnostics = binding.getDiagnostics().getDiagnostics();
             Diagnostic primary = bindingDiagnostics.isEmpty() ? null : bindingDiagnostics.get(bindingDiagnostics.size() - 1);
             throw new AnalysisFailure(binding.getOutcome() == BindingOutcome.UNSUPPORTED ? "UNSUPPORTED_STATEMENT"
-                : primary == null ? "BINDING_FAILED" : primary.getCode(),
-                primary == null ? "Statement cannot be bound for requested capabilities" : primary.getMessage());
+                    : primary == null ? "BINDING_FAILED" : primary.getCode(),
+                    primary == null ? "Statement cannot be bound for requested capabilities" : primary.getMessage());
         }
         return binding.getUnit().get();
     }
@@ -313,7 +324,7 @@ public final class DefaultScriptLineageAnalyzer implements ScriptLineageAnalyzer
         if (contract.getVariablePolicy() == VariablePolicy.CURRENT_API_FALLBACK) {
             session.getVariables().forEach((key, value) -> {
                 if (key.getNamespace() == VariableKey.Namespace.UNQUALIFIED && value.getValue().isPresent()) {
-                    for (String namespace : new String[] { "hiveconf", "hivevar", "runtime" }) {
+                    for (String namespace : new String[]{"hiveconf", "hivevar", "runtime"}) {
                         namespaces.computeIfAbsent(namespace, ignored -> new LinkedHashMap<>()).put(key.getName(), value.getValue().get());
                     }
                 }

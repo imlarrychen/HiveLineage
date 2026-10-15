@@ -22,6 +22,7 @@ import com.panfan.hivelineage.v2.session.DefinitionRequest;
 import com.panfan.hivelineage.v2.syntax.LiteralSyntax;
 import com.panfan.hivelineage.v2.syntax.QueryStatementSyntax;
 import com.panfan.hivelineage.v2.syntax.SelectQuerySyntax;
+
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
 import org.junit.Assert;
 import org.junit.Test;
 

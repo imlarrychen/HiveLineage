@@ -5,6 +5,7 @@ import com.panfan.hivelineage.v2.analysis.LineageFacts;
 import com.panfan.hivelineage.v2.common.DiagnosticBag;
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
+
 import java.util.Optional;
 
 public final class StatementAnalysisResult {
@@ -26,22 +27,22 @@ public final class StatementAnalysisResult {
 
     public StatementAnalysisResult(StatementIdentity identity, String statementType, SourceDocument rawSql, SourceDocument normalizedSql, StatementStatus status, boolean formalLineageProduced, Optional<LineageFacts> lineage, Optional<JoinFacts> joins, Optional<BoundAnalysisUnit> boundUnit, Optional<String> skipReason, Optional<String> failureCode, Optional<String> failureMessage, DiagnosticBag diagnostics) {
         this(identity, statementType, rawSql, normalizedSql, status, formalLineageProduced, lineage, joins, boundUnit, skipReason,
-            failureCode, failureMessage, diagnostics, Optional.<com.panfan.hivelineage.v2.frontend.ExpandedUnit>empty());
+                failureCode, failureMessage, diagnostics, Optional.<com.panfan.hivelineage.v2.frontend.ExpandedUnit>empty());
     }
 
     public StatementAnalysisResult(StatementIdentity identity, String statementType, SourceDocument rawSql, SourceDocument normalizedSql,
-            StatementStatus status, boolean formalLineageProduced, Optional<LineageFacts> lineage, Optional<JoinFacts> joins,
-            Optional<BoundAnalysisUnit> boundUnit, Optional<String> skipReason, Optional<String> failureCode, Optional<String> failureMessage,
-            DiagnosticBag diagnostics, Optional<com.panfan.hivelineage.v2.frontend.ExpandedUnit> frontendEvidence) {
+                                   StatementStatus status, boolean formalLineageProduced, Optional<LineageFacts> lineage, Optional<JoinFacts> joins,
+                                   Optional<BoundAnalysisUnit> boundUnit, Optional<String> skipReason, Optional<String> failureCode, Optional<String> failureMessage,
+                                   DiagnosticBag diagnostics, Optional<com.panfan.hivelineage.v2.frontend.ExpandedUnit> frontendEvidence) {
         this(identity, statementType, rawSql, normalizedSql, status, formalLineageProduced, lineage, joins,
-            boundUnit, skipReason, failureCode, failureMessage, diagnostics, frontendEvidence, Optional.empty());
+                boundUnit, skipReason, failureCode, failureMessage, diagnostics, frontendEvidence, Optional.empty());
     }
 
     public StatementAnalysisResult(StatementIdentity identity, String statementType, SourceDocument rawSql, SourceDocument normalizedSql,
-            StatementStatus status, boolean formalLineageProduced, Optional<LineageFacts> lineage, Optional<JoinFacts> joins,
-            Optional<BoundAnalysisUnit> boundUnit, Optional<String> skipReason, Optional<String> failureCode, Optional<String> failureMessage,
-            DiagnosticBag diagnostics, Optional<com.panfan.hivelineage.v2.frontend.ExpandedUnit> frontendEvidence,
-            Optional<Throwable> failureCause) {
+                                   StatementStatus status, boolean formalLineageProduced, Optional<LineageFacts> lineage, Optional<JoinFacts> joins,
+                                   Optional<BoundAnalysisUnit> boundUnit, Optional<String> skipReason, Optional<String> failureCode, Optional<String> failureMessage,
+                                   DiagnosticBag diagnostics, Optional<com.panfan.hivelineage.v2.frontend.ExpandedUnit> frontendEvidence,
+                                   Optional<Throwable> failureCause) {
         this.failureCause = ModelChecks.value(failureCause, "failureCause");
         this.frontendEvidence = ModelChecks.value(frontendEvidence, "frontendEvidence");
         this.identity = ModelChecks.value(identity, "identity");
@@ -117,7 +118,9 @@ public final class StatementAnalysisResult {
         return failureMessage;
     }
 
-    /** In-process debugging evidence; renderers retain the stable failure code/message contract. */
+    /**
+     * In-process debugging evidence; renderers retain the stable failure code/message contract.
+     */
     public Optional<Throwable> getFailureCause() {
         return failureCause;
     }

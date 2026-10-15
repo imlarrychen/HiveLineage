@@ -4,6 +4,7 @@ import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.ir.identity.QueryBlockId;
 import com.panfan.hivelineage.v2.ir.identity.ScopeId;
+
 import java.util.List;
 import java.util.Optional;
 

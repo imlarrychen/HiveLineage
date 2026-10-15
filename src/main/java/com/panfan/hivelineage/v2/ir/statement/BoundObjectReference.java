@@ -6,6 +6,7 @@ import com.panfan.hivelineage.v2.ir.FieldIdentity;
 import com.panfan.hivelineage.v2.ir.quality.SchemaState;
 import com.panfan.hivelineage.v2.ir.identity.DefinitionId;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -16,7 +17,8 @@ import java.util.Optional;
  * Object identity is opaque and must never be parsed to recover the qualified name.
  */
 public final class BoundObjectReference {
-    public enum ObjectKind { TABLE, VIEW, TEMPORARY, EXTERNAL, UNKNOWN }
+    public enum ObjectKind {TABLE, VIEW, TEMPORARY, EXTERNAL, UNKNOWN}
+
     private final ObjectId id;
     private final QualifiedName name;
     private final ObjectKind kind;

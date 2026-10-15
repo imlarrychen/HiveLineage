@@ -8,6 +8,7 @@ import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.common.Diagnostic;
 import com.panfan.hivelineage.v2.common.AnalysisStage;
 import com.panfan.hivelineage.v2.common.SourceRef;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -17,7 +18,9 @@ import java.util.Optional;
 import java.util.Map;
 import java.util.LinkedHashMap;
 
-/** Read-only faceted and legacy views of one captured source; no live fallback. */
+/**
+ * Read-only faceted and legacy views of one captured source; no live fallback.
+ */
 public final class SnapshotMetadataServices implements MetadataProvider, ObjectDescriptorProvider, RelationSchemaProvider {
     private final MetadataReadContext context;
     private final MetadataAccess replay;
@@ -37,10 +40,10 @@ public final class SnapshotMetadataServices implements MetadataProvider, ObjectD
                 .orElse(ProviderCapabilities.LookupShape.UNKNOWN)
                 == ProviderCapabilities.LookupShape.BUNDLED_LOOKUP);
         boolean unknown = records.values().stream().anyMatch(read -> read.getLookupShape().orElse(ProviderCapabilities.LookupShape.UNKNOWN)
-            == ProviderCapabilities.LookupShape.UNKNOWN);
+                == ProviderCapabilities.LookupShape.UNKNOWN);
         return new ProviderCapabilities(EnumSet.of(MetadataFacet.OBJECT_DESCRIPTOR, MetadataFacet.RELATION_SCHEMA,
-            MetadataFacet.RELATION_METADATA), bundled ? ProviderCapabilities.LookupShape.BUNDLED_LOOKUP
-                    : unknown ? ProviderCapabilities.LookupShape.UNKNOWN : ProviderCapabilities.LookupShape.FACET_LOOKUP, false);
+                MetadataFacet.RELATION_METADATA), bundled ? ProviderCapabilities.LookupShape.BUNDLED_LOOKUP
+                : unknown ? ProviderCapabilities.LookupShape.UNKNOWN : ProviderCapabilities.LookupShape.FACET_LOOKUP, false);
     }
 
     @Override
@@ -115,8 +118,8 @@ public final class SnapshotMetadataServices implements MetadataProvider, ObjectD
     }
 
     private static LookupStatus combinedStatus(LookupStatus left, LookupStatus right) {
-        for (LookupStatus status : new LookupStatus[] { LookupStatus.ACCESS_ERROR, LookupStatus.NOT_FOUND,
-                LookupStatus.CAPABILITY_MISSING, LookupStatus.UNKNOWN }) {
+        for (LookupStatus status : new LookupStatus[]{LookupStatus.ACCESS_ERROR, LookupStatus.NOT_FOUND,
+                LookupStatus.CAPABILITY_MISSING, LookupStatus.UNKNOWN}) {
             if (left == status || right == status) {
                 return status;
             }

@@ -9,6 +9,7 @@ import com.panfan.hivelineage.v2.ir.identity.DefinitionId;
 import com.panfan.hivelineage.v2.metadata.MetadataAccess;
 import com.panfan.hivelineage.v2.metadata.MetadataReadContext;
 import com.panfan.hivelineage.v2.session.SessionSnapshot;
+
 import java.util.Map;
 import java.util.Collections;
 
@@ -24,7 +25,7 @@ public final class BindingContext {
 
     public BindingContext(SessionSnapshot session, MetadataAccess metadata, MetadataReadContext metadataContext, Map<DefinitionId, PreparedDefinition> definitions, FunctionCatalog functions, DialectProfile dialect, AnalysisContract contract) {
         this(session, metadata, metadataContext, definitions, functions, dialect, contract,
-            Collections.<DefinitionId, DiagnosticBag>emptyMap());
+                Collections.<DefinitionId, DiagnosticBag>emptyMap());
     }
 
     public BindingContext(SessionSnapshot session, MetadataAccess metadata, MetadataReadContext metadataContext, Map<DefinitionId, PreparedDefinition> definitions, FunctionCatalog functions, DialectProfile dialect, AnalysisContract contract, Map<DefinitionId, DiagnosticBag> failedDefinitions) {

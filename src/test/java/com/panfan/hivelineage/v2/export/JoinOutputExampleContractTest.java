@@ -15,6 +15,7 @@ import com.panfan.hivelineage.v2.api.StatementIdentity;
 import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.compat.DefaultLegacyResultProjector;
 import com.panfan.hivelineage.v2.compat.HiveScriptLineageAdapter;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -22,34 +23,38 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-/** Original specification fixtures; expected values never originate from a V2 run. */
+/**
+ * Original specification fixtures; expected values never originate from a V2 run.
+ */
 public class JoinOutputExampleContractTest {
     @Test
     public void cteJsonExampleMatchesEveryDeclaredFieldAcrossNativeAndLegacyViews() throws IOException {
         verify("cte-non-continuous",
-            Arrays.asList(Arrays.asList("ods.a.id", "ods.b.id"), Arrays.asList("ods.c.id", "ods.d.id"), Arrays.asList("x.id", "y.id")));
+                Arrays.asList(Arrays.asList("ods.a.id", "ods.b.id"), Arrays.asList("ods.c.id", "ods.d.id"), Arrays.asList("x.id", "y.id")));
     }
 
     @Test
     public void existsJsonExampleMatchesEveryDeclaredFieldAcrossNativeAndLegacyViews() throws IOException {
         verify("exists-non-continuous",
-            Arrays.asList(Arrays.asList("ods.a.id", "ods.b.id"), Arrays.asList("ods.c.id", "ods.d.id")));
+                Arrays.asList(Arrays.asList("ods.a.id", "ods.b.id"), Arrays.asList("ods.c.id", "ods.d.id")));
     }
 
     private void verify(String fixture, List<List<String>> legacyDirectColumns) throws IOException {
         String sql = resource(fixture + ".sql").trim();
         JsonNode expected = new ObjectMapper().readTree(resource(fixture + ".expected.json"));
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder().workflowId(expected.get("workflowId").asText())
-            .taskId(expected.get("taskId").asText()).taskVersion(expected.get("taskVersion").asText())
-            .rawScript("use default;\n" + sql)
-            .options(LineageAnalyzeOptions.builder().parseMode(LineageParseMode.TABLE_ONLY).parseJoinConditions(true).build())
-            .metadataProvider(table -> HiveTableMetadata.table(table, Collections.singletonList("id"))).build();
+                .taskId(expected.get("taskId").asText()).taskVersion(expected.get("taskVersion").asText())
+                .rawScript("use default;\n" + sql)
+                .options(LineageAnalyzeOptions.builder().parseMode(LineageParseMode.TABLE_ONLY).parseJoinConditions(true).build())
+                .metadataProvider(table -> HiveTableMetadata.table(table, Collections.singletonList("id"))).build();
         ScriptAnalysisResult result = new HiveScriptLineageAdapter().analyzeNative(request);
         assertEquals(fixture, 0, result.getCounts().getFailed());
         List<StatementLineageResult> projected = new DefaultLegacyResultProjector().project(result).getResult().getStatements();

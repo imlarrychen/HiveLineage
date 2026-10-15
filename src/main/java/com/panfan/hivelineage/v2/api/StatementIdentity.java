@@ -15,7 +15,7 @@ public final class StatementIdentity {
 
     public static StatementIdentity forTask(TaskIdentity task, int index) {
         return new StatementIdentity(task, index,
-            task.getWorkflowId() + "_" + task.getTaskId() + "_" + task.getTaskVersion() + "_" + index);
+                task.getWorkflowId() + "_" + task.getTaskId() + "_" + task.getTaskVersion() + "_" + index);
     }
 
     public TaskIdentity getTask() {

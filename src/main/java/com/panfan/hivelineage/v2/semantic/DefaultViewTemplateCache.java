@@ -1,12 +1,15 @@
 package com.panfan.hivelineage.v2.semantic;
 
 import com.panfan.hivelineage.v2.syntax.SyntaxTemplate;
+
 import java.util.Optional;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.LongSupplier;
 
-/** Immutable syntax templates only; binding and Session state are request-owned. */
+/**
+ * Immutable syntax templates only; binding and Session state are request-owned.
+ */
 public final class DefaultViewTemplateCache implements ViewTemplateCache {
     private final Map<ViewTemplateKey, Entry> templates = new LinkedHashMap<>(16, 0.75f, true);
     private final int capacity;

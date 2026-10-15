@@ -2,10 +2,13 @@ package com.panfan.hivelineage.v2.ir.statement;
 
 import com.panfan.hivelineage.v2.ir.identity.QueryBlockId;
 import com.panfan.hivelineage.v2.ir.identity.ScopeId;
+
 import java.util.Objects;
 import java.util.Optional;
 
-/** Immutable declared scope ancestry, independent of mutable Binder scope state. */
+/**
+ * Immutable declared scope ancestry, independent of mutable Binder scope state.
+ */
 public final class BoundScopeReference {
     private final ScopeId id;
     private final QueryBlockId queryBlockId;

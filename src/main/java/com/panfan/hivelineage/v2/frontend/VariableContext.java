@@ -1,9 +1,12 @@
 package com.panfan.hivelineage.v2.frontend;
 
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.Map;
 
-/** Explicit variable namespaces, including supplied environment and system values. */
+/**
+ * Explicit variable namespaces, including supplied environment and system values.
+ */
 public final class VariableContext {
     private final Map<String, Map<String, String>> namespaces;
 

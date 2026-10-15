@@ -10,6 +10,7 @@ import com.panfan.hivelineage.v2.ir.expression.QualifiedFieldHandle;
 import com.panfan.hivelineage.v2.ir.expression.ResolvedFunctionSymbol;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.ir.identity.SlotId;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -17,10 +18,13 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Optional;
 
-/** Recursive bound-expression algebra, independent of SQL text, frontends and catalogs. */
+/**
+ * Recursive bound-expression algebra, independent of SQL text, frontends and catalogs.
+ */
 final class ExpressionFactsResolver {
     interface Upstream {
         RelationFacts relation(NodeId id);
+
         ExpressionFacts slot(SlotId id);
     }
 
@@ -40,7 +44,9 @@ final class ExpressionFactsResolver {
         return new Evaluation(inputSlots, inputRows).resolve(expression);
     }
 
-    /** Inputs stay read-only for this synchronous evaluation; a new invocation always starts a new memo. */
+    /**
+     * Inputs stay read-only for this synchronous evaluation; a new invocation always starts a new memo.
+     */
     private final class Evaluation {
         private final Map<SlotId, ExpressionFacts> inputSlots;
         private final List<Dependency> inputRows;
@@ -211,8 +217,8 @@ final class ExpressionFactsResolver {
     }
 
     private void physical(com.panfan.hivelineage.v2.ir.identity.RelationInstanceId owner,
-            com.panfan.hivelineage.v2.ir.identity.FieldId field, List<String> path, boolean verified, boolean existenceUnknown,
-            BoundExpression expression, SlotEndpoint target, List<Dependency> dependencies) {
+                          com.panfan.hivelineage.v2.ir.identity.FieldId field, List<String> path, boolean verified, boolean existenceUnknown,
+                          BoundExpression expression, SlotEndpoint target, List<Dependency> dependencies) {
         if (existenceUnknown) {
             unknown("FIELD_EXISTENCE_UNKNOWN", "Physical field state is uncertain", expression, target, dependencies);
             return;
@@ -227,7 +233,7 @@ final class ExpressionFactsResolver {
     }
 
     private List<Dependency> slot(SlotId slot, List<String> path, BoundExpression expression, SlotEndpoint target,
-            Map<SlotId, ExpressionFacts> inputSlots) {
+                                  Map<SlotId, ExpressionFacts> inputSlots) {
         ExpressionFacts facts = inputSlots.containsKey(slot) ? inputSlots.get(slot) : upstream.slot(slot);
         return path(facts.getDependencies(), path, expression, target);
     }

@@ -6,13 +6,17 @@ import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
 import com.panfan.hivelineage.v2.ir.quality.MappingCoverage;
 import com.panfan.hivelineage.v2.ir.quality.UnknownMapping;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Bound contribution, separate from the complete post-write dataset and execution fact. */
+/**
+ * Bound contribution, separate from the complete post-write dataset and execution fact.
+ */
 public final class BoundWrite {
-    public enum WriteMode { APPEND, OVERWRITE, UPDATE, DELETE, MERGE_ACTION, CREATE_AS }
+    public enum WriteMode {APPEND, OVERWRITE, UPDATE, DELETE, MERGE_ACTION, CREATE_AS}
+
     private final NodeId id;
     private final NodeId sourceRelation;
     private final ObjectId targetObject;

@@ -17,9 +17,11 @@ import com.panfan.hivelineage.v2.lexical.TokenKind;
 import com.panfan.hivelineage.v2.lexical.TokenLocation;
 import com.panfan.hivelineage.v2.lexical.Trivia;
 import com.panfan.hivelineage.v2.lexical.TriviaKind;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
 import org.antlr.runtime.CommonToken;
 import org.antlr.runtime.Token;
 import org.apache.hadoop.conf.Configuration;

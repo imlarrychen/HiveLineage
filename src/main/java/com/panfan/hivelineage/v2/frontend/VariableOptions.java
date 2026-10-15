@@ -2,6 +2,7 @@ package com.panfan.hivelineage.v2.frontend;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;

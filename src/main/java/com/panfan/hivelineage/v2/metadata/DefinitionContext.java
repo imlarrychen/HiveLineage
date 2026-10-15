@@ -3,10 +3,13 @@ package com.panfan.hivelineage.v2.metadata;
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.common.QualifiedName;
+
 import java.util.Map;
 import java.util.Optional;
 
-/** Immutable creation/binding context for a definition, without task-local callbacks. */
+/**
+ * Immutable creation/binding context for a definition, without task-local callbacks.
+ */
 public final class DefinitionContext {
     private final Optional<QualifiedName> defaultDatabase;
     private final Map<String, String> variables;

@@ -4,10 +4,13 @@ import com.panfan.hivelineage.v2.api.SourceDocument;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.common.SourceSpan;
+
 import java.util.Map;
 import java.util.Optional;
 
-/** Restores only the supplied span; never tokenizes text or interprets a field name. */
+/**
+ * Restores only the supplied span; never tokenizes text or interprets a field name.
+ */
 public final class DefaultSourceRenderer implements SourceRenderer {
     private final Map<String, SourceDocument> sources;
 

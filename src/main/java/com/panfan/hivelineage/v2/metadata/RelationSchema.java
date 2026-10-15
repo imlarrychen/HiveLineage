@@ -3,9 +3,12 @@ package com.panfan.hivelineage.v2.metadata;
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.ir.quality.SchemaState;
+
 import java.util.List;
 
-/** Ordered schema data; UNKNOWN and NOT_REQUESTED differ from a known empty schema. */
+/**
+ * Ordered schema data; UNKNOWN and NOT_REQUESTED differ from a known empty schema.
+ */
 public final class RelationSchema {
     private final SchemaState state;
     private final List<ColumnMetadata> columns;

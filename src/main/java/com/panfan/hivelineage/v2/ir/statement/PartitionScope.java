@@ -3,12 +3,15 @@ package com.panfan.hivelineage.v2.ir.statement;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.ir.FieldIdentity;
 import com.panfan.hivelineage.v2.ir.expression.BoundExpression;
+
 import java.util.List;
 import java.util.Objects;
 
 public final class PartitionScope {
-    public enum Kind { UNPARTITIONED, STATIC, DYNAMIC, MIXED, UNKNOWN }
-    public enum AssignmentKind { STATIC, DYNAMIC }
+    public enum Kind {UNPARTITIONED, STATIC, DYNAMIC, MIXED, UNKNOWN}
+
+    public enum AssignmentKind {STATIC, DYNAMIC}
+
     private final Kind kind;
     private final List<Assignment> assignments;
 

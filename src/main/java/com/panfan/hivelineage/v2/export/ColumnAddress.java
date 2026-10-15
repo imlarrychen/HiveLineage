@@ -3,6 +3,7 @@ package com.panfan.hivelineage.v2.export;
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.common.QualifiedName;
+
 import java.util.List;
 
 public final class ColumnAddress {
@@ -27,6 +28,7 @@ public final class ColumnAddress {
     public List<String> getFieldPath() {
         return fieldPath;
     }
+
     @Override
     public boolean equals(Object other) {
         if (!(other instanceof ColumnAddress)) {

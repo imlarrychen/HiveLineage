@@ -1,6 +1,7 @@
 package com.panfan.hivelineage.v2.export;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
+
 import java.util.Optional;
 
 public final class RenderedExpression {

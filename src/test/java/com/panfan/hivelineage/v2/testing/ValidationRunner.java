@@ -3,13 +3,16 @@ package com.panfan.hivelineage.v2.testing;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+
 import org.junit.runner.Description;
 import org.junit.runner.JUnitCore;
 import org.junit.runner.Result;
 import org.junit.runner.notification.Failure;
 import org.junit.runner.notification.RunListener;
 
-/** Reports assumption skips explicitly when running legacy and semantic engine suites together. */
+/**
+ * Reports assumption skips explicitly when running legacy and semantic engine suites together.
+ */
 public final class ValidationRunner {
     private ValidationRunner() {
     }
@@ -125,8 +128,8 @@ public final class ValidationRunner {
 
         String summary() {
             return "Tests=" + result.getRunCount() + ", passed=" + passed + ", failures=" + result.getFailureCount()
-                + ", assumptionSkips=" + assumptionSkips + ", classAssumptionSkips=" + classAssumptionSkips
-                + ", classFailures=" + classFailures + ", ignored=" + result.getIgnoreCount();
+                    + ", assumptionSkips=" + assumptionSkips + ", classAssumptionSkips=" + classAssumptionSkips
+                    + ", classFailures=" + classFailures + ", ignored=" + result.getIgnoreCount();
         }
     }
 

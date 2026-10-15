@@ -1,6 +1,8 @@
 package com.panfan.hivelineage.v2.api;
 
-/** Expected stage rejection, distinct from unexpected implementation failures. */
+/**
+ * Expected stage rejection, distinct from unexpected implementation failures.
+ */
 final class AnalysisFailure extends RuntimeException {
     private static final long serialVersionUID = 1L;
     final String code;

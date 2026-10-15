@@ -2,9 +2,12 @@ package com.panfan.hivelineage.v2.session;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.metadata.DefinitionRef;
+
 import java.util.Optional;
 
-/** Session definition boundary. A legacy CTE is not a physical temporary object. */
+/**
+ * Session definition boundary. A legacy CTE is not a physical temporary object.
+ */
 public final class LogicalDefinition {
     public enum Kind {
         VIEW,

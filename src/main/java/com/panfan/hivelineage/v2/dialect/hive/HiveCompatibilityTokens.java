@@ -3,12 +3,15 @@ package com.panfan.hivelineage.v2.dialect.hive;
 import com.panfan.hivelineage.v2.lexical.LexToken;
 import com.panfan.hivelineage.v2.lexical.LexedUnit;
 import com.panfan.hivelineage.v2.lexical.TokenChannel;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Hive's INTO column grammar also accepts the established OVERWRITE-column extension. */
+/**
+ * Hive's INTO column grammar also accepts the established OVERWRITE-column extension.
+ */
 final class HiveCompatibilityTokens {
     static Set<Integer> overwriteColumnExtensions(LexedUnit unit) {
         List<LexToken> visible = new ArrayList<LexToken>();

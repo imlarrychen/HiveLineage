@@ -9,17 +9,22 @@ import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
 import com.panfan.hivelineage.v2.api.StatementStatus;
 import com.panfan.hivelineage.v2.compare.CorpusCase;
 import com.panfan.hivelineage.v2.testing.LegacyCorpusMetadataFixture;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/** Runs the actual existing SQL and metadata fixtures through all concrete V2 stages. */
+/**
+ * Runs the actual existing SQL and metadata fixtures through all concrete V2 stages.
+ */
 @RunWith(Parameterized.class)
 public class GeneratedSqlCompatibilityRegressionTest {
     private final CorpusCase item;
@@ -35,7 +40,7 @@ public class GeneratedSqlCompatibilityRegressionTest {
         List<Object[]> cases = new ArrayList<>();
         for (CorpusCase item : LegacyCorpusMetadataFixture.legacyCorpus()) {
             for (LineageParseMode mode : LineageParseMode.values()) {
-                cases.add(new Object[] { item, mode });
+                cases.add(new Object[]{item, mode});
             }
         }
         return cases;
@@ -44,13 +49,13 @@ public class GeneratedSqlCompatibilityRegressionTest {
     @Test
     public void entireCorpusHasOnlyItsDeclaredFailureAndModeSpecificOutput() {
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder().workflowId(item.getTask().getWorkflowId()).taskId(item.getTask().getTaskId())
-            .taskVersion(item.getTask().getTaskVersion()).defaultDatabase("default").rawScript(item.getSource().getText())
-            .metadataProvider(LegacyCorpusMetadataFixture.provider()).options(LineageAnalyzeOptions.builder().parseMode(mode)
-                .includeIgnoredStatements(true).includeTemporaryLineage(true).expandViewLineage(true).parseJoinConditions(true).fallbackVariableValue("fallback_value").build()).build();
+                .taskVersion(item.getTask().getTaskVersion()).defaultDatabase("default").rawScript(item.getSource().getText())
+                .metadataProvider(LegacyCorpusMetadataFixture.provider()).options(LineageAnalyzeOptions.builder().parseMode(mode)
+                        .includeIgnoredStatements(true).includeTemporaryLineage(true).expandViewLineage(true).parseJoinConditions(true).fallbackVariableValue("fallback_value").build()).build();
         ScriptAnalysisResult nativeResult = new HiveScriptLineageAdapter().analyzeNative(request);
         assertEquals(item.getRelativePath() + " failures: " + nativeResult.getDiagnostics().getDiagnostics().stream()
-            .map(diagnostic -> diagnostic.getCode() + ":" + diagnostic.getMessage()).collect(java.util.stream.Collectors.joining(";")),
-            item.getExpectedFailureCount(), nativeResult.getCounts().getFailed());
+                        .map(diagnostic -> diagnostic.getCode() + ":" + diagnostic.getMessage()).collect(java.util.stream.Collectors.joining(";")),
+                item.getExpectedFailureCount(), nativeResult.getCounts().getFailed());
         LineageAnalyzeResult projected = new DefaultLegacyResultProjector().project(nativeResult).getResult();
         assertEquals(nativeResult.getCounts().getTotal(), projected.getTotalStatementCount());
         assertEquals(nativeResult.getCounts().getTotal(), nativeResult.getStatements().size());
@@ -73,9 +78,9 @@ public class GeneratedSqlCompatibilityRegressionTest {
                 String target = column.getTargetColumn().getQualifiedName();
                 boolean primaryTarget = target.startsWith(statement.getOutputObject().getQualifiedName() + ".");
                 boolean definitionTarget = nativeResult.getStatements().get(statement.getStatementIndex()).getBoundUnit().get().getObjects().values().stream()
-                    .anyMatch(object -> (object.getKind() == com.panfan.hivelineage.v2.ir.statement.BoundObjectReference.ObjectKind.VIEW
-                        || object.getKind() == com.panfan.hivelineage.v2.ir.statement.BoundObjectReference.ObjectKind.TEMPORARY)
-                        && target.startsWith(object.getName().getDisplayName() + "."));
+                        .anyMatch(object -> (object.getKind() == com.panfan.hivelineage.v2.ir.statement.BoundObjectReference.ObjectKind.VIEW
+                                || object.getKind() == com.panfan.hivelineage.v2.ir.statement.BoundObjectReference.ObjectKind.TEMPORARY)
+                                && target.startsWith(object.getName().getDisplayName() + "."));
                 assertTrue(target + " must address the write or an expanded definition", primaryTarget || definitionTarget);
                 assertFalse(column.getExpression() == null || column.getExpression().isEmpty());
             });

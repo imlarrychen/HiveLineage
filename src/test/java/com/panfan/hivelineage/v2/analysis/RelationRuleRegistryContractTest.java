@@ -7,11 +7,13 @@ import com.panfan.hivelineage.v2.ir.relation.OutputAssignment;
 import com.panfan.hivelineage.v2.ir.relation.OutputSchema;
 import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -38,6 +40,7 @@ public class RelationRuleRegistryContractTest {
             public Optional<ExpressionLineageRule> expressionRule(RuleKey key) {
                 return Optional.empty();
             }
+
             @Override
             public Optional<RelationLineageRule> relationRule(RuleKey key) {
                 return Optional.empty();

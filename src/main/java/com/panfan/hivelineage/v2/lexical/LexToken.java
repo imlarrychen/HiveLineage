@@ -53,6 +53,7 @@ public final class LexToken {
     public TokenLocation getLocation() {
         return location;
     }
+
     public SourceRef getSourceRef() {
         return location.getSourceRef();
     }

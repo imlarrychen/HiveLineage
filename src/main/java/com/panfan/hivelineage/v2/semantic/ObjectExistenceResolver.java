@@ -4,7 +4,9 @@ import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
 import com.panfan.hivelineage.v2.metadata.LookupStatus;
 
-/** Script facts take precedence over a pinned external snapshot for catalog preconditions. */
+/**
+ * Script facts take precedence over a pinned external snapshot for catalog preconditions.
+ */
 final class ObjectExistenceResolver {
     private final BindingContext context;
 

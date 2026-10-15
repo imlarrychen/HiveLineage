@@ -26,6 +26,7 @@ import com.panfan.hivelineage.v2.ir.statement.BoundRelationReference;
 import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
 import com.panfan.hivelineage.v2.ir.statement.PartitionScope;
 import com.panfan.hivelineage.v2.ir.statement.WriteAssignment;
+
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -33,7 +34,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/** Displays bound identities only. Missing declarations are never recovered by parsing IDs or SQL. */
+/**
+ * Displays bound identities only. Missing declarations are never recovered by parsing IDs or SQL.
+ */
 public final class BoundNameIndex {
     private final BoundAnalysisUnit unit;
     private final PureIrIndex index;
@@ -240,7 +243,9 @@ public final class BoundNameIndex {
         return Optional.ofNullable(objectFields.getOrDefault(owner, Collections.emptyMap()).get(id));
     }
 
-    /** Unscoped display is available only when all owning declarations agree. */
+    /**
+     * Unscoped display is available only when all owning declarations agree.
+     */
     public Optional<String> declaredField(FieldId id) {
         String name = null;
         List<Map<FieldId, String>> owners = new ArrayList<Map<FieldId, String>>(objectFields.values());

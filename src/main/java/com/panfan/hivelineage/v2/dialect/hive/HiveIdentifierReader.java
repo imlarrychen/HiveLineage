@@ -12,7 +12,9 @@ import org.antlr.runtime.TokenSource;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
 import org.apache.hadoop.hive.ql.parse.ParseDriver;
 
-/** Reads declaration identifiers, including the grammar's non-reserved keywords. */
+/**
+ * Reads declaration identifiers, including the grammar's non-reserved keywords.
+ */
 final class HiveIdentifierReader {
     IdentifierPart read(final LexToken token) {
         if (token.getKind() != TokenKind.IDENTIFIER && token.getKind() != TokenKind.KEYWORD) {

@@ -1,9 +1,12 @@
 package com.panfan.hivelineage.v2.metadata;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
+
 import java.util.Optional;
 
-/** Captured workflow evidence; no service or cache callback is stored here. */
+/**
+ * Captured workflow evidence; no service or cache callback is stored here.
+ */
 public final class MetadataReadRecord {
     private final MetadataCacheKey key;
     private final LookupStatus status;

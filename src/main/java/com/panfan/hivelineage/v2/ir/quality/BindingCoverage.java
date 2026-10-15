@@ -2,13 +2,17 @@ package com.panfan.hivelineage.v2.ir.quality;
 
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
-/** Coverage is explicit per region and requirement; absence is not completion. */
+/**
+ * Coverage is explicit per region and requirement; absence is not completion.
+ */
 public final class BindingCoverage {
-    public enum State { NOT_REQUESTED, COMPLETE, PARTIAL, UNKNOWN }
+    public enum State {NOT_REQUESTED, COMPLETE, PARTIAL, UNKNOWN}
+
     private final Map<NodeId, Map<BindingRequirement, State>> regions;
 
     public BindingCoverage(Map<NodeId, Map<BindingRequirement, State>> regions) {

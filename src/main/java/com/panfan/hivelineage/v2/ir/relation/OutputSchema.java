@@ -2,11 +2,14 @@ package com.panfan.hivelineage.v2.ir.relation;
 
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.ir.quality.SchemaState;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
-/** Ordered segments retain known prefixes/suffixes without numbering across unknown gaps. */
+/**
+ * Ordered segments retain known prefixes/suffixes without numbering across unknown gaps.
+ */
 public final class OutputSchema {
     private final SchemaState state;
     private final List<OutputSegment> segments;

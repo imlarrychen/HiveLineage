@@ -7,6 +7,7 @@ import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.common.ResourceLimitException;
 import com.panfan.hivelineage.v2.ir.identity.EvidenceId;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -36,7 +37,7 @@ final class FactSupport implements EvidenceFactory {
 
     @Override
     public Dependency dependency(LineageEndpoint source, LineageEndpoint target, DependencyRole role, DependencyPrecision precision,
-            NodeId operation, String rule, List<EvidenceId> parents, Optional<SourceRef> sourceRef) {
+                                 NodeId operation, String rule, List<EvidenceId> parents, Optional<SourceRef> sourceRef) {
         StringBuilder identity = new StringBuilder(part(operation.getValue()) + part(rule) + endpointKey(source) + endpointKey(target)
                 + part(role.name()) + part(precision.name()));
         identity.append(parents.size()).append(':');
@@ -57,7 +58,7 @@ final class FactSupport implements EvidenceFactory {
 
     @Override
     public List<Dependency> retarget(List<Dependency> dependencies, LineageEndpoint target, NodeId operation,
-            String rule, DependencyRole forcedRole, Optional<SourceRef> sourceRef) {
+                                     String rule, DependencyRole forcedRole, Optional<SourceRef> sourceRef) {
         List<Dependency> result = new ArrayList<Dependency>();
         capture(dependencies);
         for (Dependency dependency : dependencies) {

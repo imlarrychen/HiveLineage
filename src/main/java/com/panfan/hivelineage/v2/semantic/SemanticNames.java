@@ -3,6 +3,7 @@ package com.panfan.hivelineage.v2.semantic;
 import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.syntax.IdentifierPart;
 import com.panfan.hivelineage.v2.syntax.SyntaxName;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -89,7 +90,7 @@ final class SemanticNames {
 
     static String temporaryDatabase(BindingContext context) {
         return "seele_tmp_db_" + normalizeIdPart(context.getSession().getInitialContext().getWorkflowId())
-            + "_" + normalizeIdPart(context.getSession().getInitialContext().getTaskId());
+                + "_" + normalizeIdPart(context.getSession().getInitialContext().getTaskId());
     }
 
     static List<QualifiedName> temporaryLookupNames(SyntaxName original, BindingContext context) {

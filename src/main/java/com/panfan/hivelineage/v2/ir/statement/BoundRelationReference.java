@@ -5,10 +5,13 @@ import com.panfan.hivelineage.v2.ir.identity.DefinitionId;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
 import com.panfan.hivelineage.v2.ir.identity.QueryBlockId;
 import com.panfan.hivelineage.v2.ir.identity.RelationInstanceId;
+
 import java.util.Objects;
 import java.util.Optional;
 
-/** Display declaration for a bound occurrence; alias is never used to rebind fields. */
+/**
+ * Display declaration for a bound occurrence; alias is never used to rebind fields.
+ */
 public final class BoundRelationReference {
     private final RelationInstanceId id;
     private final QualifiedName alias;

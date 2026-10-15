@@ -22,13 +22,16 @@ import com.panfan.hivelineage.v2.api.VariablePolicy;
 import com.panfan.hivelineage.v2.api.StarMappingPolicy;
 import com.panfan.hivelineage.v2.api.StatementPublicationPolicy;
 import com.panfan.hivelineage.v2.api.DefinitionPolicy;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
-/** Both engines read the same frozen payloads with separate caches and Sessions. */
+/**
+ * Both engines read the same frozen payloads with separate caches and Sessions.
+ */
 public final class DefaultLineageComparisonRunner implements LineageComparisonRunner {
     private final HiveLineageAnalyzer legacy;
     private final DefaultScriptLineageAnalyzer semantic;
@@ -49,7 +52,7 @@ public final class DefaultLineageComparisonRunner implements LineageComparisonRu
         }
         SnapshotMetadataServices replay = new SnapshotMetadataServices(snapshot);
         WorkflowContext frozen = new WorkflowContext(workflow.getWorkflowId(), snapshot.getReadContext(), replay, new DefaultMetadataCache(),
-            Optional.of(replay), Optional.of(replay));
+                Optional.of(replay), Optional.of(replay));
         LineageAnalyzeResult before = legacy.analyzeScript(asLegacy(request, replay));
         ScriptAnalysisResult after = semantic.analyzeScript(request, frozen);
         LineageAnalyzeResult projected = new DefaultLegacyResultProjector().project(after).getResult();
@@ -57,18 +60,18 @@ public final class DefaultLineageComparisonRunner implements LineageComparisonRu
         List<Difference> differences = new ArrayList<>(compared.getDifferences());
         AnalysisContract contract = request.getContract();
         if (contract.getVariablePolicy() != VariablePolicy.CURRENT_API_FALLBACK
-            || contract.getStarMappingPolicy() != StarMappingPolicy.CURRENT_API_TARGET_MAPPING
-            || contract.getPublicationPolicy() != StatementPublicationPolicy.CURRENT_API
-            || contract.getDefinitionPolicy() != DefinitionPolicy.CURRENT_API_CTE_REUSE) {
+                || contract.getStarMappingPolicy() != StarMappingPolicy.CURRENT_API_TARGET_MAPPING
+                || contract.getPublicationPolicy() != StatementPublicationPolicy.CURRENT_API
+                || contract.getDefinitionPolicy() != DefinitionPolicy.CURRENT_API_CTE_REUSE) {
             differences.add(new Difference(request.getTask().getTaskId(), Optional.empty(), DifferenceKind.QUALITY,
-                "V1 API cannot select this native policy: variables=" + contract.getVariablePolicy() + ", star="
-                    + contract.getStarMappingPolicy() + ", publication=" + contract.getPublicationPolicy() + ", definitions=" + contract.getDefinitionPolicy(),
-                DifferenceDisposition.PENDING_REVIEW));
+                    "V1 API cannot select this native policy: variables=" + contract.getVariablePolicy() + ", star="
+                            + contract.getStarMappingPolicy() + ", publication=" + contract.getPublicationPolicy() + ", definitions=" + contract.getDefinitionPolicy(),
+                    DifferenceDisposition.PENDING_REVIEW));
         }
         boolean unsupported = after.getStatements().stream().anyMatch(statement -> statement.getDiagnostics().getDiagnostics().stream()
-            .anyMatch(diagnostic -> diagnostic.getCode().contains("UNSUPPORTED")));
+                .anyMatch(diagnostic -> diagnostic.getCode().contains("UNSUPPORTED")));
         return new ComparisonResult(before, after, new LineageDifferenceReport(compared.getCorpusId(), differences, 1,
-            unsupported ? 1 : 0, differences.isEmpty() ? 0 : 1));
+                unsupported ? 1 : 0, differences.isEmpty() ? 0 : 1));
     }
 
     private static LineageAnalyzeRequest asLegacy(ScriptAnalysisRequest request, SnapshotMetadataServices replay) {
@@ -77,14 +80,14 @@ public final class DefaultLineageComparisonRunner implements LineageComparisonRu
         boolean column = contract.getCapabilities().supports(AnalysisCapability.COLUMN_LINEAGE);
         LineageParseMode mode = column ? table ? LineageParseMode.TABLE_AND_COLUMN : LineageParseMode.COLUMN_ONLY : LineageParseMode.TABLE_ONLY;
         LineageAnalyzeOptions options = LineageAnalyzeOptions.builder().parseMode(mode)
-            .includeTemporaryLineage(contract.isIncludeTemporaryLineage()).includeIgnoredStatements(contract.isIncludeIgnoredStatements())
-            .expandViewLineage(contract.isExpandViewLineage()).parseJoinConditions(contract.getCapabilities().supports(AnalysisCapability.JOIN_CONDITION))
-            .maxViewExpandDepth(contract.getMaxViewExpandDepth()).failFast(contract.isFailFast()).fallbackVariableValue(contract.getFallbackVariableValue()).build();
+                .includeTemporaryLineage(contract.isIncludeTemporaryLineage()).includeIgnoredStatements(contract.isIncludeIgnoredStatements())
+                .expandViewLineage(contract.isExpandViewLineage()).parseJoinConditions(contract.getCapabilities().supports(AnalysisCapability.JOIN_CONDITION))
+                .maxViewExpandDepth(contract.getMaxViewExpandDepth()).failFast(contract.isFailFast()).fallbackVariableValue(contract.getFallbackVariableValue()).build();
         Map<String, String> variables = new LinkedHashMap<>();
         request.getInitialSession().getInitialVariables().forEach((key, value) -> value.getValue().ifPresent(text -> variables.put(variableName(key), text)));
         return LineageAnalyzeRequest.builder().workflowId(request.getTask().getWorkflowId()).taskId(request.getTask().getTaskId()).taskVersion(request.getTask().getTaskVersion())
-            .clusterName(request.getInitialSession().getClusterName()).defaultDatabase(request.getInitialSession().getDefaultDatabase().map(name -> name.getDisplayName()).orElse(null))
-            .rawScript(request.getSource().getText()).runtimeVariables(variables).options(options).metadataProvider(replay.asLegacyProvider()).metadataCache(new HiveMetadataCache()).build();
+                .clusterName(request.getInitialSession().getClusterName()).defaultDatabase(request.getInitialSession().getDefaultDatabase().map(name -> name.getDisplayName()).orElse(null))
+                .rawScript(request.getSource().getText()).runtimeVariables(variables).options(options).metadataProvider(replay.asLegacyProvider()).metadataCache(new HiveMetadataCache()).build();
     }
 
     private static String variableName(VariableKey key) {

@@ -2,9 +2,12 @@ package com.panfan.hivelineage.v2.ir.statement;
 
 import com.panfan.hivelineage.v2.ir.FieldIdentity;
 import com.panfan.hivelineage.v2.ir.expression.BoundExpression;
+
 import java.util.Objects;
 
-/** Target identity is resolved before lineage; expression contains no source-column result. */
+/**
+ * Target identity is resolved before lineage; expression contains no source-column result.
+ */
 public final class WriteAssignment {
     private final FieldIdentity targetField;
     private final BoundExpression expression;

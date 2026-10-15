@@ -12,10 +12,12 @@ import com.panfan.hivelineage.v2.frontend.VariableEvidence;
 import com.panfan.hivelineage.v2.syntax.ParseResult;
 import com.panfan.hivelineage.v2.syntax.SqlSyntaxParser;
 import com.panfan.hivelineage.v2.syntax.SyntaxOptions;
+
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
 import org.junit.Assert;
 import org.junit.Test;
 

@@ -55,6 +55,7 @@ import com.panfan.hivelineage.v2.syntax.UnarySyntax;
 import com.panfan.hivelineage.v2.syntax.UnknownExpressionSyntax;
 import com.panfan.hivelineage.v2.syntax.UseCommandSyntax;
 import com.panfan.hivelineage.v2.syntax.WindowCallSyntax;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -64,9 +65,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+
 import static com.panfan.hivelineage.v2.testing.GeneratedSqlSupport.analyze;
 import static com.panfan.hivelineage.v2.testing.GeneratedSqlSupport.assertColumnSources;
 import static com.panfan.hivelineage.v2.testing.GeneratedSqlSupport.assertInputs;
@@ -82,18 +85,20 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-/** Remaining keyword branches are verified as syntax, bound structure and physical lineage. */
+/**
+ * Remaining keyword branches are verified as syntax, bound structure and physical lineage.
+ */
 @RunWith(Parameterized.class)
 public class HiveKeywordSyntaxIntegrationTest {
     private static final String PREFIX = "v2_keyword_";
     private static final List<String> SUFFIXES = Arrays.asList(
-        "nested_group_by_scalar_subquery", "nested_order_by_scalar_subquery", "nested_sort_by_scalar_subquery",
-        "nested_distribute_by_scalar_subquery", "nested_cluster_by_scalar_subquery", "not_exists_correlated",
-        "literal_boolean_datetime_adjacent_strings", "interval_internal_function_boundary",
-        "remaining_unary_comparison_operators", "window_named_inheritance_following_frames",
-        "window_unknown_and_recursive_boundaries", "select_all_default_set_quantifiers",
-        "join_using_partial_boundary", "session_queries_quoted_use_resource_kinds",
-        "sample_bucket_percent_rows_byte_length", "cast_primitive_type_parameters");
+            "nested_group_by_scalar_subquery", "nested_order_by_scalar_subquery", "nested_sort_by_scalar_subquery",
+            "nested_distribute_by_scalar_subquery", "nested_cluster_by_scalar_subquery", "not_exists_correlated",
+            "literal_boolean_datetime_adjacent_strings", "interval_internal_function_boundary",
+            "remaining_unary_comparison_operators", "window_named_inheritance_following_frames",
+            "window_unknown_and_recursive_boundaries", "select_all_default_set_quantifiers",
+            "join_using_partial_boundary", "session_queries_quoted_use_resource_kinds",
+            "sample_bucket_percent_rows_byte_length", "cast_primitive_type_parameters");
     private final String file;
     private final String suffix;
     private final LineageParseMode mode;
@@ -120,7 +125,7 @@ public class HiveKeywordSyntaxIntegrationTest {
         List<Object[]> cases = new ArrayList<>();
         for (String file : scenarioFiles()) {
             for (LineageParseMode mode : LineageParseMode.values()) {
-                cases.add(new Object[] { file, mode });
+                cases.add(new Object[]{file, mode});
             }
         }
         return cases;
@@ -146,24 +151,47 @@ public class HiveKeywordSyntaxIntegrationTest {
             clauseSubquery(result);
         } else {
             switch (suffix) {
-                case "not_exists_correlated": notExists(result, syntax); break;
-                case "literal_boolean_datetime_adjacent_strings": literals(result, syntax); break;
-                case "interval_internal_function_boundary": intervals(result, syntax); break;
-                case "remaining_unary_comparison_operators": operators(result, syntax); break;
-                case "window_named_inheritance_following_frames": windows(result, syntax); break;
-                case "window_unknown_and_recursive_boundaries": windowBoundaries(result); break;
-                case "select_all_default_set_quantifiers": quantifiers(result, syntax); break;
-                case "join_using_partial_boundary": usingBoundary(result, syntax); break;
-                case "session_queries_quoted_use_resource_kinds": commands(result, syntax); break;
-                case "sample_bucket_percent_rows_byte_length": samples(result, syntax); break;
-                case "cast_primitive_type_parameters": casts(result, syntax); break;
-                default: fail("Unreviewed keyword scenario: " + suffix);
+                case "not_exists_correlated":
+                    notExists(result, syntax);
+                    break;
+                case "literal_boolean_datetime_adjacent_strings":
+                    literals(result, syntax);
+                    break;
+                case "interval_internal_function_boundary":
+                    intervals(result, syntax);
+                    break;
+                case "remaining_unary_comparison_operators":
+                    operators(result, syntax);
+                    break;
+                case "window_named_inheritance_following_frames":
+                    windows(result, syntax);
+                    break;
+                case "window_unknown_and_recursive_boundaries":
+                    windowBoundaries(result);
+                    break;
+                case "select_all_default_set_quantifiers":
+                    quantifiers(result, syntax);
+                    break;
+                case "join_using_partial_boundary":
+                    usingBoundary(result, syntax);
+                    break;
+                case "session_queries_quoted_use_resource_kinds":
+                    commands(result, syntax);
+                    break;
+                case "sample_bucket_percent_rows_byte_length":
+                    samples(result, syntax);
+                    break;
+                case "cast_primitive_type_parameters":
+                    casts(result, syntax);
+                    break;
+                default:
+                    fail("Unreviewed keyword scenario: " + suffix);
             }
         }
     }
 
     private void clauseSubquery(ScriptAnalysisResult result) {
-        successfulWrite(result, 0, new String[] { "ods.users", "ods.events" }, new String[][] { { "id", "ods.users.id" } });
+        successfulWrite(result, 0, new String[]{"ods.users", "ods.events"}, new String[][]{{"id", "ods.users.id"}});
         String clause = suffix.substring("nested_".length(), suffix.length() - "_scalar_subquery".length());
         BoundAnalysisUnit unit = bound(result, 0);
         assertTrue(unit.getQueryBlocks().values().stream().anyMatch(block -> block.getPath().startsWith("root." + clause + ".scalar[")));
@@ -171,20 +199,22 @@ public class HiveKeywordSyntaxIntegrationTest {
         if (mode == LineageParseMode.TABLE_ONLY) {
             // Object-only subquery traversal must not demand metastore schemas or projection fields.
             ScriptAnalysisResult withoutMetadata = new HiveScriptLineageAdapter().analyzeNative(LineageAnalyzeRequest.builder()
-                .workflowId("wf_keyword_object_only").taskId(file).taskVersion("V1").defaultDatabase("default")
-                .rawScript(readSql(file)).metadataProvider(table -> { throw new AssertionError("Unneeded metadata: " + table.getQualifiedName()); })
-                .options(LineageAnalyzeOptions.builder().parseMode(mode).includeIgnoredStatements(true)
-                    .parseJoinConditions(false).expandViewLineage(false).build()).build());
-            successfulWrite(withoutMetadata, 0, new String[] { "ods.users", "ods.events" }, new String[][] { { "id", "ods.users.id" } });
+                    .workflowId("wf_keyword_object_only").taskId(file).taskVersion("V1").defaultDatabase("default")
+                    .rawScript(readSql(file)).metadataProvider(table -> {
+                        throw new AssertionError("Unneeded metadata: " + table.getQualifiedName());
+                    })
+                    .options(LineageAnalyzeOptions.builder().parseMode(mode).includeIgnoredStatements(true)
+                            .parseJoinConditions(false).expandViewLineage(false).build()).build());
+            successfulWrite(withoutMetadata, 0, new String[]{"ods.users", "ods.events"}, new String[][]{{"id", "ods.users.id"}});
             bound(withoutMetadata, 0).getRelations().stream().filter(relation -> relation instanceof Relations.Scan)
-                .forEach(scan -> assertEquals(SchemaState.NOT_REQUESTED, scan.getOutputSchema().getState()));
+                    .forEach(scan -> assertEquals(SchemaState.NOT_REQUESTED, scan.getOutputSchema().getState()));
         } else if (!clause.equals("distribute_by") && !clause.equals("cluster_by")) {
             diagnostic(result, "SCALAR_CARDINALITY_UNKNOWN");
         }
     }
 
     private void notExists(ScriptAnalysisResult result, List<SyntaxResult> syntax) {
-        successfulWrite(result, 0, new String[] { "ods.users", "ods.events" }, new String[][] { { "id", "ods.users.id" } });
+        successfulWrite(result, 0, new String[]{"ods.users", "ods.events"}, new String[][]{{"id", "ods.users.id"}});
         UnarySyntax predicate = (UnarySyntax) select(syntax, 0).getBody().getClauses().getWhere();
         assertEquals(UnaryOperatorSyntax.NOT, predicate.getOperator());
         assertEquals(SubqueryKindSyntax.EXISTS, ((SubqueryExpressionSyntax) predicate.getOperand()).getSubqueryKind());
@@ -193,15 +223,15 @@ public class HiveKeywordSyntaxIntegrationTest {
             Set<String> calls = calls(bound(result, 0));
             assertTrue(calls.toString(), calls.contains("not"));
             assertTrue(bound(result, 0).getRelations().stream().filter(relation -> relation instanceof Relations.Filter)
-                .map(relation -> ((Relations.Filter) relation).getPredicate()).anyMatch(expression -> contains(expression, Expressions.ExistsSubquery.class)));
+                    .map(relation -> ((Relations.Filter) relation).getPredicate()).anyMatch(expression -> contains(expression, Expressions.ExistsSubquery.class)));
         }
     }
 
     private void literals(ScriptAnalysisResult result, List<SyntaxResult> syntax) {
-        successfulWrite(result, 0, new String[] { "ods.users" }, constantMappings());
+        successfulWrite(result, 0, new String[]{"ods.users"}, constantMappings());
         List<SelectItemSyntax> items = select(syntax, 0).getBody().getSelectItems();
-        LiteralKind[] kinds = { LiteralKind.BOOLEAN, LiteralKind.STRING, LiteralKind.BOOLEAN, LiteralKind.DATE,
-            LiteralKind.TIMESTAMP, LiteralKind.NUMBER, LiteralKind.NULL };
+        LiteralKind[] kinds = {LiteralKind.BOOLEAN, LiteralKind.STRING, LiteralKind.BOOLEAN, LiteralKind.DATE,
+                LiteralKind.TIMESTAMP, LiteralKind.NUMBER, LiteralKind.NULL};
         for (int index = 0; index < kinds.length; index++) {
             assertEquals(kinds[index], ((LiteralSyntax) items.get(index).getExpression()).getLiteralKind());
         }
@@ -210,13 +240,13 @@ public class HiveKeywordSyntaxIntegrationTest {
             statement(result, 0).getColumnLineages().forEach(column -> assertEquals(LineageType.CONSTANT, column.getLineageType()));
             List<Expressions.Literal> values = projected(bound(result, 0)).stream().map(expression -> (Expressions.Literal) expression).collect(Collectors.toList());
             assertEquals(Arrays.asList(TypeRef.Kind.BOOLEAN, TypeRef.Kind.STRING, TypeRef.Kind.BOOLEAN, TypeRef.Kind.DATE,
-                TypeRef.Kind.TIMESTAMP, TypeRef.Kind.INTEGER, TypeRef.Kind.NULL), values.stream().map(value -> value.getType().getKind()).collect(Collectors.toList()));
+                    TypeRef.Kind.TIMESTAMP, TypeRef.Kind.INTEGER, TypeRef.Kind.NULL), values.stream().map(value -> value.getType().getKind()).collect(Collectors.toList()));
             assertEquals("firstsecond", values.get(1).getValue().getValue().get());
         }
     }
 
     private void intervals(ScriptAnalysisResult result, List<SyntaxResult> syntax) {
-        successfulWrite(result, 0, new String[] { "ods.users" }, new String[][] { { "tag" }, { "dt" } });
+        successfulWrite(result, 0, new String[]{"ods.users"}, new String[][]{{"tag"}, {"dt"}});
         for (SelectItemSyntax item : select(syntax, 0).getBody().getSelectItems()) {
             CallSyntax interval = (CallSyntax) item.getExpression();
             assertEquals("internal_interval", interval.getFunctionName().getParts().get(0).getValue());
@@ -231,9 +261,9 @@ public class HiveKeywordSyntaxIntegrationTest {
     private void operators(ScriptAnalysisResult result, List<SyntaxResult> syntax) {
         String[][] mappings = constantMappings();
         for (int index = 0; index < mappings.length; index++) {
-            mappings[index] = new String[] { mappings[index][0], "ods.users.id" };
+            mappings[index] = new String[]{mappings[index][0], "ods.users.id"};
         }
-        successfulWrite(result, 0, new String[] { "ods.users" }, mappings);
+        successfulWrite(result, 0, new String[]{"ods.users"}, mappings);
         List<SelectItemSyntax> items = select(syntax, 0).getBody().getSelectItems();
         assertEquals(UnaryOperatorSyntax.PLUS, ((UnarySyntax) items.get(0).getExpression()).getOperator());
         assertEquals(UnaryOperatorSyntax.BITWISE_NOT, ((UnarySyntax) items.get(1).getExpression()).getOperator());
@@ -255,23 +285,23 @@ public class HiveKeywordSyntaxIntegrationTest {
         assertFalse(((BetweenSyntax) items.get(6).getExpression()).isNegated());
         if (mode != LineageParseMode.TABLE_ONLY) {
             assertTrue(calls(bound(result, 0)).containsAll(Arrays.asList("plus", "bitwise_not", "divide", "not_equal", "less_than",
-                "less_or_equal", "is_null", "not", "in", "between")));
+                    "less_or_equal", "is_null", "not", "in", "between")));
         }
     }
 
     private void windows(ScriptAnalysisResult result, List<SyntaxResult> syntax) {
         assertEquals(5, result.getCounts().getTotal());
         for (int index = 0; index < 5; index++) {
-            String[] inputs = index == 4 ? new String[] { "ods.users", "ods.events" } : new String[] { "ods.users" };
-            successfulWrite(result, index, inputs, new String[][] { { "id", "ods.users.id" },
-                index == 4 ? new String[] { "amount", "ods.users.amount", "ods.events.user_id" }
-                    : new String[] { "amount", "ods.users.amount", "ods.users.dept_id" } });
+            String[] inputs = index == 4 ? new String[]{"ods.users", "ods.events"} : new String[]{"ods.users"};
+            successfulWrite(result, index, inputs, new String[][]{{"id", "ods.users.id"},
+                    index == 4 ? new String[]{"amount", "ods.users.amount", "ods.events.user_id"}
+                            : new String[]{"amount", "ods.users.amount", "ods.users.dept_id"}});
             if (mode == LineageParseMode.TABLE_ONLY) {
                 continue;
             }
             Relations.WindowComputation computation = bound(result, index).getRelations().stream()
-                .filter(relation -> relation instanceof Relations.Window).map(relation -> (Relations.Window) relation)
-                .flatMap(window -> window.getComputations().stream()).findFirst().get();
+                    .filter(relation -> relation instanceof Relations.Window).map(relation -> (Relations.Window) relation)
+                    .flatMap(window -> window.getComputations().stream()).findFirst().get();
             assertEquals(1, computation.getPartitions().size());
             assertEquals(1, computation.getOrderKeys().size());
             Relations.WindowFrame frame = computation.getFrame().get();
@@ -306,22 +336,22 @@ public class HiveKeywordSyntaxIntegrationTest {
             assertTableSources(statement(result, index), "dwd.result", "ods.users");
             assertColumnSources(statement(result, index), "dwd.result.id", "ods.users.id");
             assertColumnSources(statement(result, index), "dwd.result.amount",
-                index == 0 ? new String[] { "ods.users.amount" } : new String[] { "ods.users.amount", "ods.users.dept_id" });
+                    index == 0 ? new String[]{"ods.users.amount"} : new String[]{"ods.users.amount", "ods.users.dept_id"});
         }
     }
 
     private void quantifiers(ScriptAnalysisResult result, List<SyntaxResult> syntax) {
         assertEquals(QuantifierSyntax.DEFAULT, select(syntax, 0).getBody().getQuantifier());
-        successfulWrite(result, 0, new String[] { "ods.users" }, new String[][] { { "id", "ods.users.id" } });
+        successfulWrite(result, 0, new String[]{"ods.users"}, new String[][]{{"id", "ods.users.id"}});
         for (int index = 1; index < 4; index++) {
-            successfulWrite(result, index, new String[] { "ods.users", "ods.users_archive" },
-                new String[][] { { "id", "ods.users.id", "ods.users_archive.id" } });
+            successfulWrite(result, index, new String[]{"ods.users", "ods.users_archive"},
+                    new String[][]{{"id", "ods.users.id", "ods.users_archive.id"}});
             SetQuerySyntax set = setQuery(select(syntax, index));
             SetOperatorSyntax expected = index == 1 ? SetOperatorSyntax.INTERSECT : index == 2 ? SetOperatorSyntax.EXCEPT : SetOperatorSyntax.UNION;
             assertEquals(expected, set.getBody().getOperator());
             assertEquals(QuantifierSyntax.DISTINCT, set.getBody().getQuantifier());
             Relations.SetOp relation = (Relations.SetOp) bound(result, index).getRelations().stream()
-                .filter(value -> value instanceof Relations.SetOp).findFirst().get();
+                    .filter(value -> value instanceof Relations.SetOp).findFirst().get();
             assertEquals(Relations.SetOperator.valueOf(expected.name()), relation.getOperator());
             assertEquals(Relations.DuplicatePolicy.DISTINCT, relation.getDuplicatePolicy());
         }
@@ -351,7 +381,7 @@ public class HiveKeywordSyntaxIntegrationTest {
         assertNull(query.getValue());
         assertEquals("active", ((SetCommandSyntax) command(syntax, 2)).getValue());
         assertEquals(QuoteKind.BACKTICK, ((UseCommandSyntax) command(syntax, 3)).getDatabase().getParts().get(0).getQuoteKind());
-        String[] types = { "JAR", "FILE", "ARCHIVE" };
+        String[] types = {"JAR", "FILE", "ARCHIVE"};
         for (int index = 4; index < 13; index++) {
             ResourceCommandSyntax resource = (ResourceCommandSyntax) command(syntax, index);
             assertEquals(types[(index - 4) % 3], resource.getResourceType().toUpperCase(java.util.Locale.ROOT));
@@ -368,13 +398,13 @@ public class HiveKeywordSyntaxIntegrationTest {
                 assertEquals(StatementStatus.IGNORED, result.getStatements().get(index).getStatus());
             }
         }
-        successfulWrite(result, 14, new String[] { "ods.users" }, new String[][] { { "id", "ods.users.id" } });
+        successfulWrite(result, 14, new String[]{"ods.users"}, new String[][]{{"id", "ods.users.id"}});
     }
 
     private void samples(ScriptAnalysisResult result, List<SyntaxResult> syntax) {
-        SampleKindSyntax[] kinds = { SampleKindSyntax.BUCKET, SampleKindSyntax.PERCENT, SampleKindSyntax.ROWS, SampleKindSyntax.BYTE_LENGTH };
+        SampleKindSyntax[] kinds = {SampleKindSyntax.BUCKET, SampleKindSyntax.PERCENT, SampleKindSyntax.ROWS, SampleKindSyntax.BYTE_LENGTH};
         for (int index = 0; index < kinds.length; index++) {
-            successfulWrite(result, index, new String[] { "ods.users" }, new String[][] { { "id", "ods.users.id" } });
+            successfulWrite(result, index, new String[]{"ods.users"}, new String[][]{{"id", "ods.users.id"}});
             TableSampleSyntax sample = ((NamedFromSyntax) select(syntax, index).getBody().getFrom()).getSample();
             assertEquals(kinds[index], sample.getKind());
             assertEquals(index == 0 ? 3 : 1, sample.getArguments().size());
@@ -385,23 +415,23 @@ public class HiveKeywordSyntaxIntegrationTest {
     }
 
     private void casts(ScriptAnalysisResult result, List<SyntaxResult> syntax) {
-        String[][] names = { { "tinyint", "smallint", "int", "bigint", "float", "double", "decimal" },
-            { "boolean", "string", "char", "varchar", "binary", "date", "timestamp" } };
-        String[][] sources = { { "id", "id", "id", "id", "amount", "amount", "amount" },
-            { "id", "name", "name", "name", "name", "dt", "dt" } };
+        String[][] names = {{"tinyint", "smallint", "int", "bigint", "float", "double", "decimal"},
+                {"boolean", "string", "char", "varchar", "binary", "date", "timestamp"}};
+        String[][] sources = {{"id", "id", "id", "id", "amount", "amount", "amount"},
+                {"id", "name", "name", "name", "name", "dt", "dt"}};
         for (int index = 0; index < 2; index++) {
             String[][] mappings = constantMappings();
             List<SelectItemSyntax> items = select(syntax, index).getBody().getSelectItems();
             for (int column = 0; column < 7; column++) {
-                mappings[column] = new String[] { mappings[column][0], "ods.users." + sources[index][column] };
+                mappings[column] = new String[]{mappings[column][0], "ods.users." + sources[index][column]};
                 CastSyntax cast = (CastSyntax) items.get(column).getExpression();
                 assertEquals(names[index][column], cast.getTargetType().getTypeName().getParts().get(0).getValue());
                 List<Integer> numeric = index == 0 && column == 6 ? Arrays.asList(12, 2)
-                    : index == 1 && column == 2 ? Collections.singletonList(8)
-                    : index == 1 && column == 3 ? Collections.singletonList(32) : Collections.emptyList();
+                        : index == 1 && column == 2 ? Collections.singletonList(8)
+                          : index == 1 && column == 3 ? Collections.singletonList(32) : Collections.emptyList();
                 assertEquals(numeric, cast.getTargetType().getNumericArguments());
             }
-            successfulWrite(result, index, new String[] { "ods.users" }, mappings);
+            successfulWrite(result, index, new String[]{"ods.users"}, mappings);
             if (mode != LineageParseMode.TABLE_ONLY) {
                 assertTrue(projected(bound(result, index)).stream().allMatch(value -> value instanceof Expressions.Cast));
             }
@@ -422,7 +452,7 @@ public class HiveKeywordSyntaxIntegrationTest {
     }
 
     private static String[][] constantMappings() {
-        return new String[][] { { "id" }, { "name" }, { "amount" }, { "dept_name" }, { "tag" }, { "rn" }, { "dt" } };
+        return new String[][]{{"id"}, {"name"}, {"amount"}, {"dept_name"}, {"tag"}, {"rn"}, {"dt"}};
     }
 
     private static BoundAnalysisUnit bound(ScriptAnalysisResult result, int index) {
@@ -445,13 +475,13 @@ public class HiveKeywordSyntaxIntegrationTest {
 
     private static void diagnostic(ScriptAnalysisResult result, String code) {
         assertTrue(code + " in " + result.getDiagnostics().getDiagnostics(), result.getDiagnostics().getDiagnostics().stream()
-            .anyMatch(diagnostic -> code.equals(diagnostic.getCode())));
+                .anyMatch(diagnostic -> code.equals(diagnostic.getCode())));
     }
 
     private static List<BoundExpression> projected(BoundAnalysisUnit unit) {
         return unit.getRelations().stream().filter(relation -> relation instanceof Relations.Project)
-            .map(relation -> (Relations.Project) relation).flatMap(project -> project.getAssignments().stream())
-            .map(OutputAssignment::getExpression).collect(Collectors.toList());
+                .map(relation -> (Relations.Project) relation).flatMap(project -> project.getAssignments().stream())
+                .map(OutputAssignment::getExpression).collect(Collectors.toList());
     }
 
     private static Set<String> calls(BoundAnalysisUnit unit) {

@@ -3,12 +3,16 @@ package com.panfan.hivelineage.v2.dialect.hive;
 import com.panfan.hivelineage.v2.lexical.LexedUnit;
 import com.panfan.hivelineage.v2.common.Diagnostic;
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.List;
 import java.util.Collections;
+
 import com.panfan.hivelineage.v2.syntax.SyntaxStatement;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 
-/** Opaque dialect result. Native AST is visible only to this adapter package. */
+/**
+ * Opaque dialect result. Native AST is visible only to this adapter package.
+ */
 public final class HiveParseArtifact {
     private final LexedUnit unit;
     private final ASTNode tree;

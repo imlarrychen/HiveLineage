@@ -12,6 +12,7 @@ import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
 import com.panfan.hivelineage.v2.ir.statement.QueryResult;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -21,7 +22,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-/** Displays the declared direct input boundary; physical lineage remains in separate facts. */
+/**
+ * Displays the declared direct input boundary; physical lineage remains in separate facts.
+ */
 public final class BoundInputObjectProjector {
     private final BoundAnalysisUnit unit;
     private final BoundNameIndex names;

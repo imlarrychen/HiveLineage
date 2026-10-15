@@ -10,6 +10,7 @@ import com.panfan.hivelineage.v2.ir.relation.OutputSchema;
 import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
 import com.panfan.hivelineage.v2.ir.statement.PartitionScope;
 import com.panfan.hivelineage.v2.ir.statement.VersionRef;
+
 import java.util.List;
 
 public final class SinkBindingRequest {
@@ -26,7 +27,7 @@ public final class SinkBindingRequest {
 
     public SinkBindingRequest(NodeId writeId, ObjectId targetObject, OutputSchema targetSchema, List<FieldIdentity> explicitTargetFields, PartitionScope partitionScope, BoundWrite.WriteMode writeMode, VersionRef beforeVersion, VersionRef afterVersion, StarMappingPolicy mappingPolicy) {
         this(writeId, targetObject, targetSchema, explicitTargetFields, partitionScope, writeMode,
-            beforeVersion, afterVersion, mappingPolicy, false);
+                beforeVersion, afterVersion, mappingPolicy, false);
     }
 
     public SinkBindingRequest(NodeId writeId, ObjectId targetObject, OutputSchema targetSchema, List<FieldIdentity> explicitTargetFields, PartitionScope partitionScope, BoundWrite.WriteMode writeMode, VersionRef beforeVersion, VersionRef afterVersion, StarMappingPolicy mappingPolicy, boolean sourceContainsStar) {

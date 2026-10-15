@@ -2,7 +2,9 @@ package com.panfan.hivelineage.v2.metadata;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
 
-/** Bundled provider payload; accepting it does not imply all attributes are known. */
+/**
+ * Bundled provider payload; accepting it does not imply all attributes are known.
+ */
 public final class RelationMetadata {
     private final ObjectDescriptor object;
     private final RelationSchema schema;

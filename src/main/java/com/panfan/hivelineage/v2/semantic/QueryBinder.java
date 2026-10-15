@@ -63,6 +63,7 @@ import com.panfan.hivelineage.v2.syntax.StarSyntax;
 import com.panfan.hivelineage.v2.syntax.SyntaxExpression;
 import com.panfan.hivelineage.v2.syntax.SyntaxQuery;
 import com.panfan.hivelineage.v2.syntax.SyntaxStatement;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -95,9 +96,9 @@ final class QueryBinder {
     BoundRelation query(SyntaxQuery syntax, ReferenceScope outer, boolean outputs, QueryResult.Role role,
                         String prefix, FromSyntax fallbackFrom, String displayPath) {
         com.panfan.hivelineage.v2.ir.identity.QueryBlockId block = prefix.isEmpty() ? syntax.getQueryBlockId()
-            : new com.panfan.hivelineage.v2.ir.identity.QueryBlockId(prefix + syntax.getQueryBlockId().getValue());
+                : new com.panfan.hivelineage.v2.ir.identity.QueryBlockId(prefix + syntax.getQueryBlockId().getValue());
         ReferenceScope scope = new ReferenceScope(work, outer, new ScopeId(prefix + syntax.getNodeId().getValue() + "/scope"),
-            block, prefix, syntax.getCtes());
+                block, prefix, syntax.getCtes());
         if (displayPath != null) {
             scope.displayPath = displayPath;
         } else if (role == QueryResult.Role.MAIN) {
@@ -142,7 +143,7 @@ final class QueryBinder {
         BoundRelation input;
         if (from == null) {
             input = new Relations.Values(work.id(syntax, scope, "one-row"), OutputSchema.known(Collections.<OutputSlot>emptyList()),
-                scope.block, order(syntax), syntax.getSourceRef(), Collections.singletonList(Collections.<BoundExpression>emptyList()));
+                    scope.block, order(syntax), syntax.getSourceRef(), Collections.singletonList(Collections.<BoundExpression>emptyList()));
             work.put(input);
         } else {
             input = from(from, scope, outputs);
@@ -160,7 +161,7 @@ final class QueryBinder {
             }
             if (predicate != null) {
                 input = new Relations.Filter(work.id(syntax, scope, "where"), input.getOutputSchema(), scope.block,
-                    order(syntax), clauses.getWhere().getSourceRef(), input.getId(), predicate, BindingWork.mappings(input.getOutputSchema()));
+                        order(syntax), clauses.getWhere().getSourceRef(), input.getId(), predicate, BindingWork.mappings(input.getOutputSchema()));
                 work.put(input);
             }
             scope.clauseLocation = ClauseLocation.SELECT;
@@ -184,24 +185,24 @@ final class QueryBinder {
         new SyntaxSubqueryCollector(work, this).collectClauses(clauses, scope, projectionQueries, true);
         if (!projectionQueries.isEmpty()) {
             BoundExpression dependency = new Expressions.NotRequestedExpression(work.id(syntax, scope, "select-not-requested"),
-                TypeRef.unknown(), syntax.getSourceRef(), BindingRequirement.OUTPUT_SCHEMA, projectionQueries);
+                    TypeRef.unknown(), syntax.getSourceRef(), BindingRequirement.OUTPUT_SCHEMA, projectionQueries);
             input = new Relations.Filter(work.id(syntax, scope, "select-dependencies"), input.getOutputSchema(), scope.block,
-                order(syntax), syntax.getSourceRef(), input.getId(), dependency, BindingWork.mappings(input.getOutputSchema()));
+                    order(syntax), syntax.getSourceRef(), input.getId(), dependency, BindingWork.mappings(input.getOutputSchema()));
             work.put(input);
         }
         if (clauses.getHaving() != null) {
             scope.clauseLocation = ClauseLocation.HAVING;
             BoundExpression having = work.requested(BindingRequirement.CONDITION_FIELDS)
-                ? expressions.bind(clauses.getHaving(), scope)
-                : objectPredicate(clauses.getHaving(), scope, BindingRequirement.CONDITION_FIELDS);
+                    ? expressions.bind(clauses.getHaving(), scope)
+                    : objectPredicate(clauses.getHaving(), scope, BindingRequirement.CONDITION_FIELDS);
             input = refresh(input.getId(), new LinkedHashSet<NodeId>());
             input = new Relations.Filter(work.id(syntax, scope, "having"), input.getOutputSchema(), scope.block, order(syntax),
-                clauses.getHaving().getSourceRef(), input.getId(), having, BindingWork.mappings(input.getOutputSchema()));
+                    clauses.getHaving().getSourceRef(), input.getId(), having, BindingWork.mappings(input.getOutputSchema()));
             work.put(input);
             scope.clauseLocation = ClauseLocation.SELECT;
         }
         BoundRelation projection = new Relations.Project(work.id(syntax, scope, "project"), OutputSchema.notRequested(),
-            scope.block, order(syntax), syntax.getSourceRef(), input.getId(), Collections.<OutputAssignment>emptyList());
+                scope.block, order(syntax), syntax.getSourceRef(), input.getId(), Collections.<OutputAssignment>emptyList());
         work.put(projection);
         return projection;
     }
@@ -229,11 +230,11 @@ final class QueryBinder {
                     List<OutputSlot> expanded = new ArrayList<>();
                     for (OutputSlot inputSlot : BindingWork.slots(source.schema)) {
                         OutputSlot output = new OutputSlot(new SlotId(work.id(star, scope, "output-" + position++).getValue()),
-                            inputSlot.getDisplayName(), inputSlot.getType(), null);
+                                inputSlot.getDisplayName(), inputSlot.getType(), null);
                         expanded.add(output);
                         assignments.add(new OutputAssignment(output.getId(), new Expressions.SlotRef(
-                            new NodeId(output.getId().getValue() + "/reference"), inputSlot.getType(), star.getSourceRef(),
-                            inputSlot.getId(), Collections.<String>emptyList())));
+                                new NodeId(output.getId().getValue() + "/reference"), inputSlot.getType(), star.getSourceRef(),
+                                inputSlot.getId(), Collections.<String>emptyList())));
                     }
                     segments.add(new KnownOutputSegment(expanded));
                 }
@@ -241,7 +242,7 @@ final class QueryBinder {
                 BoundExpression expression = expressions.bind(item.getExpression(), scope);
                 String name = outputName(item, position);
                 OutputSlot output = new OutputSlot(new SlotId(work.id(item.getExpression(), scope, "output-" + position++).getValue()),
-                    name, work.analyzeType(expression), null);
+                        name, work.analyzeType(expression), null);
                 segments.add(new KnownOutputSegment(Collections.singletonList(output)));
                 assignments.add(new OutputAssignment(output.getId(), expression));
             }
@@ -299,7 +300,7 @@ final class QueryBinder {
             String role = "order-" + orderIndex++;
             SlotId slot = hiddenOutput(syntax, scope, role, expression, assignments, hiddenSlots);
             orderKeys.add(new Relations.OrderKey(hiddenReference(syntax, scope, role, expression, slot),
-                key.getDirection(), key.getNullOrder()));
+                    key.getDirection(), key.getNullOrder()));
         }
         return new PostProjectionClauses(assignments, hiddenSlots, having, orderKeys, aggregate);
     }
@@ -319,23 +320,23 @@ final class QueryBinder {
         // HAVING and ORDER BY can refer to fields that SELECT does not expose.
         // Evaluate them with the projection/aggregate, then use their output slots.
         OutputSchema operatorSchema = hiddenSlots.isEmpty() ? schema
-            : BindingWork.combined(schema, OutputSchema.known(hiddenSlots), true);
+                : BindingWork.combined(schema, OutputSchema.known(hiddenSlots), true);
         if (!scope.windowComputations.isEmpty()) {
             OutputSchema windowSchema = BindingWork.combined(input.getOutputSchema(), OutputSchema.known(scope.windowSlots), true);
             BoundRelation window = new Relations.Window(work.id(syntax, scope, "window"), windowSchema, scope.block,
-                order(syntax), syntax.getSourceRef(), input.getId(), BindingWork.mappings(input.getOutputSchema()), scope.windowComputations);
+                    order(syntax), syntax.getSourceRef(), input.getId(), BindingWork.mappings(input.getOutputSchema()), scope.windowComputations);
             work.put(window);
             input = window;
         }
         BoundRelation projection = aggregate
-            ? new Relations.Aggregate(work.id(syntax, scope, "aggregate"), operatorSchema, scope.block, order(syntax),
+                ? new Relations.Aggregate(work.id(syntax, scope, "aggregate"), operatorSchema, scope.block, order(syntax),
                 syntax.getSourceRef(), input.getId(), groupings, assignments)
-            : new Relations.Project(work.id(syntax, scope, "project"), operatorSchema, scope.block, order(syntax),
+                : new Relations.Project(work.id(syntax, scope, "project"), operatorSchema, scope.block, order(syntax),
                 syntax.getSourceRef(), input.getId(), assignments);
         work.put(projection);
         if (having != null) {
             projection = new Relations.Filter(work.id(syntax, scope, "having"), operatorSchema, scope.block, order(syntax),
-                clauses.getHaving().getSourceRef(), projection.getId(), having, BindingWork.mappings(operatorSchema));
+                    clauses.getHaving().getSourceRef(), projection.getId(), having, BindingWork.mappings(operatorSchema));
             work.put(projection);
         }
         if (body.getQuantifier() == QuantifierSyntax.DISTINCT) {
@@ -344,7 +345,7 @@ final class QueryBinder {
                 keys.add(slot.getId());
             }
             projection = new Relations.Distinct(work.id(syntax, scope, "distinct"), operatorSchema, scope.block, order(syntax),
-                syntax.getSourceRef(), projection.getId(), keys, BindingWork.mappings(operatorSchema));
+                    syntax.getSourceRef(), projection.getId(), keys, BindingWork.mappings(operatorSchema));
             work.put(projection);
         }
         projection = tail(projection, clauses.getTail(), syntax, scope, orderKeys);
@@ -358,8 +359,8 @@ final class QueryBinder {
                         SlotId output = new SlotId(slot.getId().getValue() + "/visible-output");
                         slots.add(new OutputSlot(output, slot.getDisplayName(), slot.getType(), null));
                         visible.add(new OutputAssignment(output, new Expressions.SlotRef(
-                            new NodeId(output.getValue() + "/reference"), slot.getType(), syntax.getSourceRef(),
-                            slot.getId(), Collections.<String>emptyList())));
+                                new NodeId(output.getValue() + "/reference"), slot.getType(), syntax.getSourceRef(),
+                                slot.getId(), Collections.<String>emptyList())));
                     }
                     visibleSegments.add(new KnownOutputSegment(slots));
                 } else {
@@ -369,7 +370,7 @@ final class QueryBinder {
             OutputSchema visibleSchema = new OutputSchema(state, visibleSegments);
             scope.setOutputAliases(visibleSchema);
             projection = new Relations.Project(work.id(syntax, scope, "visible-project"), visibleSchema, scope.block,
-                order(syntax), syntax.getSourceRef(), projection.getId(), visible);
+                    order(syntax), syntax.getSourceRef(), projection.getId(), visible);
             work.put(projection);
         }
         return projection;
@@ -377,6 +378,7 @@ final class QueryBinder {
 
     private static final class BoundSources {
         final BoundRelation input;
+
         BoundSources(BoundRelation input) {
             this.input = input;
         }
@@ -386,6 +388,7 @@ final class QueryBinder {
         final OutputSchema schema;
         final List<OutputAssignment> assignments;
         final List<BoundExpression> groupings;
+
         BoundProjection(OutputSchema schema, List<OutputAssignment> assignments, List<BoundExpression> groupings) {
             this.schema = schema;
             this.assignments = Collections.unmodifiableList(new ArrayList<>(assignments));
@@ -399,6 +402,7 @@ final class QueryBinder {
         final BoundExpression having;
         final List<Relations.OrderKey> orderKeys;
         final boolean aggregate;
+
         PostProjectionClauses(List<OutputAssignment> assignments, List<OutputSlot> hiddenSlots,
                               BoundExpression having, List<Relations.OrderKey> orderKeys, boolean aggregate) {
             this.assignments = Collections.unmodifiableList(new ArrayList<>(assignments));
@@ -431,8 +435,8 @@ final class QueryBinder {
         for (BoundRelation branch : branches) {
             known &= branch.getOutputSchema().getState() == SchemaState.KNOWN;
             if (branch.getOutputSchema().getState() == SchemaState.KNOWN
-                && shape != null
-                && BindingWork.slots(branch.getOutputSchema()).size() != width) {
+                    && shape != null
+                    && BindingWork.slots(branch.getOutputSchema()).size() != width) {
                 work.error("COLUMN_COUNT_MISMATCH", "Set operation branches have different widths", syntax.getSourceRef());
             }
         }
@@ -442,22 +446,22 @@ final class QueryBinder {
                 OutputSlot first = BindingWork.slots(shape.getOutputSchema()).get(index);
                 boolean namedByFirstBranch = branches.get(0).getOutputSchema().getState() == SchemaState.KNOWN;
                 OutputSlot output = new OutputSlot(new SlotId(work.id(syntax, scope, "set-output-" + index).getValue()),
-                    namedByFirstBranch ? first.getDisplayName() : "_col" + index, first.getType(), null);
+                        namedByFirstBranch ? first.getDisplayName() : "_col" + index, first.getType(), null);
                 slots.add(output);
                 for (BoundRelation branch : branches) {
                     List<OutputSlot> branchSlots = BindingWork.slots(branch.getOutputSchema());
                     inputs.add(branch.getOutputSchema().getState() == SchemaState.KNOWN && index < branchSlots.size()
-                        ? Relations.BranchSlot.known(branchSlots.get(index).getId())
-                        : Relations.BranchSlot.unknown("SET_BRANCH_WIDTH_UNKNOWN"));
+                            ? Relations.BranchSlot.known(branchSlots.get(index).getId())
+                            : Relations.BranchSlot.unknown("SET_BRANCH_WIDTH_UNKNOWN"));
                 }
                 mappings.add(new Relations.SetOutputMapping(output.getId(), inputs));
             }
         }
         OutputSchema schema = !outputs ? OutputSchema.notRequested() : known ? OutputSchema.known(slots)
-            : partialSchema(slots, work.id(syntax, scope, "set-width"), "SET_BRANCH_WIDTH_UNKNOWN");
+                                                                       : partialSchema(slots, work.id(syntax, scope, "set-width"), "SET_BRANCH_WIDTH_UNKNOWN");
         BoundRelation result = new Relations.SetOp(work.id(syntax, scope, "set"), schema, scope.block, order(syntax),
-            syntax.getSourceRef(), ids, Relations.SetOperator.valueOf(syntax.getBody().getOperator().name()),
-            syntax.getBody().getQuantifier() == QuantifierSyntax.ALL ? Relations.DuplicatePolicy.ALL : Relations.DuplicatePolicy.DISTINCT, mappings);
+                syntax.getSourceRef(), ids, Relations.SetOperator.valueOf(syntax.getBody().getOperator().name()),
+                syntax.getBody().getQuantifier() == QuantifierSyntax.ALL ? Relations.DuplicatePolicy.ALL : Relations.DuplicatePolicy.DISTINCT, mappings);
         work.put(result);
         scope.setOutputAliases(schema);
         return outputs ? tail(result, syntax.getBody().getTail(), syntax, scope) : result;
@@ -470,12 +474,12 @@ final class QueryBinder {
         if (syntax instanceof DerivedFromSyntax) {
             DerivedFromSyntax derived = (DerivedFromSyntax) syntax;
             String path = derived.isSyntheticWrapper() ? scope.displayPath
-                : scope.displayPath + ".subquery[" + (++scope.childSequence) + "]";
+                    : scope.displayPath + ".subquery[" + (++scope.childSequence) + "]";
             BoundRelation child = query(derived.getQuery(), scope, outputs || work.requested(BindingRequirement.CONDITION_FIELDS),
-                QueryResult.Role.SUBQUERY, scope.prefix, null, path);
+                    QueryResult.Role.SUBQUERY, scope.prefix, null, path);
             return instance(syntax, child, new DefinitionId(work.id(syntax, scope, "definition").getValue()),
-                new QualifiedName(Collections.singletonList(SemanticNames.normalize(derived.getAlias().getValue()))),
-                derived.getColumnAliases(), null, scope);
+                    new QualifiedName(Collections.singletonList(SemanticNames.normalize(derived.getAlias().getValue()))),
+                    derived.getColumnAliases(), null, scope);
         }
         if (syntax instanceof LateralFromSyntax) {
             LateralFromSyntax lateral = (LateralFromSyntax) syntax;
@@ -492,17 +496,17 @@ final class QueryBinder {
                 }
                 NodeId id = work.id(generator.getFunction(), scope, "generate");
                 Relations.Generate relation = new Relations.Generate(id,
-                    BindingWork.combined(result.getOutputSchema(), OutputSchema.known(generated), true), scope.block,
-                    order(syntax), generator.getFunction().getSourceRef(), result.getId(), call.getFunction(),
-                    call.getArguments(), ids, BindingWork.mappings(result.getOutputSchema()), generator.isOuter());
+                        BindingWork.combined(result.getOutputSchema(), OutputSchema.known(generated), true), scope.block,
+                        order(syntax), generator.getFunction().getSourceRef(), result.getId(), call.getFunction(),
+                        call.getArguments(), ids, BindingWork.mappings(result.getOutputSchema()), generator.isOuter());
                 work.put(relation);
                 RelationInstanceId instance = new RelationInstanceId(id.getValue() + "/instance");
                 QualifiedName alias = new QualifiedName(Collections.singletonList(SemanticNames.normalize(generator.getTableAlias().getValue())));
                 scope.sources.add(new SourceBinding(id, instance, null, alias, alias.getParts(), false,
-                    generator.getFunction().getSourceRef(), OutputSchema.known(generated), true));
+                        generator.getFunction().getSourceRef(), OutputSchema.known(generated), true));
                 scope.sources.get(scope.sources.size() - 1).generated = true;
                 work.relationReferences.put(instance, new BoundRelationReference(instance, alias, Optional.<ObjectId>empty(),
-                    Optional.<DefinitionId>empty(), scope.block));
+                        Optional.<DefinitionId>empty(), scope.block));
                 result = relation;
             }
             return result;
@@ -514,22 +518,22 @@ final class QueryBinder {
             BoundRelation right = from(join.getOperands().getRight(), scope, outputs);
             scope.clauseLocation = ClauseLocation.ON;
             BoundExpression condition = join.getCondition().getOn() == null ? null
-                : !outputs && !work.requested(BindingRequirement.CONDITION_FIELDS)
-                    ? objectPredicate(join.getCondition().getOn(), scope, BindingRequirement.CONDITION_FIELDS)
-                    : expressions.bind(join.getCondition().getOn(), scope);
+                    : !outputs && !work.requested(BindingRequirement.CONDITION_FIELDS)
+                      ? objectPredicate(join.getCondition().getOn(), scope, BindingRequirement.CONDITION_FIELDS)
+                      : expressions.bind(join.getCondition().getOn(), scope);
             List<Relations.JoinPredicate> predicates = condition == null || condition instanceof Expressions.NotRequestedExpression
-                ? Collections.<Relations.JoinPredicate>emptyList()
-                : Collections.singletonList(new Relations.JoinPredicate(condition, Relations.PredicateOrigin.ON,
+                    ? Collections.<Relations.JoinPredicate>emptyList()
+                    : Collections.singletonList(new Relations.JoinPredicate(condition, Relations.PredicateOrigin.ON,
                     expressions.owners(condition, scope), join.getCondition().getOn().getSourceRef().getSpan().getStart()));
             scope.clauseLocation = ClauseLocation.SELECT;
             Relations.JoinType type = Relations.JoinType.valueOf(join.getJoinType().name().replace("_OUTER", ""));
             boolean leftOnly = leftOnly(type);
             Relations.Join relation = new Relations.Join(work.id(syntax, scope, "join"),
-                leftOnly ? left.getOutputSchema() : BindingWork.combined(left.getOutputSchema(), right.getOutputSchema(), outputs),
-                scope.block, order(syntax),
-                syntax.getSourceRef(), left.getId(), right.getId(),
-                type, Relations.JoinForm.EXPLICIT, condition,
-                leftOnly ? BindingWork.mappings(left.getOutputSchema()) : joinedMappings(left, right), predicates);
+                    leftOnly ? left.getOutputSchema() : BindingWork.combined(left.getOutputSchema(), right.getOutputSchema(), outputs),
+                    scope.block, order(syntax),
+                    syntax.getSourceRef(), left.getId(), right.getId(),
+                    type, Relations.JoinForm.EXPLICIT, condition,
+                    leftOnly ? BindingWork.mappings(left.getOutputSchema()) : joinedMappings(left, right), predicates);
             work.put(relation);
             if (leftOnly) {
                 // The right relation is visible to ON, but cannot expose SELECT fields.
@@ -546,9 +550,9 @@ final class QueryBinder {
                 result = right;
             } else {
                 result = new Relations.Join(work.id(syntax, scope, "comma-" + index),
-                    BindingWork.combined(result.getOutputSchema(), right.getOutputSchema(), outputs),
-                    scope.block, order(syntax), syntax.getSourceRef(), result.getId(), right.getId(), Relations.JoinType.CROSS,
-                    Relations.JoinForm.COMMA, null, joinedMappings(result, right), Collections.<Relations.JoinPredicate>emptyList());
+                        BindingWork.combined(result.getOutputSchema(), right.getOutputSchema(), outputs),
+                        scope.block, order(syntax), syntax.getSourceRef(), result.getId(), right.getId(), Relations.JoinType.CROSS,
+                        Relations.JoinForm.COMMA, null, joinedMappings(result, right), Collections.<Relations.JoinPredicate>emptyList());
                 work.put(result);
             }
             index++;
@@ -564,7 +568,7 @@ final class QueryBinder {
             BoundRelation child = cte(cte, scope, outputs || work.requested(BindingRequirement.CONDITION_FIELDS));
             String alias = syntax.getAlias() == null ? simple : SemanticNames.normalize(syntax.getAlias().getValue());
             return instance(syntax, child, new DefinitionId(cte.getNodeId().getValue() + "/definition"),
-                new QualifiedName(Collections.singletonList(alias)), cte.getColumnAliases(), null, scope);
+                    new QualifiedName(Collections.singletonList(alias)), cte.getColumnAliases(), null, scope);
         }
         CatalogObjectResolver.Resolution resolved = new CatalogObjectResolver(work.context).resolve(syntax.getName(), scope.database, true);
         resolved.requireAvailable();
@@ -597,24 +601,24 @@ final class QueryBinder {
             }
         }
         work.declare(object, name, kind, SchemaState.NOT_REQUESTED, Collections.<FieldIdentity>emptyList(),
-            definition == null ? null : definition.getDefinitionId());
+                definition == null ? null : definition.getDefinitionId());
         if (definition != null) {
             PreparedDefinition localPrepared = logical != null && logical.getTemplate().isPresent()
-                && logical.getTemplate().get() instanceof PreparedDefinition ? (PreparedDefinition) logical.getTemplate().get() : null;
+                    && logical.getTemplate().get() instanceof PreparedDefinition ? (PreparedDefinition) logical.getTemplate().get() : null;
             BoundRelation bound = external(definition, scope, syntax, outputs || work.requested(BindingRequirement.CONDITION_FIELDS), localPrepared);
             if (bound != null) {
                 String alias = syntax.getAlias() == null ? simple : SemanticNames.normalize(syntax.getAlias().getValue());
                 return instance(syntax, bound, definition.getDefinitionId(), new QualifiedName(Collections.singletonList(alias)),
-                    definitionColumns(definition, localPrepared), logical != null && logical.getKind() == LogicalDefinition.Kind.LEGACY_CTE ? null : object, scope);
+                        definitionColumns(definition, localPrepared), logical != null && logical.getKind() == LogicalDefinition.Kind.LEGACY_CTE ? null : object, scope);
             }
         }
         NodeId id = work.id(syntax, scope, "scan");
         RelationInstanceId instance = new RelationInstanceId(id.getValue() + "/instance");
         VersionRef version = dataVersion(object);
         OutputSchema initialSchema = uncertain ? BindingWork.unknown(new NodeId(id.getValue() + "/uncertain-width"), "SESSION_OBJECT_UNCERTAIN")
-            : OutputSchema.notRequested();
+                : OutputSchema.notRequested();
         Relations.Scan relation = new Relations.Scan(id, initialSchema, scope.block, order(syntax),
-            syntax.getSourceRef(), object, version, instance);
+                syntax.getSourceRef(), object, version, instance);
         work.put(relation);
         List<String> aliases = new ArrayList<>();
         aliases.add(simple);
@@ -623,13 +627,13 @@ final class QueryBinder {
             aliases.add(SemanticNames.normalize(syntax.getAlias().getValue()));
         }
         SourceBinding binding = new SourceBinding(id, instance, object, name, aliases, true, syntax.getSourceRef(),
-            initialSchema, uncertain);
+                initialSchema, uncertain);
         binding.uncertain = uncertain;
         binding.explicitAlias = syntax.getAlias() == null ? null : SemanticNames.normalize(syntax.getAlias().getValue());
         scope.sources.add(binding);
         String display = syntax.getAlias() == null ? simple : SemanticNames.normalize(syntax.getAlias().getValue());
         work.relationReferences.put(instance, new BoundRelationReference(instance,
-            new QualifiedName(Collections.singletonList(display)), Optional.of(object), Optional.<DefinitionId>empty(), scope.block));
+                new QualifiedName(Collections.singletonList(display)), Optional.of(object), Optional.<DefinitionId>empty(), scope.block));
         return relation;
     }
 
@@ -643,7 +647,7 @@ final class QueryBinder {
             throw new BindingFailure("RECURSIVE_DEFINITION", "Recursive CTE is not supported");
         }
         String path = "root".equals(scope.displayPath) ? "cte." + SemanticNames.normalize(cte.getName().getValue())
-            : scope.displayPath + ".cte." + SemanticNames.normalize(cte.getName().getValue());
+                : scope.displayPath + ".cte." + SemanticNames.normalize(cte.getName().getValue());
         BoundRelation result = query(cte.getQuery(), scope, outputs, QueryResult.Role.CTE, scope.prefix, null, path);
         work.activeDefinitions.remove(cacheKey);
         work.cteRoots.put(cacheKey, result);
@@ -681,22 +685,22 @@ final class QueryBinder {
         PreparedDefinition prepared = localPrepared == null ? work.context.getDefinitions().get(reference.getDefinitionId()) : localPrepared;
         if (prepared == null) {
             work.definitionRequests.add(new DefinitionRequest(reference, work.demand.getRequirements(), work.definitionPath,
-                Math.max(0, work.context.getContract().getMaxViewExpandDepth() - work.definitionPath.size())));
+                    Math.max(0, work.context.getContract().getMaxViewExpandDepth() - work.definitionPath.size())));
             return null;
         }
         if (prepared.getSyntax().isPresent()) {
             SyntaxStatement statement = prepared.getSyntax().get().getStatement();
             SyntaxQuery query = statement instanceof QueryStatementSyntax ? ((QueryStatementSyntax) statement).getQuery()
-                : statement instanceof DefinitionStatementSyntax ? ((DefinitionStatementSyntax) statement).getDefinition().getQuery() : null;
+                    : statement instanceof DefinitionStatementSyntax ? ((DefinitionStatementSyntax) statement).getDefinition().getQuery() : null;
             if (query != null) {
                 work.definitionPath.add(reference.getDefinitionId());
                 ReferenceScope definitionScope = new ReferenceScope(work, null,
-                    new ScopeId(scope.prefix + source.getNodeId().getValue() + "/definition-context"),
-                    scope.block, scope.prefix + source.getNodeId().getValue() + "/definition/", Collections.<CteSyntax>emptyList());
+                        new ScopeId(scope.prefix + source.getNodeId().getValue() + "/definition-context"),
+                        scope.block, scope.prefix + source.getNodeId().getValue() + "/definition/", Collections.<CteSyntax>emptyList());
                 definitionScope.database = reference.getDefinitionContext().getDefaultDatabase();
                 definitionScope.analyzeJoins = false;
                 BoundRelation result = query(query, definitionScope, outputs, QueryResult.Role.DEFINITION, definitionScope.prefix,
-                    null, scope.displayPath + ".definition");
+                        null, scope.displayPath + ".definition");
                 work.definitionPath.remove(work.definitionPath.size() - 1);
                 return result;
             }
@@ -709,7 +713,7 @@ final class QueryBinder {
             work.scopes.putAll(prepared.getBoundUnit().get().getScopes());
             work.relationReferences.putAll(prepared.getBoundUnit().get().getRelationReferences());
             for (Map.Entry<com.panfan.hivelineage.v2.ir.identity.QueryBlockId, BoundQueryBlockReference> entry
-                : prepared.getBoundUnit().get().getQueryBlocks().entrySet()) {
+                    : prepared.getBoundUnit().get().getQueryBlocks().entrySet()) {
                 work.queryBlocks.put(entry.getKey(), new BoundQueryBlockReference(entry.getKey(), entry.getValue().getPath(), false));
             }
             return prepared.getBoundRelation().get();
@@ -736,15 +740,15 @@ final class QueryBinder {
             mappings.add(new SlotMapping(slot.getId(), inputSlot.getId()));
         }
         OutputSchema schema = input.getOutputSchema().getState() == SchemaState.KNOWN ? OutputSchema.known(slots)
-            : input.getOutputSchema().getState() == SchemaState.NOT_REQUESTED ? OutputSchema.notRequested()
-            : partialSchema(slots, new NodeId(id.getValue() + "/width"), "DEFINITION_WIDTH_UNKNOWN");
+                : input.getOutputSchema().getState() == SchemaState.NOT_REQUESTED ? OutputSchema.notRequested()
+                  : partialSchema(slots, new NodeId(id.getValue() + "/width"), "DEFINITION_WIDTH_UNKNOWN");
         Relations.DefinitionInstance relation = new Relations.DefinitionInstance(id, schema, scope.block, order(syntax),
-            syntax.getSourceRef(), input.getId(), definition, instance, dataVersion(physicalObject), mappings, physicalObject);
+                syntax.getSourceRef(), input.getId(), definition, instance, dataVersion(physicalObject), mappings, physicalObject);
         work.put(relation);
         scope.sources.add(new SourceBinding(id, instance, physicalObject, alias, Collections.singletonList(alias.getDisplayName()),
-            false, syntax.getSourceRef(), schema, true));
+                false, syntax.getSourceRef(), schema, true));
         work.relationReferences.put(instance, new BoundRelationReference(instance, alias, Optional.ofNullable(physicalObject),
-            Optional.of(definition), scope.block));
+                Optional.of(definition), scope.block));
         return relation;
     }
 
@@ -763,7 +767,7 @@ final class QueryBinder {
             return work.context.getSession().getDatasetVersions().get(object).getVersion();
         }
         return VersionRef.known(new DatasetVersionId(object.getValue() + "/session/"
-            + work.context.getSession().getInitialContext().getSessionId() + "/script-entry"));
+                + work.context.getSession().getInitialContext().getSessionId() + "/script-entry"));
     }
 
     private OutputSchema partialSchema(List<OutputSlot> slots, NodeId id, String code) {
@@ -795,13 +799,13 @@ final class QueryBinder {
             owners.retainAll(localOwners);
             if (owners.size() > 1) {
                 predicates.add(new Relations.JoinPredicate(expression, Relations.PredicateOrigin.WHERE, owners,
-                    syntax.getSourceRef().getSpan().getStart()));
+                        syntax.getSourceRef().getSpan().getStart()));
             }
         }
         Relations.Join join = (Relations.Join) relation;
         Relations.Join replacement = new Relations.Join(join.getId(), join.getOutputSchema(), join.getQueryBlockId(),
-            join.getSourceOrder(), join.getSourceRef().orElse(null), join.getLeft(), join.getRight(), join.getJoinType(),
-            join.getJoinForm(), null, join.getMappings(), predicates);
+                join.getSourceOrder(), join.getSourceRef().orElse(null), join.getLeft(), join.getRight(), join.getJoinType(),
+                join.getJoinForm(), null, join.getMappings(), predicates);
         work.put(replacement);
         return replacement;
     }
@@ -859,7 +863,7 @@ final class QueryBinder {
     }
 
     private void distributionOutputs(SyntaxQuery syntax, QueryTailSyntax tail, ReferenceScope scope,
-            Map<SlotId, BoundExpression> outputExpressions, List<OutputAssignment> assignments, List<OutputSlot> slots) {
+                                     Map<SlotId, BoundExpression> outputExpressions, List<OutputAssignment> assignments, List<OutputSlot> slots) {
         int index = 0;
         scope.clauseLocation = ClauseLocation.DISTRIBUTE_BY;
         for (SyntaxExpression key : tail.getDistributeBy()) {
@@ -879,14 +883,14 @@ final class QueryBinder {
                                List<Relations.OrderKey> orders) {
         if (!orders.isEmpty()) {
             relation = new Relations.Sort(work.id(syntax, scope, "sort"), relation.getOutputSchema(), scope.block, order(syntax),
-                syntax.getSourceRef(), relation.getId(), orders, BindingWork.mappings(relation.getOutputSchema()));
+                    syntax.getSourceRef(), relation.getId(), orders, BindingWork.mappings(relation.getOutputSchema()));
             work.put(relation);
         }
         if (tail.getLimit() != null) {
             relation = new Relations.Limit(work.id(syntax, scope, "limit"), relation.getOutputSchema(), scope.block, order(syntax),
-                syntax.getSourceRef(), relation.getId(), expressions.bind(tail.getLimit().getCount(), scope),
-                tail.getLimit().getOffset() == null ? null : expressions.bind(tail.getLimit().getOffset(), scope),
-                BindingWork.mappings(relation.getOutputSchema()));
+                    syntax.getSourceRef(), relation.getId(), expressions.bind(tail.getLimit().getCount(), scope),
+                    tail.getLimit().getOffset() == null ? null : expressions.bind(tail.getLimit().getOffset(), scope),
+                    BindingWork.mappings(relation.getOutputSchema()));
             work.put(relation);
         }
         return relation;
@@ -903,7 +907,7 @@ final class QueryBinder {
     private BoundExpression hiddenReference(SyntaxQuery syntax, ReferenceScope scope, String role,
                                             BoundExpression expression, SlotId slot) {
         return new Expressions.SlotRef(work.id(syntax, scope, role + "-reference"), expression.getType(),
-            expression.getSourceRef().orElse(null), slot, Collections.<String>emptyList());
+                expression.getSourceRef().orElse(null), slot, Collections.<String>emptyList());
     }
 
     private boolean leftOnly(Relations.JoinType type) {
@@ -929,7 +933,7 @@ final class QueryBinder {
         List<NodeId> roots = new ArrayList<>();
         collectSubqueryRoots(expression, scope, roots);
         return new Expressions.NotRequestedExpression(work.id(expression, scope, "not-requested"),
-            TypeRef.unknown(), expression.getSourceRef(), requirement, roots);
+                TypeRef.unknown(), expression.getSourceRef(), requirement, roots);
     }
 
     private void collectSubqueryRoots(SyntaxExpression expression, ReferenceScope scope, List<NodeId> roots) {
@@ -955,17 +959,17 @@ final class QueryBinder {
             Relations.Filter filter = (Relations.Filter) relation;
             BoundRelation input = work.relations.get(filter.getInput());
             replacement = new Relations.Filter(filter.getId(), input.getOutputSchema(), filter.getQueryBlockId(),
-                filter.getSourceOrder(), filter.getSourceRef().orElse(null), input.getId(), filter.getPredicate(),
-                BindingWork.mappings(input.getOutputSchema()));
+                    filter.getSourceOrder(), filter.getSourceRef().orElse(null), input.getId(), filter.getPredicate(),
+                    BindingWork.mappings(input.getOutputSchema()));
         } else if (relation instanceof Relations.Join) {
             Relations.Join join = (Relations.Join) relation;
             BoundRelation left = work.relations.get(join.getLeft());
             BoundRelation right = work.relations.get(join.getRight());
             replacement = new Relations.Join(join.getId(), leftOnly(join.getJoinType()) ? left.getOutputSchema()
                     : BindingWork.combined(left.getOutputSchema(), right.getOutputSchema(), true),
-                join.getQueryBlockId(), join.getSourceOrder(), join.getSourceRef().orElse(null), join.getLeft(), join.getRight(),
-                join.getJoinType(), join.getJoinForm(), join.getCondition().orElse(null),
-                leftOnly(join.getJoinType()) ? BindingWork.mappings(left.getOutputSchema()) : joinedMappings(left, right), join.getPredicates());
+                    join.getQueryBlockId(), join.getSourceOrder(), join.getSourceRef().orElse(null), join.getLeft(), join.getRight(),
+                    join.getJoinType(), join.getJoinForm(), join.getCondition().orElse(null),
+                    leftOnly(join.getJoinType()) ? BindingWork.mappings(left.getOutputSchema()) : joinedMappings(left, right), join.getPredicates());
         } else if (relation instanceof Relations.Generate) {
             Relations.Generate generate = (Relations.Generate) relation;
             BoundRelation input = work.relations.get(generate.getInput());
@@ -976,9 +980,9 @@ final class QueryBinder {
                 }
             }
             replacement = new Relations.Generate(generate.getId(),
-                BindingWork.combined(input.getOutputSchema(), OutputSchema.known(generated), true), generate.getQueryBlockId(),
-                generate.getSourceOrder(), generate.getSourceRef().orElse(null), input.getId(), generate.getFunction(),
-                generate.getArguments(), generate.getGeneratedSlots(), BindingWork.mappings(input.getOutputSchema()), generate.getOuter());
+                    BindingWork.combined(input.getOutputSchema(), OutputSchema.known(generated), true), generate.getQueryBlockId(),
+                    generate.getSourceOrder(), generate.getSourceRef().orElse(null), input.getId(), generate.getFunction(),
+                    generate.getArguments(), generate.getGeneratedSlots(), BindingWork.mappings(input.getOutputSchema()), generate.getOuter());
         }
         work.put(replacement);
         return replacement;

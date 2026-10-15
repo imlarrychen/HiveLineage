@@ -18,12 +18,15 @@ import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 import com.panfan.hivelineage.v2.ir.statement.BoundQueryBlockReference;
 import com.panfan.hivelineage.v2.ir.statement.BoundScopeReference;
 import com.panfan.hivelineage.v2.common.QualifiedName;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 
@@ -162,7 +165,7 @@ public class DefaultJoinConditionAnalysisTest {
     }
 
     private Relations.Join join(String id, Relations.Scan left, Relations.Scan right, com.panfan.hivelineage.v2.ir.expression.BoundExpression predicate,
-            Relations.JoinForm form, java.util.List<Relations.JoinPredicate> predicates) {
+                                Relations.JoinForm form, java.util.List<Relations.JoinPredicate> predicates) {
         return new Relations.Join(new NodeId(id), OutputSchema.notRequested(), new QueryBlockId("main"), 10, null,
                 left.getId(), right.getId(), Relations.JoinType.INNER, form, predicate, Collections.<SlotMapping>emptyList(), predicates);
     }

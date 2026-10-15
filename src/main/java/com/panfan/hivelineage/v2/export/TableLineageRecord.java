@@ -4,6 +4,7 @@ import com.panfan.hivelineage.v2.api.StatementIdentity;
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.common.QualifiedName;
+
 import java.util.List;
 
 public final class TableLineageRecord {

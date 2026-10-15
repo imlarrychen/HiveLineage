@@ -1,9 +1,12 @@
 package com.panfan.hivelineage.v2.frontend;
 
 import com.panfan.hivelineage.v2.common.SourceSpan;
+
 import java.util.Objects;
 
-/** A half-open range association, including replacements whose widths differ. */
+/**
+ * A half-open range association, including replacements whose widths differ.
+ */
 public final class SourceMapEntry {
     private final SourceSpan originalSpan;
     private final SourceSpan expandedSpan;

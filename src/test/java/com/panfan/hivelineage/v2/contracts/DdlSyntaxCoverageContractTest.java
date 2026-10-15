@@ -7,16 +7,21 @@ import com.panfan.hivelineage.v2.syntax.DefinitionKindSyntax;
 import com.panfan.hivelineage.v2.syntax.DefinitionStatementSyntax;
 import com.panfan.hivelineage.v2.syntax.SyntaxResult;
 import com.panfan.hivelineage.v2.testing.GeneratedSqlSupport;
+
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
-/** New modeled DDL families must be exercised by saved SQL, in addition to effect assertions. */
+/**
+ * New modeled DDL families must be exercised by saved SQL, in addition to effect assertions.
+ */
 public class DdlSyntaxCoverageContractTest {
     @Test
     public void everyModeledDdlStatementFamilyIsRepresentedByFileBackedIntegrationCases() {
@@ -33,7 +38,7 @@ public class DdlSyntaxCoverageContractTest {
             }
         }
         assertEquals("Adding a new modeled DDL family requires an integration SQL resource", EnumSet.allOf(DefinitionKindSyntax.class),
-            represented.keySet());
+                represented.keySet());
         for (Map.Entry<DefinitionKindSyntax, Set<String>> item : represented.entrySet()) {
             assertFalse(item.getKey().name(), item.getValue().isEmpty());
         }

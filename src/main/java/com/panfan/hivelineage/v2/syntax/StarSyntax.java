@@ -3,7 +3,9 @@ package com.panfan.hivelineage.v2.syntax;
 import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
 
-/** A syntactic star; no output width or physical source is assumed. */
+/**
+ * A syntactic star; no output width or physical source is assumed.
+ */
 public final class StarSyntax extends SyntaxExpression {
     private final SyntaxName qualifier;
 

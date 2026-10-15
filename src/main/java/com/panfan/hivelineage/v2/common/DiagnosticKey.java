@@ -2,7 +2,9 @@ package com.panfan.hivelineage.v2.common;
 
 import java.util.Objects;
 
-/** Value identity for diagnostics; display punctuation never participates in encoding. */
+/**
+ * Value identity for diagnostics; display punctuation never participates in encoding.
+ */
 public final class DiagnosticKey {
     private final AnalysisStage stage;
     private final String code;
@@ -28,7 +30,7 @@ public final class DiagnosticKey {
         }
         DiagnosticKey that = (DiagnosticKey) other;
         return stage == that.stage && code.equals(that.code) && message.equals(that.message)
-            && Objects.equals(sourceId, that.sourceId) && Objects.equals(start, that.start) && Objects.equals(end, that.end);
+                && Objects.equals(sourceId, that.sourceId) && Objects.equals(start, that.start) && Objects.equals(end, that.end);
     }
 
     @Override

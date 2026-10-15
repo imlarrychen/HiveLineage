@@ -2,7 +2,9 @@ package com.panfan.hivelineage.v2.metadata;
 
 import com.panfan.hivelineage.v2.common.QualifiedName;
 
-/** Per-object lookup shape permits mixed captured sources to retain their actual read origin. */
+/**
+ * Per-object lookup shape permits mixed captured sources to retain their actual read origin.
+ */
 public interface MetadataLookupProvenance {
     ProviderCapabilities getCapabilities();
 

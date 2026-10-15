@@ -7,13 +7,16 @@ import com.panfan.hivelineage.v2.ir.relation.OutputAssignment;
 import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.ir.relation.SlotMapping;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Immutable structural provenance shared by display and compatibility projections of one unit. */
+/**
+ * Immutable structural provenance shared by display and compatibility projections of one unit.
+ */
 public final class SlotProvenanceIndex {
     private final Map<SlotId, BoundExpression> assignments = new LinkedHashMap<SlotId, BoundExpression>();
     private final Map<SlotId, SlotId> mappings = new LinkedHashMap<SlotId, SlotId>();

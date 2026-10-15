@@ -7,6 +7,7 @@ import com.panfan.hivelineage.v2.common.DiagnosticBag;
 import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
 import org.junit.Test;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -18,6 +19,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -44,9 +46,11 @@ public class MetadataImplementationsTest {
         MetadataProvider provider = new V1MetadataProviderAdapter(binding(missing, new HiveMetadataCache(), context));
         assertEquals(LookupStatus.UNKNOWN, provider.lookupRelation(name, context).getStatus());
         MetadataProvider authoritative = new V1MetadataProviderAdapter(new LegacyMetadataBinding(Optional.of(missing),
-            Optional.<HiveMetadataCache>empty(), context, true));
+                Optional.<HiveMetadataCache>empty(), context, true));
         assertEquals(LookupStatus.NOT_FOUND, authoritative.lookupRelation(name, context).getStatus());
-        HiveMetadataProvider failure = table -> { throw new IllegalStateException("offline"); };
+        HiveMetadataProvider failure = table -> {
+            throw new IllegalStateException("offline");
+        };
         MetadataProvider failed = new V1MetadataProviderAdapter(binding(failure, new HiveMetadataCache(), context));
         assertEquals(LookupStatus.ACCESS_ERROR, failed.lookupRelation(name, context).getStatus());
     }
@@ -75,7 +79,7 @@ public class MetadataImplementationsTest {
         };
         MetadataProvider bundled = provider(schemaCalls);
         WorkflowContext workflow = new WorkflowContext("workflow", context, bundled, new DefaultMetadataCache(),
-            Optional.of(light), Optional.<RelationSchemaProvider>empty());
+                Optional.of(light), Optional.<RelationSchemaProvider>empty());
         CapturedMetadataAccess access = new DefaultMetadataAccessFactory().create(workflow);
         assertEquals(LookupStatus.FOUND, access.lookupObject(name, context).getStatus());
         assertEquals(0, schemaCalls.get());
@@ -87,7 +91,7 @@ public class MetadataImplementationsTest {
     public void concurrentBundledReadsMergeAndSeedAllFacets() throws Exception {
         AtomicInteger calls = new AtomicInteger();
         CapturedMetadataAccess access = new DefaultMetadataAccessFactory().create(new WorkflowContext("workflow", context,
-            provider(calls), new DefaultMetadataCache()));
+                provider(calls), new DefaultMetadataCache()));
         ExecutorService executor = Executors.newFixedThreadPool(8);
         CountDownLatch start = new CountDownLatch(1);
         try {
@@ -136,7 +140,7 @@ public class MetadataImplementationsTest {
     @Test
     public void replayNeverFallsBackToLiveProvider() {
         CapturedMetadataAccess access = new DefaultMetadataAccessFactory().create(new WorkflowContext("workflow", context,
-            provider(new AtomicInteger()), new DefaultMetadataCache()));
+                provider(new AtomicInteger()), new DefaultMetadataCache()));
         access.lookupRelation(name, context);
         MetadataAccess replay = new DefaultMetadataReplayProviderFactory().create(access.snapshot());
         assertEquals(LookupStatus.FOUND, replay.lookupSchema(name, context).getStatus());
@@ -180,7 +184,7 @@ public class MetadataImplementationsTest {
     public void unrecordedCacheShapeCannotClaimARealFacetLookup() {
         DefaultMetadataCache cache = new DefaultMetadataCache();
         cache.put(new MetadataCacheKey(context, name, MetadataFacet.OBJECT_DESCRIPTOR), ObjectDescriptor.class,
-            LookupResult.found(object(name)), 0L);
+                LookupResult.found(object(name)), 0L);
         AtomicInteger calls = new AtomicInteger();
         CapturedMetadataAccess access = new CapturedMetadataAccess(new WorkflowContext("workflow", context, provider(calls), cache), 0L);
         access.lookupObject(name, context);
@@ -204,7 +208,7 @@ public class MetadataImplementationsTest {
         ObjectDescriptor old = object(name);
         cache.put(key, ObjectDescriptor.class, LookupResult.found(old), 1000L, ProviderCapabilities.LookupShape.BUNDLED_LOOKUP);
         onRead.set(() -> cache.put(key, ObjectDescriptor.class, LookupResult.found(object(new QualifiedName(Arrays.asList("db", "new")))),
-            1000L, ProviderCapabilities.LookupShape.FACET_LOOKUP));
+                1000L, ProviderCapabilities.LookupShape.FACET_LOOKUP));
         CapturedMetadataAccess access = new CapturedMetadataAccess(new WorkflowContext("workflow", context, provider(new AtomicInteger()), cache), 0L);
         assertTrue(old == access.lookupObject(name, context).getValue().get());
         assertEquals(ProviderCapabilities.LookupShape.BUNDLED_LOOKUP, access.manifest().getRecords().get(0).getLookupShape());
@@ -220,7 +224,7 @@ public class MetadataImplementationsTest {
 
     private ObjectDescriptor object(QualifiedName requested) {
         return new ObjectDescriptor(new ObjectId("object"), requested, ObjectDescriptor.Kind.TABLE, Optional.<DefinitionRef>empty(),
-            new MetadataProvenance("source-a", MetadataProvenance.Origin.TEST_FIXTURE, Optional.<String>empty(), Optional.<Long>empty()), MetadataVersion.unknown());
+                new MetadataProvenance("source-a", MetadataProvenance.Origin.TEST_FIXTURE, Optional.<String>empty(), Optional.<Long>empty()), MetadataVersion.unknown());
     }
 
     private static LegacyMetadataBinding binding(HiveMetadataProvider provider, HiveMetadataCache cache, MetadataReadContext scope) {

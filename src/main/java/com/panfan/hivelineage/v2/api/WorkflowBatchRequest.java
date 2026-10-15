@@ -2,6 +2,7 @@ package com.panfan.hivelineage.v2.api;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.List;
 
 public final class WorkflowBatchRequest {

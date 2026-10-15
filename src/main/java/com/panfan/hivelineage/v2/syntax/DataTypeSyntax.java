@@ -1,10 +1,13 @@
 package com.panfan.hivelineage.v2.syntax;
 
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.List;
 import java.util.Objects;
 
-/** Structural type declaration; no inferred or validated Hive type. */
+/**
+ * Structural type declaration; no inferred or validated Hive type.
+ */
 public final class DataTypeSyntax {
     private final SyntaxName typeName;
     private final List<DataTypeSyntax> typeArguments;

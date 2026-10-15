@@ -3,21 +3,24 @@ package com.panfan.hivelineage.v2.semantic;
 import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.syntax.NamedWindowSyntax;
 import com.panfan.hivelineage.v2.syntax.WindowSpecificationSyntax;
+
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-/** Expands named-window inheritance before either field or object dependency binding. */
+/**
+ * Expands named-window inheritance before either field or object dependency binding.
+ */
 final class WindowSpecificationResolver {
     private WindowSpecificationResolver() {
     }
 
     static WindowSpecificationSyntax resolve(WindowSpecificationSyntax window, ReferenceScope scope,
-            BindingWork work, SourceRef source) {
+                                             BindingWork work, SourceRef source) {
         return resolve(window, scope, work, source, new LinkedHashSet<String>());
     }
 
     private static WindowSpecificationSyntax resolve(WindowSpecificationSyntax window, ReferenceScope scope,
-            BindingWork work, SourceRef source, Set<String> active) {
+                                                     BindingWork work, SourceRef source, Set<String> active) {
         WindowSpecificationSyntax base = null;
         if (window.getBaseWindowName() != null) {
             String name = SemanticNames.normalize(window.getBaseWindowName().getValue());
@@ -32,8 +35,8 @@ final class WindowSpecificationResolver {
             }
         }
         return new WindowSpecificationSyntax(null,
-            window.getPartitionBy().isEmpty() && base != null ? base.getPartitionBy() : window.getPartitionBy(),
-            window.getOrderBy().isEmpty() && base != null ? base.getOrderBy() : window.getOrderBy(),
-            window.getFrame() == null && base != null ? base.getFrame() : window.getFrame());
+                window.getPartitionBy().isEmpty() && base != null ? base.getPartitionBy() : window.getPartitionBy(),
+                window.getOrderBy().isEmpty() && base != null ? base.getOrderBy() : window.getOrderBy(),
+                window.getFrame() == null && base != null ? base.getFrame() : window.getFrame());
     }
 }

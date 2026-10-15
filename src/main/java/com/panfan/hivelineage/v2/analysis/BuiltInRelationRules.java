@@ -11,6 +11,7 @@ import com.panfan.hivelineage.v2.ir.relation.OutputAssignment;
 import com.panfan.hivelineage.v2.ir.relation.OutputSlot;
 import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.ir.relation.SlotMapping;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -19,9 +20,12 @@ import java.util.Map;
 import java.util.Optional;
 
 import java.util.function.Consumer;
+
 import static com.panfan.hivelineage.v2.analysis.RelationFactsEngine.facts;
 
-/** Single implementations of built-in relation rules, selected through the same registry as extensions. */
+/**
+ * Single implementations of built-in relation rules, selected through the same registry as extensions.
+ */
 final class BuiltInRelationRules {
     private static final Map<RuleKey, RelationLineageRule> RULES = rules();
     private static final RelationLineageRule UNKNOWN = rule(State::unknown);
@@ -61,7 +65,9 @@ final class BuiltInRelationRules {
         return new BuiltInRule(operation);
     }
 
-    /** These rules resolve expressions lazily, because predicates can refine their input row environment. */
+    /**
+     * These rules resolve expressions lazily, because predicates can refine their input row environment.
+     */
     static final class BuiltInRule implements RelationLineageRule {
         private final Consumer<State> operation;
 
@@ -71,7 +77,7 @@ final class BuiltInRelationRules {
 
         @Override
         public RelationFacts analyze(BoundRelation relation, List<RelationFacts> inputs,
-                Map<NodeId, ExpressionFacts> expressions, LineageRuleContext context) {
+                                     Map<NodeId, ExpressionFacts> expressions, LineageRuleContext context) {
             State state = new State(relation, inputs, expressions, context);
             operation.accept(state);
             return state.finish();
@@ -176,7 +182,7 @@ final class BuiltInRelationRules {
                                 "set." + set.getOperator() + "." + set.getDuplicatePolicy(), null, relation.getSourceRef()));
                     } else {
                         dependencies.add(support.dependency(new UnknownEndpoint(FactSupport.diagnostic(branchSlot.getDiagnosticCode().orElse("SET_BRANCH_UNKNOWN"),
-                                "Set branch output is unknown", null)), new SlotEndpoint(mapping.getOutput()), DependencyRole.VALUE,
+                                        "Set branch output is unknown", null)), new SlotEndpoint(mapping.getOutput()), DependencyRole.VALUE,
                                 DependencyPrecision.UNKNOWN, id, "set.unknown", Collections.emptyList(), relation.getSourceRef()));
                     }
                 }
@@ -190,7 +196,7 @@ final class BuiltInRelationRules {
             for (Relations.WindowComputation computation : window.getComputations()) {
                 SlotId target = computation.getAssignment().getOutput();
                 List<Dependency> dependencies = new ArrayList<Dependency>(support.retarget(resolve(
-                        computation.getAssignment().getExpression(), slots, rows).getDependencies(), new SlotEndpoint(target), id,
+                                computation.getAssignment().getExpression(), slots, rows).getDependencies(), new SlotEndpoint(target), id,
                         "window.value", null, relation.getSourceRef()));
                 for (BoundExpression partition : computation.getPartitions()) {
                     dependencies.addAll(support.retarget(resolve(partition, slots, rows).getDependencies(), new SlotEndpoint(target), id,
@@ -289,7 +295,7 @@ final class BuiltInRelationRules {
         }
 
         private void assignments(List<OutputAssignment> assignments, BoundRelation relation, Map<SlotId, ExpressionFacts> inputs,
-                List<Dependency> rows, Map<SlotId, ExpressionFacts> output, String rule) {
+                                 List<Dependency> rows, Map<SlotId, ExpressionFacts> output, String rule) {
             for (OutputAssignment assignment : assignments) {
                 List<Dependency> dependencies = support.retarget(resolve(assignment.getExpression(), inputs, rows).getDependencies(),
                         new SlotEndpoint(assignment.getOutput()), relation.getId(), rule, null, relation.getSourceRef());
@@ -298,7 +304,7 @@ final class BuiltInRelationRules {
         }
 
         private void mappings(List<SlotMapping> mappings, BoundRelation relation, Map<SlotId, ExpressionFacts> inputs,
-                Map<SlotId, ExpressionFacts> output, String rule) {
+                              Map<SlotId, ExpressionFacts> output, String rule) {
             for (SlotMapping mapping : mappings) {
                 ExpressionFacts facts = inputs.get(mapping.getInput());
                 output.put(mapping.getOutput(), facts(relation.getId(), support.retarget(facts.getDependencies(), new SlotEndpoint(mapping.getOutput()),
@@ -307,7 +313,7 @@ final class BuiltInRelationRules {
         }
 
         private void predicate(BoundExpression predicate, BoundRelation relation, Map<SlotId, ExpressionFacts> inputs,
-                List<Dependency> rows, RowSetEndpoint target, String rule) {
+                               List<Dependency> rows, RowSetEndpoint target, String rule) {
             List<Dependency> proof = resolve(predicate, inputs, new ArrayList<Dependency>(rows)).getDependencies();
             rows.addAll(support.retarget(proof, target, relation.getId(), rule, DependencyRole.CONDITION, relation.getSourceRef()));
         }

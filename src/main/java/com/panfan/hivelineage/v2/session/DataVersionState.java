@@ -4,9 +4,12 @@ import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.ir.identity.DatasetVersionId;
 import com.panfan.hivelineage.v2.ir.statement.VersionRef;
+
 import java.util.List;
 
-/** Static data-version record, separate from claims about actual execution. */
+/**
+ * Static data-version record, separate from claims about actual execution.
+ */
 public final class DataVersionState {
     public enum Basis {
         SCRIPT_ENTRY,

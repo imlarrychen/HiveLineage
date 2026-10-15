@@ -47,6 +47,7 @@ import com.panfan.hivelineage.v2.frontend.VariableResolutionPolicy;
 import com.panfan.hivelineage.v2.lexical.LexResult;
 import com.panfan.hivelineage.v2.lexical.LexedUnit;
 import com.panfan.hivelineage.v2.lexical.LexicalOptions;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -59,6 +60,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -199,7 +201,7 @@ public class HiveFrontendTest {
     @Test
     public void recoveryRetainsOpaqueProjectionAndCteColumnAliases() {
         LexResult lexed = factory.createLexer().tokenize(expanded(
-                "with c(`ID`, name) as(select id,name from db1.a) select ??? from c join db2.b b on c.id=b.id"),
+                        "with c(`ID`, name) as(select id,name from db1.a) select ??? from c join db2.b b on c.id=b.id"),
                 new LexicalOptions(factory.getProfile(), true));
         Assert.assertNotEquals(StageOutcome.FAILED, lexed.getOutcome());
         LexedUnit unit = lexed.getUnit();
@@ -255,7 +257,7 @@ public class HiveFrontendTest {
                 ParseResult<HiveParseArtifact> parsed = factory.createParser().parse(lexed.getUnit(), syntaxOptions());
                 String file = path.getFileName().toString();
                 boolean expectedFailure = expectedFailures.containsKey(file)
-                    && expectedFailures.get(file).equals(unit.getStatementIndex());
+                        && expectedFailures.get(file).equals(unit.getStatementIndex());
                 Assert.assertEquals(path + ":" + unit.getStatementIndex(), expectedFailure, parsed.getOutcome() == StageOutcome.FAILED);
                 if (parsed.getOutcome() == StageOutcome.FAILED) {
                     failures++;
@@ -264,7 +266,7 @@ public class HiveFrontendTest {
                 }
                 SyntaxResult normalized = factory.createNormalizer().normalize(parsed.getArtifact(), syntaxOptions());
                 StageOutcome expectedOutcome = expectedPartial.getOrDefault(file, Collections.emptySet()).contains(unit.getStatementIndex())
-                    ? StageOutcome.PARTIAL : StageOutcome.SUCCESS;
+                        ? StageOutcome.PARTIAL : StageOutcome.SUCCESS;
                 Assert.assertEquals(path + ":" + unit.getStatementIndex(), expectedOutcome, normalized.getOutcome());
                 rememberSet(normalized.getStatement(), variables);
             }

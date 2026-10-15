@@ -2,6 +2,7 @@ package com.panfan.hivelineage.v2.analysis;
 
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.ir.identity.EvidenceId;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -9,7 +10,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Complete immutable proof DAG, including intermediate expression facts. */
+/**
+ * Complete immutable proof DAG, including intermediate expression facts.
+ */
 public final class EvidenceGraph {
     private final Map<EvidenceId, Dependency> dependencies;
     private final Map<EvidenceId, Evidence> evidence;

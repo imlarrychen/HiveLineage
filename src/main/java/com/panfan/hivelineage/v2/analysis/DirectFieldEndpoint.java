@@ -4,11 +4,14 @@ import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.ir.identity.FieldId;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
 import com.panfan.hivelineage.v2.ir.identity.RelationInstanceId;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Occurrence-qualified direct reference; self-join aliases remain distinct. */
+/**
+ * Occurrence-qualified direct reference; self-join aliases remain distinct.
+ */
 public final class DirectFieldEndpoint implements LineageEndpoint {
     private final RelationInstanceId owner;
     private final FieldId fieldId;

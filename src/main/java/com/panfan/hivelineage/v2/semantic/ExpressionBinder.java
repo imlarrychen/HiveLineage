@@ -46,6 +46,7 @@ import com.panfan.hivelineage.v2.syntax.UnknownExpressionSyntax;
 import com.panfan.hivelineage.v2.syntax.WindowCallSyntax;
 import com.panfan.hivelineage.v2.syntax.WindowFrameSyntax;
 import com.panfan.hivelineage.v2.syntax.WindowSpecificationSyntax;
+
 import java.util.ArrayList;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -88,7 +89,7 @@ final class ExpressionBinder {
             Expressions.LiteralValue.Kind kind;
             if (literal.getLiteralKind() == LiteralKind.NUMBER) {
                 kind = literal.getDecodedValue() != null && literal.getDecodedValue().contains(".")
-                    ? Expressions.LiteralValue.Kind.DECIMAL : Expressions.LiteralValue.Kind.INTEGER;
+                        ? Expressions.LiteralValue.Kind.DECIMAL : Expressions.LiteralValue.Kind.INTEGER;
             } else if (literal.getLiteralKind() == LiteralKind.INTERVAL) {
                 kind = Expressions.LiteralValue.Kind.STRING;
             } else {
@@ -99,17 +100,17 @@ final class ExpressionBinder {
                 value = literal.getLexeme();
             }
             return new Expressions.Literal(id, SemanticTypes.type(TypeRef.Kind.valueOf(kind.name())), source,
-                new Expressions.LiteralValue(kind, value));
+                    new Expressions.LiteralValue(kind, value));
         }
         if (syntax instanceof BinarySyntax) {
             BinarySyntax binary = (BinarySyntax) syntax;
             return operator(id, source, binary.getOperator().name().toLowerCase(java.util.Locale.ROOT),
-                Arrays.asList(bind(binary.getLeft(), scope), bind(binary.getRight(), scope)));
+                    Arrays.asList(bind(binary.getLeft(), scope), bind(binary.getRight(), scope)));
         }
         if (syntax instanceof UnarySyntax) {
             UnarySyntax unary = (UnarySyntax) syntax;
             return operator(id, source, unary.getOperator().name().toLowerCase(java.util.Locale.ROOT),
-                Collections.singletonList(bind(unary.getOperand(), scope)));
+                    Collections.singletonList(bind(unary.getOperand(), scope)));
         }
         if (syntax instanceof CallSyntax) {
             return call((CallSyntax) syntax, scope);
@@ -127,12 +128,12 @@ final class ExpressionBinder {
                 BoundExpression condition = bind(branch.getWhenExpression(), scope);
                 if (operand != null) {
                     condition = operator(new NodeId(condition.getId().getValue() + "/simple-case"), condition.getSourceRef().orElse(null),
-                        "equal", Arrays.asList(operand, condition));
+                            "equal", Arrays.asList(operand, condition));
                 }
                 branches.add(new Expressions.WhenThen(condition, bind(branch.getThenExpression(), scope)));
             }
             return new Expressions.Case(id, TypeRef.unknown(), source, branches,
-                cases.getElseExpression() == null ? null : bind(cases.getElseExpression(), scope));
+                    cases.getElseExpression() == null ? null : bind(cases.getElseExpression(), scope));
         }
         if (syntax instanceof FieldAccessSyntax) {
             FieldAccessSyntax access = (FieldAccessSyntax) syntax;
@@ -155,7 +156,7 @@ final class ExpressionBinder {
             SubscriptSyntax subscript = (SubscriptSyntax) syntax;
             BoundExpression base = bind(subscript.getBase(), scope);
             TypeRef type = base.getType().getArguments().isEmpty() ? TypeRef.unknown()
-                : base.getType().getArguments().get(base.getType().getArguments().size() - 1);
+                    : base.getType().getArguments().get(base.getType().getArguments().size() - 1);
             return new Expressions.Subscript(id, type, source, base, bind(subscript.getIndex(), scope));
         }
         if (syntax instanceof InListSyntax) {
@@ -170,15 +171,15 @@ final class ExpressionBinder {
         if (syntax instanceof BetweenSyntax) {
             BetweenSyntax between = (BetweenSyntax) syntax;
             return operator(id, source, between.isNegated() ? "not_between" : "between",
-                Arrays.asList(bind(between.getExpression(), scope), bind(between.getLowerBound(), scope),
-                    bind(between.getUpperBound(), scope)));
+                    Arrays.asList(bind(between.getExpression(), scope), bind(between.getLowerBound(), scope),
+                            bind(between.getUpperBound(), scope)));
         }
         if (syntax instanceof SubqueryExpressionSyntax) {
             SubqueryExpressionSyntax subquery = (SubqueryExpressionSyntax) syntax;
             String suffix = subquery.getSubqueryKind().name().toLowerCase(java.util.Locale.ROOT);
             String path = scope.displayPath + "." + scope.clauseLocation + "." + suffix + "[" + (++scope.childSequence) + "]";
             BoundRelation relation = new QueryBinder(work).query(subquery.getQuery(), scope,
-                subquery.getSubqueryKind() != SubqueryKindSyntax.EXISTS, QueryResult.Role.SUBQUERY, scope.prefix, null, path);
+                    subquery.getSubqueryKind() != SubqueryKindSyntax.EXISTS, QueryResult.Role.SUBQUERY, scope.prefix, null, path);
             if (subquery.getSubqueryKind() == SubqueryKindSyntax.EXISTS) {
                 return new Expressions.ExistsSubquery(id, SemanticTypes.type(TypeRef.Kind.BOOLEAN), source, relation.getId(), false);
             }
@@ -186,16 +187,16 @@ final class ExpressionBinder {
             if (slots.size() != 1) {
                 work.warn("SCALAR_SUBQUERY_WIDTH_UNKNOWN", "Subquery must expose one known output", source);
                 return new Expressions.UnknownExpression(id, TypeRef.unknown(), source,
-                    Collections.<BoundExpression>singletonList(new Expressions.ExistsSubquery(
-                        new NodeId(id.getValue() + "/rows"), SemanticTypes.type(TypeRef.Kind.BOOLEAN), source, relation.getId(), false)),
-                    "SCALAR_SUBQUERY_WIDTH_UNKNOWN");
+                        Collections.<BoundExpression>singletonList(new Expressions.ExistsSubquery(
+                                new NodeId(id.getValue() + "/rows"), SemanticTypes.type(TypeRef.Kind.BOOLEAN), source, relation.getId(), false)),
+                        "SCALAR_SUBQUERY_WIDTH_UNKNOWN");
             }
             if (subquery.getSubqueryKind() == SubqueryKindSyntax.IN) {
                 return new Expressions.InSubquery(id, SemanticTypes.type(TypeRef.Kind.BOOLEAN), source,
-                    bind(subquery.getProbe(), scope), relation.getId(), slots.get(0).getId(), false);
+                        bind(subquery.getProbe(), scope), relation.getId(), slots.get(0).getId(), false);
             }
             return new Expressions.ScalarSubquery(id, slots.get(0).getType(), source, relation.getId(),
-                slots.get(0).getId(), Expressions.ScalarCardinality.UNKNOWN);
+                    slots.get(0).getId(), Expressions.ScalarCardinality.UNKNOWN);
         }
         if (syntax instanceof WindowCallSyntax) {
             return window((WindowCallSyntax) syntax, scope);
@@ -233,14 +234,14 @@ final class ExpressionBinder {
         }
         NodeId id = work.id(syntax, scope, "call");
         Expressions.Call result = new Expressions.Call(id, TypeRef.unknown(), syntax.getSourceRef(), symbol, arguments,
-            syntax.getArguments().getQuantifier() == QuantifierSyntax.DISTINCT);
+                syntax.getArguments().getQuantifier() == QuantifierSyntax.DISTINCT);
         TypeRef type = work.analyzeType(result);
         return new Expressions.Call(id, type, syntax.getSourceRef(), symbol, arguments, result.getDistinct());
     }
 
     BoundExpression operator(NodeId id, SourceRef source, String name, List<BoundExpression> arguments) {
         FunctionSymbol function = new ResolvedFunctionSymbol(new QualifiedName(Collections.singletonList(name)),
-            FunctionSymbol.FunctionKind.OPERATOR, "operator." + name);
+                FunctionSymbol.FunctionKind.OPERATOR, "operator." + name);
         Expressions.Call call = new Expressions.Call(id, TypeRef.unknown(), source, function, arguments, false);
         return new Expressions.Call(id, work.analyzeType(call), source, function, arguments, false);
     }
@@ -249,7 +250,7 @@ final class ExpressionBinder {
         List<Relations.OrderKey> result = new ArrayList<>();
         for (SortItemSyntax sort : syntax) {
             Relations.Direction direction = "DESCENDING".equals(sort.getDirection().name()) || "DESC".equals(sort.getDirection().name())
-                ? Relations.Direction.DESCENDING : Relations.Direction.ASCENDING;
+                    ? Relations.Direction.DESCENDING : Relations.Direction.ASCENDING;
             Relations.NullOrder nullOrder;
             try {
                 nullOrder = Relations.NullOrder.valueOf(sort.getNullOrdering().name());
@@ -264,7 +265,7 @@ final class ExpressionBinder {
     private BoundExpression window(WindowCallSyntax syntax, ReferenceScope scope) {
         Expressions.Call call = call(syntax.getCall(), scope);
         WindowSpecificationSyntax specification = WindowSpecificationResolver.resolve(
-            syntax.getWindow(), scope, work, syntax.getSourceRef());
+                syntax.getWindow(), scope, work, syntax.getSourceRef());
         List<BoundExpression> partitions = new ArrayList<>();
         for (SyntaxExpression partition : specification.getPartitionBy()) {
             partitions.add(bind(partition, scope));
@@ -273,21 +274,21 @@ final class ExpressionBinder {
         WindowFrameSyntax syntaxFrame = specification.getFrame();
         if (syntaxFrame != null) {
             Relations.FrameBound end = syntaxFrame.getEnd() == null
-                ? new Relations.FrameBound(Relations.FrameBoundKind.CURRENT_ROW, null) : boundary(syntaxFrame.getEnd(), scope);
+                    ? new Relations.FrameBound(Relations.FrameBoundKind.CURRENT_ROW, null) : boundary(syntaxFrame.getEnd(), scope);
             frame = new Relations.WindowFrame(Relations.FrameUnit.valueOf(syntaxFrame.getUnit().name()),
-                boundary(syntaxFrame.getStart(), scope), end);
+                    boundary(syntaxFrame.getStart(), scope), end);
         }
         SlotId slotId = new SlotId(work.id(syntax, scope, "window-output").getValue());
         scope.windowSlots.add(new OutputSlot(slotId, "_window_" + syntax.getSourceRef().getSpan().getStart(), call.getType(), null));
         scope.windowComputations.add(new Relations.WindowComputation(new OutputAssignment(slotId, call),
-            partitions, orders(specification.getOrderBy(), scope), frame));
+                partitions, orders(specification.getOrderBy(), scope), frame));
         return new Expressions.SlotRef(work.id(syntax, scope, "window-reference"), call.getType(), syntax.getSourceRef(),
-            slotId, Collections.<String>emptyList());
+                slotId, Collections.<String>emptyList());
     }
 
     private Relations.FrameBound boundary(FrameBoundarySyntax syntax, ReferenceScope scope) {
         return new Relations.FrameBound(Relations.FrameBoundKind.valueOf(syntax.getKind().name()),
-            syntax.getOffset() == null ? null : bind(syntax.getOffset(), scope));
+                syntax.getOffset() == null ? null : bind(syntax.getOffset(), scope));
     }
 
     List<RelationInstanceId> owners(BoundExpression expression, ReferenceScope scope) {

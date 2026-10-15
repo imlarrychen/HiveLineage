@@ -4,9 +4,11 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Objects;
+
 import org.junit.Test;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
+
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -80,7 +82,7 @@ public class JdbcMetadataConnectionRuleTest {
     }
 
     private static String[] properties() {
-        return new String[] { System.getProperty("lineage.mysql.url"), System.getProperty("lineage.mysql.user"), System.getProperty("lineage.mysql.password") };
+        return new String[]{System.getProperty("lineage.mysql.url"), System.getProperty("lineage.mysql.user"), System.getProperty("lineage.mysql.password")};
     }
 
     private static void assertPropertiesRestored(String[] previous) {

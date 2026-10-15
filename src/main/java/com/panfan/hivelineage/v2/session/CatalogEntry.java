@@ -5,10 +5,13 @@ import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.metadata.ObjectDescriptor;
 import com.panfan.hivelineage.v2.metadata.RelationSchema;
+
 import java.util.List;
 import java.util.Optional;
 
-/** Local object and declared lookup names; name resolution is performed elsewhere. */
+/**
+ * Local object and declared lookup names; name resolution is performed elsewhere.
+ */
 public final class CatalogEntry {
     private final ObjectDescriptor object;
     private final List<QualifiedName> lookupNames;

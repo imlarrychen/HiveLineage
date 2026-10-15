@@ -9,10 +9,12 @@ import com.panfan.hivelineage.v2.syntax.SqlSyntaxParser;
 import com.panfan.hivelineage.v2.syntax.SyntaxOptions;
 import com.panfan.hivelineage.v2.syntax.OtherStatementSyntax;
 import com.panfan.hivelineage.v2.syntax.SyntaxStatement;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+
 import org.antlr.runtime.CommonTokenStream;
 import org.antlr.runtime.RecognitionException;
 import org.apache.hadoop.hive.ql.parse.ASTNode;

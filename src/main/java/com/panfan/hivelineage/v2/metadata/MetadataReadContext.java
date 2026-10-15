@@ -2,11 +2,14 @@ package com.panfan.hivelineage.v2.metadata;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Metadata source and access scope; intentionally has no workflow/task version. */
+/**
+ * Metadata source and access scope; intentionally has no workflow/task version.
+ */
 public final class MetadataReadContext {
     private final String sourceId;
     private final String clusterName;
@@ -47,7 +50,7 @@ public final class MetadataReadContext {
         }
         MetadataReadContext that = (MetadataReadContext) other;
         return sourceId.equals(that.sourceId) && clusterName.equals(that.clusterName)
-            && snapshotId.equals(that.snapshotId) && accessContext.equals(that.accessContext);
+                && snapshotId.equals(that.snapshotId) && accessContext.equals(that.accessContext);
     }
 
     @Override

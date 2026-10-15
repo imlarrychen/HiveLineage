@@ -5,10 +5,13 @@ import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.ir.identity.DefinitionId;
 import com.panfan.hivelineage.v2.ir.quality.BindingRequirement;
 import com.panfan.hivelineage.v2.metadata.DefinitionRef;
+
 import java.util.List;
 import java.util.Set;
 
-/** Binder emits this structural request instead of parsing external definition text. */
+/**
+ * Binder emits this structural request instead of parsing external definition text.
+ */
 public final class DefinitionRequest {
     private final DefinitionRef reference;
     private final Set<BindingRequirement> requirements;

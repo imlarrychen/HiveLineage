@@ -1,6 +1,8 @@
 package com.panfan.hivelineage.v2.metadata;
 
-/** A missing value alone never proves that an object does not exist. */
+/**
+ * A missing value alone never proves that an object does not exist.
+ */
 public enum LookupStatus {
     FOUND,
     UNKNOWN,

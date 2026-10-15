@@ -8,12 +8,14 @@ import com.panfan.hivelineage.v2.api.StatementStatus;
 import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
 import com.panfan.hivelineage.v2.compat.HiveScriptLineageAdapter;
 import com.panfan.hivelineage.v2.testing.GeneratedSqlSupport;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -169,7 +171,7 @@ public class ColumnDerivationExportTest {
 
     private static ColumnLineageRecord target(List<ColumnLineageRecord> columns, String object, String field) {
         return columns.stream().filter(column -> object.equals(column.getTarget().getObject().getDisplayName())
-                && Collections.singletonList(field).equals(column.getTarget().getFieldPath())).findFirst()
+                        && Collections.singletonList(field).equals(column.getTarget().getFieldPath())).findFirst()
                 .orElseThrow(() -> new AssertionError("Missing target " + object + "." + field));
     }
 

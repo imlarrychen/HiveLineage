@@ -11,6 +11,7 @@ import com.panfan.hivelineage.v2.ir.identity.QueryBlockId;
 import com.panfan.hivelineage.v2.ir.identity.RelationInstanceId;
 import com.panfan.hivelineage.v2.ir.identity.SlotId;
 import com.panfan.hivelineage.v2.ir.statement.VersionRef;
+
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -18,7 +19,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Immutable operator nodes; graph edges use stable identities, never deferred callbacks. */
+/**
+ * Immutable operator nodes; graph edges use stable identities, never deferred callbacks.
+ */
 public final class Relations {
     private Relations() {
     }
@@ -68,17 +71,27 @@ public final class Relations {
         }
     }
 
-    public enum JoinType { INNER, LEFT, RIGHT, FULL, CROSS, LEFT_SEMI, LEFT_ANTI }
-    public enum JoinForm { EXPLICIT, COMMA }
-    public enum PredicateOrigin { ON, WHERE }
-    public enum SetOperator { UNION, INTERSECT, EXCEPT }
-    public enum DuplicatePolicy { ALL, DISTINCT }
-    public enum Direction { ASCENDING, DESCENDING }
-    public enum NullOrder { FIRST, LAST, DIALECT_DEFAULT }
-    public enum FrameUnit { ROWS, RANGE, GROUPS }
-    public enum FrameBoundKind { UNBOUNDED_PRECEDING, PRECEDING, CURRENT_ROW, FOLLOWING, UNBOUNDED_FOLLOWING }
+    public enum JoinType {INNER, LEFT, RIGHT, FULL, CROSS, LEFT_SEMI, LEFT_ANTI}
 
-    /** Predicate ownership is bound before Join analysis, including comma/WHERE conditions. */
+    public enum JoinForm {EXPLICIT, COMMA}
+
+    public enum PredicateOrigin {ON, WHERE}
+
+    public enum SetOperator {UNION, INTERSECT, EXCEPT}
+
+    public enum DuplicatePolicy {ALL, DISTINCT}
+
+    public enum Direction {ASCENDING, DESCENDING}
+
+    public enum NullOrder {FIRST, LAST, DIALECT_DEFAULT}
+
+    public enum FrameUnit {ROWS, RANGE, GROUPS}
+
+    public enum FrameBoundKind {UNBOUNDED_PRECEDING, PRECEDING, CURRENT_ROW, FOLLOWING, UNBOUNDED_FOLLOWING}
+
+    /**
+     * Predicate ownership is bound before Join analysis, including comma/WHERE conditions.
+     */
     public static final class JoinPredicate {
         private final BoundExpression expression;
         private final PredicateOrigin origin;
@@ -255,6 +268,7 @@ public final class Relations {
             return Optional.ofNullable(frame);
         }
     }
+
     public static final class Scan extends Base {
         private final ObjectId objectId;
         private final VersionRef version;
@@ -644,7 +658,9 @@ public final class Relations {
         }
     }
 
-    /** Finite literal/expression row source, including a one-row zero-column SELECT input. */
+    /**
+     * Finite literal/expression row source, including a one-row zero-column SELECT input.
+     */
     public static final class Values extends Base {
         private final List<List<BoundExpression>> rows;
 

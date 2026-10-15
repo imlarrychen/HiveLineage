@@ -15,6 +15,7 @@ import com.panfan.hivelineage.v2.syntax.QueryStatementSyntax;
 import com.panfan.hivelineage.v2.syntax.SyntaxQuery;
 import com.panfan.hivelineage.v2.syntax.SyntaxStatement;
 import com.panfan.hivelineage.v2.syntax.SyntaxTemplate;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -47,7 +48,7 @@ final class SyntaxDefinitionTemplates {
                     Optional<BoundRelation> relation = unit.getRelations().stream().filter(node -> node.getId().equals(definition.getRelationRoot())).findFirst();
                     SyntaxTemplate template = new SyntaxTemplate(new NodeId(definition.getDefinitionId().getValue() + ":syntax"), body, body.getSourceRef());
                     templates.put(definition.getDefinitionId(), new PreparedDefinition(definition.getDefinitionId(), Optional.of(template), relation,
-                        body.getSourceRef(), Optional.of(unit)));
+                            body.getSourceRef(), Optional.of(unit)));
                 }
             }
         }

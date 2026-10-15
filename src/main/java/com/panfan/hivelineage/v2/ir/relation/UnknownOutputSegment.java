@@ -1,9 +1,12 @@
 package com.panfan.hivelineage.v2.ir.relation;
 
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
+
 import java.util.Objects;
 
-/** Unknown-width output gap, not a synthetic star column. */
+/**
+ * Unknown-width output gap, not a synthetic star column.
+ */
 public final class UnknownOutputSegment implements OutputSegment {
     private final NodeId id;
     private final String diagnosticCode;

@@ -2,6 +2,7 @@ package com.panfan.hivelineage.v2.syntax;
 
 import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
+
 import java.util.Objects;
 
 public final class OtherStatementSyntax extends SyntaxStatement {
@@ -15,11 +16,11 @@ public final class OtherStatementSyntax extends SyntaxStatement {
             String classification,
             String unsupportedReason) {
         this(nodeId, sourceRef, classification, unsupportedReason,
-            unsupportedReason != null && !"INVALID_DDL".equals(unsupportedReason));
+                unsupportedReason != null && !"INVALID_DDL".equals(unsupportedReason));
     }
 
     public OtherStatementSyntax(NodeId nodeId, SourceRef sourceRef, String classification,
-            String unsupportedReason, boolean dataChanging) {
+                                String unsupportedReason, boolean dataChanging) {
         super(nodeId, sourceRef);
         this.dataChanging = dataChanging;
         this.classification = Objects.requireNonNull(classification, "classification");
@@ -30,7 +31,9 @@ public final class OtherStatementSyntax extends SyntaxStatement {
         return classification;
     }
 
-    /** Dialect-independent classification of an otherwise unsupported statement. */
+    /**
+     * Dialect-independent classification of an otherwise unsupported statement.
+     */
     public boolean isDataChanging() {
         return dataChanging;
     }

@@ -2,7 +2,9 @@ package com.panfan.hivelineage.v2.session;
 
 import com.panfan.hivelineage.v2.ir.statement.BoundEffect;
 
-/** Evaluates preconditions once, dispatches handlers, and atomically publishes the delta. */
+/**
+ * Evaluates preconditions once, dispatches handlers, and atomically publishes the delta.
+ */
 public final class DefaultSessionEffectCommitter implements SessionEffectCommitter {
     @Override
     public SessionCommitResult commit(SessionSnapshot before, SessionEffectPlan plan) {

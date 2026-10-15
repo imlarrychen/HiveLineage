@@ -30,6 +30,7 @@ import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
 import com.panfan.hivelineage.v2.ir.statement.QueryResult;
 import com.panfan.hivelineage.v2.session.DefinitionRequest;
 import com.panfan.hivelineage.v2.syntax.SyntaxNode;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -107,7 +108,7 @@ final class BindingWork {
     void declare(ObjectId id, QualifiedName name, BoundObjectReference.ObjectKind kind, SchemaState state,
                  List<FieldIdentity> fields, DefinitionId definition) {
         objects.put(id, new BoundObjectReference(id, name, kind, state, fields,
-            context.getMetadataContext().getSourceId(), definition));
+                context.getMetadataContext().getSourceId(), definition));
     }
 
     void declareField(ObjectId object, FieldIdentity field) {
@@ -120,8 +121,8 @@ final class BindingWork {
             fields.add(field);
         }
         declare(object, previous.getName(), previous.getKind(),
-            previous.getSchemaState() == SchemaState.KNOWN ? SchemaState.KNOWN : SchemaState.UNKNOWN,
-            fields, previous.getDefinitionId().orElse(null));
+                previous.getSchemaState() == SchemaState.KNOWN ? SchemaState.KNOWN : SchemaState.UNKNOWN,
+                fields, previous.getDefinitionId().orElse(null));
     }
 
     static List<OutputSlot> slots(OutputSchema schema) {
@@ -144,7 +145,7 @@ final class BindingWork {
 
     static OutputSchema unknown(NodeId id, String code) {
         return new OutputSchema(SchemaState.UNKNOWN,
-            Collections.<OutputSegment>singletonList(new UnknownOutputSegment(id, code)));
+                Collections.<OutputSegment>singletonList(new UnknownOutputSegment(id, code)));
     }
 
     static OutputSchema partialSchema(List<OutputSlot> slots, NodeId id, String code) {
@@ -163,7 +164,7 @@ final class BindingWork {
         List<OutputSegment> segments = new ArrayList<>(left.getSegments());
         segments.addAll(right.getSegments());
         SchemaState state = left.getState() == SchemaState.KNOWN && right.getState() == SchemaState.KNOWN
-            ? SchemaState.KNOWN : SchemaState.UNKNOWN;
+                ? SchemaState.KNOWN : SchemaState.UNKNOWN;
         return new OutputSchema(state, segments);
     }
 }

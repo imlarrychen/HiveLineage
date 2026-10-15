@@ -2,6 +2,7 @@ package com.panfan.hivelineage.v2.semantic;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.Set;
 
 public final class FunctionOutputDependency {

@@ -13,6 +13,7 @@ import com.panfan.hivelineage.v2.ir.relation.BoundRelation;
 import com.panfan.hivelineage.v2.ir.relation.OutputSlot;
 import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Collection;
@@ -23,7 +24,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
 
-/** Text projection over bound structure; rendering never changes a dependency. */
+/**
+ * Text projection over bound structure; rendering never changes a dependency.
+ */
 public final class BoundExpressionFormatter {
     private final SourceRenderer renderer;
     private final BoundNameIndex names;
@@ -64,7 +67,9 @@ public final class BoundExpressionFormatter {
         return expression(expression, false, new LinkedHashSet<SlotId>());
     }
 
-    /** A synthesized display string does not establish that expression text was extracted. */
+    /**
+     * A synthesized display string does not establish that expression text was extracted.
+     */
     public boolean extracted(BoundExpression expression) {
         if (expression instanceof Expressions.SlotRef) {
             return extractedSlot(((Expressions.SlotRef) expression).getSlotId(), new LinkedHashSet<SlotId>());
@@ -371,7 +376,9 @@ public final class BoundExpressionFormatter {
                 && !(origin instanceof Expressions.Literal);
     }
 
-    /** Only literal leaves and sets of literal leaves are constant assignments; calls are never folded here. */
+    /**
+     * Only literal leaves and sets of literal leaves are constant assignments; calls are never folded here.
+     */
     public boolean literalOnly(BoundExpression expression) {
         return literalOnly(expression, new LinkedHashSet<SlotId>());
     }

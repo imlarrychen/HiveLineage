@@ -30,7 +30,9 @@ import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Test-only JDBC boundary: executes the provider's exact metadata queries in memory. */
+/**
+ * Test-only JDBC boundary: executes the provider's exact metadata queries in memory.
+ */
 public final class JdbcMetadataConnectionStub implements AutoCloseable {
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
     private static final Pattern COLUMN_DELETE_IN = Pattern.compile("delete from metadata_column_v2 where db_en_name in \\(([^)]+)\\) and tb_en_name in \\(([^)]+)\\)");
@@ -41,7 +43,7 @@ public final class JdbcMetadataConnectionStub implements AutoCloseable {
     private static final String VIEW_SELECT = "select view_source from hive_view_parse_info where (lower(view_name) = lower(?) or lower(view_name) = lower(?)) and (failed_status is null or failed_status <> b'1') and view_source is not null order by modified_time desc, id desc";
     private static final String COLUMN_INSERT = "insert into metadata_column_v2 (id, db_en_name, tb_en_name, column_name, column_type, integer_idx, is_active) values (?, ?, ?, ?, ?, ?, b'1')";
     private static final String VIEW_INSERT = "insert into hive_view_parse_info (id, view_tbl_id, view_db_id, view_name, view_source, failed_status) values (?, ?, ?, ?, ?, b'0')";
-    private static final String[] PROPERTY_KEYS = { "lineage.mysql.url", "lineage.mysql.user", "lineage.mysql.password" };
+    private static final String[] PROPERTY_KEYS = {"lineage.mysql.url", "lineage.mysql.user", "lineage.mysql.password"};
     private static final Object PROPERTY_LOCK = new Object();
     private static final Deque<PropertyScope> PROPERTY_SCOPES = new ArrayDeque<>();
     private final String url = "jdbc:lineage-stub:" + UUID.randomUUID();
@@ -545,7 +547,7 @@ public final class JdbcMetadataConnectionStub implements AutoCloseable {
     }
 
     private static <T> T proxy(Class<T> type, InvocationHandler handler) {
-        return type.cast(Proxy.newProxyInstance(JdbcMetadataConnectionStub.class.getClassLoader(), new Class<?>[] { type }, handler));
+        return type.cast(Proxy.newProxyInstance(JdbcMetadataConnectionStub.class.getClassLoader(), new Class<?>[]{type}, handler));
     }
 
     private static final class ColumnRow {
@@ -582,7 +584,9 @@ public final class JdbcMetadataConnectionStub implements AutoCloseable {
         }
     }
 
-    /** Snapshot counts contain no URL, username, password or parameter values. */
+    /**
+     * Snapshot counts contain no URL, username, password or parameter values.
+     */
     public static final class SnapshotStats {
         private final int[] opened;
         private final int[] closed;

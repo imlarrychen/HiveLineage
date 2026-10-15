@@ -1,9 +1,12 @@
 package com.panfan.hivelineage.v2.ir;
 
 import com.panfan.hivelineage.v2.ir.identity.FieldId;
+
 import java.util.Objects;
 
-/** Binder-assigned identity within a bound owner; display names need not be unique. */
+/**
+ * Binder-assigned identity within a bound owner; display names need not be unique.
+ */
 public final class FieldIdentity {
     private final FieldId id;
     private final String displayName;

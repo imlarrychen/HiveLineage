@@ -2,6 +2,7 @@ package com.panfan.hivelineage.v2.ir.relation;
 
 import com.panfan.hivelineage.v2.ir.expression.BoundExpression;
 import com.panfan.hivelineage.v2.ir.identity.SlotId;
+
 import java.util.Objects;
 
 public final class OutputAssignment {

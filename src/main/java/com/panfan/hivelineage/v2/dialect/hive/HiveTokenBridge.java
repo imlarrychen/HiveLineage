@@ -4,14 +4,18 @@ import com.panfan.hivelineage.v2.lexical.LexToken;
 import com.panfan.hivelineage.v2.lexical.LexedUnit;
 import com.panfan.hivelineage.v2.lexical.TokenChannel;
 import com.panfan.hivelineage.v2.lexical.TokenKind;
+
 import java.util.HashMap;
 import java.util.Map;
+
 import org.antlr.runtime.CommonToken;
 import org.antlr.runtime.Token;
 import org.antlr.runtime.TokenSource;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
 
-/** A fresh cursor over immutable tokens; never calls a Lexer or reads SQL for tokenization. */
+/**
+ * A fresh cursor over immutable tokens; never calls a Lexer or reads SQL for tokenization.
+ */
 final class HiveTokenBridge implements TokenSource {
     private static final Map<String, Integer> SYMBOLS = symbols();
     private final LexedUnit unit;

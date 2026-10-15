@@ -2,7 +2,9 @@ package com.panfan.hivelineage.v2.common;
 
 import java.util.Objects;
 
-/** Half-open UTF-16 character offsets into an explicitly identified source. */
+/**
+ * Half-open UTF-16 character offsets into an explicitly identified source.
+ */
 public final class SourceSpan {
     private final String sourceId;
     private final int start;

@@ -7,11 +7,14 @@ import com.panfan.hivelineage.v2.ir.expression.CorrelatedQualifiedFieldHandle;
 import com.panfan.hivelineage.v2.ir.relation.BoundRelation;
 import com.panfan.hivelineage.v2.ir.relation.ExternalDatasetRelation;
 import com.panfan.hivelineage.v2.ir.relation.Relations;
+
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Stable built-in protocol names; Java refactors must not change persisted rule identities. */
+/**
+ * Stable built-in protocol names; Java refactors must not change persisted rule identities.
+ */
 final class LineageRuleIdentity {
     static final String VERSION = "1";
     static final String IR_NAMESPACE = "ir";

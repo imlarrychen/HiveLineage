@@ -7,6 +7,7 @@ import com.panfan.hivelineage.v2.ir.relation.BoundRelation;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 import com.panfan.hivelineage.v2.session.DefinitionTemplate;
 import com.panfan.hivelineage.v2.syntax.SyntaxTemplate;
+
 import java.util.Optional;
 
 public final class PreparedDefinition implements DefinitionTemplate {

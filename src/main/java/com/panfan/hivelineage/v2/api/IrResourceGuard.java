@@ -22,6 +22,7 @@ import com.panfan.hivelineage.v2.ir.statement.BoundEffect;
 import com.panfan.hivelineage.v2.ir.statement.BoundWrite;
 import com.panfan.hivelineage.v2.ir.statement.PartitionScope;
 import com.panfan.hivelineage.v2.ir.statement.WriteAssignment;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,7 +36,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-/** Iterative bounds checks over unique typed IR identities and emitted proof edges. */
+/**
+ * Iterative bounds checks over unique typed IR identities and emitted proof edges.
+ */
 public final class IrResourceGuard {
     public Measures checkUnit(BoundAnalysisUnit unit, ResourceLimits limits) {
         Map<NodeId, Set<NodeId>> graph = new LinkedHashMap<NodeId, Set<NodeId>>();

@@ -6,10 +6,13 @@ import com.panfan.hivelineage.v2.ir.FieldIdentity;
 import com.panfan.hivelineage.v2.ir.TypeRef;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.ir.identity.RelationInstanceId;
+
 import java.util.List;
 import java.util.Objects;
 
-/** Physical field owner is bound; existence and type can remain unverified. */
+/**
+ * Physical field owner is bound; existence and type can remain unverified.
+ */
 public final class QualifiedFieldHandle extends Expressions.Base {
     private final RelationInstanceId owner;
     private final FieldIdentity fieldIdentity;
@@ -39,6 +42,7 @@ public final class QualifiedFieldHandle extends Expressions.Base {
     public ExistenceState getExistence() {
         return existence;
     }
-    public enum ExistenceState { VERIFIED, UNVERIFIED, UNKNOWN }
+
+    public enum ExistenceState {VERIFIED, UNVERIFIED, UNKNOWN}
 
 }

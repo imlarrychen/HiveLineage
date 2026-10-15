@@ -5,10 +5,12 @@ import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.frontend.StageOutcome;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.ir.identity.QueryBlockId;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -22,7 +24,7 @@ public class SyntaxModelContractTest {
                 new NameRefSyntax(id("right-id"), ref(), name("b", "id")));
         JoinFromSyntax join = new JoinFromSyntax(id("join"), ref(), new JoinOperandsSyntax(left, right),
                 JoinTypeSyntax.LEFT_OUTER, new JoinConditionSyntax(JoinConditionKindSyntax.ON, predicate,
-                        Collections.<IdentifierPart>emptyList()));
+                Collections.<IdentifierPart>emptyList()));
         List<SelectItemSyntax> selectItems = Arrays.asList(
                 new SelectItemSyntax(new NameRefSyntax(id("project-a"), ref(), name("a", "id")), part("id")),
                 new SelectItemSyntax(new NameRefSyntax(id("project-b"), ref(), name("b", "id")), part("id")));
@@ -63,7 +65,7 @@ public class SyntaxModelContractTest {
                 target, new QueryInsertSourceSyntax(query));
         InsertBranchSyntax valuesBranch = new InsertBranchSyntax(id("values-branch"), ref(), InsertModeSyntax.INTO,
                 target, new ValuesInsertSourceSyntax(Collections.singletonList(
-                        new ValuesRowSyntax(Collections.<SyntaxExpression>singletonList(literal("two", "2"))))));
+                new ValuesRowSyntax(Collections.<SyntaxExpression>singletonList(literal("two", "2"))))));
         List<InsertBranchSyntax> branches = new ArrayList<InsertBranchSyntax>(Arrays.asList(queryBranch, valuesBranch));
         InsertStatementSyntax insert = new InsertStatementSyntax(id("insert"), ref(), Collections.<CteSyntax>emptyList(), null, branches);
         branches.clear();

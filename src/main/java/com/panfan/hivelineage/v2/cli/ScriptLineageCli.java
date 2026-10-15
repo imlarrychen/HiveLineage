@@ -11,6 +11,7 @@ import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
 import com.panfan.hivelineage.v2.compat.DefaultLegacyResultProjector;
 import com.panfan.hivelineage.v2.compat.HiveScriptLineageAdapter;
 import com.panfan.hivelineage.v2.export.LineageJsonRenderer;
+
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -22,7 +23,9 @@ import java.util.Properties;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
-/** Independent CLI; the existing CLI entry and defaults are untouched. */
+/**
+ * Independent CLI; the existing CLI entry and defaults are untouched.
+ */
 public final class ScriptLineageCli {
     private static final Logger LOGGER = Logger.getLogger(ScriptLineageCli.class.getName());
 
@@ -55,23 +58,23 @@ public final class ScriptLineageCli {
         HiveMetadataProvider provider = null;
         if (properties.containsKey("metadata.jdbc.url")) {
             provider = new JdbcMetadataColumnV2Provider(required(properties, "metadata.jdbc.url"), required(properties, "metadata.jdbc.user"),
-                properties.getProperty("metadata.jdbc.password", ""), properties.getProperty("metadata.columnTable", "metadata_column_v2"),
-                properties.getProperty("metadata.viewInfoTable", "hive_view_parse_info"));
+                    properties.getProperty("metadata.jdbc.password", ""), properties.getProperty("metadata.columnTable", "metadata_column_v2"),
+                    properties.getProperty("metadata.viewInfoTable", "hive_view_parse_info"));
         }
         LineageAnalyzeOptions options = LineageAnalyzeOptions.builder()
-            .parseMode(LineageParseMode.valueOf(properties.getProperty("lineage.parseMode", "TABLE_AND_COLUMN")))
-            .includeTemporaryLineage(bool(properties, "lineage.includeTemporaryLineage", true))
-            .includeIgnoredStatements(bool(properties, "lineage.includeIgnoredStatements", false))
-            .expandViewLineage(bool(properties, "lineage.expandViewLineage", true))
-            .parseJoinConditions(bool(properties, "lineage.parseJoinConditions", false))
-            .maxViewExpandDepth(Integer.parseInt(properties.getProperty("lineage.maxViewExpandDepth", "5")))
-            .failFast(bool(properties, "lineage.failFast", false))
-            .fallbackVariableValue(properties.getProperty("lineage.fallbackVariableValue", "__HIVE_LINEAGE_DEFAULT__")).build();
+                .parseMode(LineageParseMode.valueOf(properties.getProperty("lineage.parseMode", "TABLE_AND_COLUMN")))
+                .includeTemporaryLineage(bool(properties, "lineage.includeTemporaryLineage", true))
+                .includeIgnoredStatements(bool(properties, "lineage.includeIgnoredStatements", false))
+                .expandViewLineage(bool(properties, "lineage.expandViewLineage", true))
+                .parseJoinConditions(bool(properties, "lineage.parseJoinConditions", false))
+                .maxViewExpandDepth(Integer.parseInt(properties.getProperty("lineage.maxViewExpandDepth", "5")))
+                .failFast(bool(properties, "lineage.failFast", false))
+                .fallbackVariableValue(properties.getProperty("lineage.fallbackVariableValue", "__HIVE_LINEAGE_DEFAULT__")).build();
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder().workflowId(properties.getProperty("lineage.workflowId", "wf_local"))
-            .taskId(properties.getProperty("lineage.taskId", script.getFileName().toString())).taskVersion(properties.getProperty("lineage.taskVersion", "V1"))
-            .clusterName(properties.getProperty("lineage.clusterName", "default")).defaultDatabase(database)
-            .rawScript(new String(Files.readAllBytes(script), StandardCharsets.UTF_8)).runtimeVariables(variables)
-            .metadataProvider(provider).metadataCache(new HiveMetadataCache()).options(options).build();
+                .taskId(properties.getProperty("lineage.taskId", script.getFileName().toString())).taskVersion(properties.getProperty("lineage.taskVersion", "V1"))
+                .clusterName(properties.getProperty("lineage.clusterName", "default")).defaultDatabase(database)
+                .rawScript(new String(Files.readAllBytes(script), StandardCharsets.UTF_8)).runtimeVariables(variables)
+                .metadataProvider(provider).metadataCache(new HiveMetadataCache()).options(options).build();
         ScriptAnalysisResult result = new HiveScriptLineageAdapter().analyzeNative(request);
         write(markdown, LineageMarkdownRenderer.render(new DefaultLegacyResultProjector().project(result).getResult(), "Hive SQL Lineage V2", database));
         write(structured, LineageJsonRenderer.render(result));

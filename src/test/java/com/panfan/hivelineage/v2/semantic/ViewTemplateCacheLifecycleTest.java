@@ -6,10 +6,13 @@ import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.metadata.MetadataReadContext;
 import com.panfan.hivelineage.v2.syntax.OtherStatementSyntax;
 import com.panfan.hivelineage.v2.syntax.SyntaxTemplate;
+
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -36,7 +39,7 @@ public class ViewTemplateCacheLifecycleTest {
 
     private static ViewTemplateKey key(String name) {
         return new ViewTemplateKey(new DefinitionId(name), "digest", "hive", "context", new MetadataReadContext(
-            "source", "cluster", Optional.empty(), Collections.emptyMap()));
+                "source", "cluster", Optional.empty(), Collections.emptyMap()));
     }
 
     private static SyntaxTemplate template(String name) {

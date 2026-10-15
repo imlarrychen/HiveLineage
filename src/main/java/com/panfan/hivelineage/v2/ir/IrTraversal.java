@@ -9,10 +9,13 @@ import com.panfan.hivelineage.v2.ir.relation.OutputSchema;
 import com.panfan.hivelineage.v2.ir.relation.OutputSegment;
 import com.panfan.hivelineage.v2.ir.relation.OutputSlot;
 import com.panfan.hivelineage.v2.ir.relation.Relations;
+
 import java.util.ArrayList;
 import java.util.List;
 
-/** Structural traversal only. It neither binds names nor computes dependencies. */
+/**
+ * Structural traversal only. It neither binds names nor computes dependencies.
+ */
 public final class IrTraversal {
     private IrTraversal() {
     }

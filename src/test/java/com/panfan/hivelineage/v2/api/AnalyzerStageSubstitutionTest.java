@@ -31,31 +31,42 @@ import com.panfan.hivelineage.v2.semantic.DefaultSemanticBinder;
 import com.panfan.hivelineage.v2.semantic.DefaultViewTemplateCache;
 import com.panfan.hivelineage.v2.session.DefaultSessionEffectCommitter;
 import com.panfan.hivelineage.v2.session.DefaultSessionEffectPlanner;
+
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 
-/** The same behavior contract applies when the orchestration capabilities are replaced. */
+/**
+ * The same behavior contract applies when the orchestration capabilities are replaced.
+ */
 public class AnalyzerStageSubstitutionTest {
     @Test
     public void delegatingStagesPreserveUnknownDiagnosticsEffectsAndOutputOrder() {
         ScriptAnalysisRequest request = request("use nextdb; insert into output select a.id from missing a "
-            + "where a.id > 0; use +; insert into output select 1;");
+                + "where a.id > 0; use +; insert into output select 1;");
         ScriptAnalysisResult expected = new DefaultScriptLineageAnalyzer().analyzeScript(request, workflow(request));
         AtomicInteger verified = new AtomicInteger();
         AtomicInteger committed = new AtomicInteger();
         AnalyzerServices services = AnalyzerServices.builder()
-            .variables((unit, context, options) -> new DefaultVariableResolver().expand(unit, context, options))
-            .demands((syntax, contract) -> new DefaultAnalysisDemandPlanner().plan(syntax, contract))
-            .verifier((unit, demand) -> { verified.incrementAndGet(); return new DefaultIrVerifier().verify(unit, demand); })
-            .lineage(limit -> (unit, rules) -> new DefaultLineageEngine(limit).analyze(unit, rules))
-            .joins(limit -> (unit, rules) -> new DefaultJoinConditionAnalysis(limit).analyze(unit, rules))
-            .effects((snapshot, unit) -> new DefaultSessionEffectPlanner().plan(snapshot, unit))
-            .committer((snapshot, plan) -> { committed.incrementAndGet(); return new DefaultSessionEffectCommitter().commit(snapshot, plan); })
-            .build();
+                .variables((unit, context, options) -> new DefaultVariableResolver().expand(unit, context, options))
+                .demands((syntax, contract) -> new DefaultAnalysisDemandPlanner().plan(syntax, contract))
+                .verifier((unit, demand) -> {
+                    verified.incrementAndGet();
+                    return new DefaultIrVerifier().verify(unit, demand);
+                })
+                .lineage(limit -> (unit, rules) -> new DefaultLineageEngine(limit).analyze(unit, rules))
+                .joins(limit -> (unit, rules) -> new DefaultJoinConditionAnalysis(limit).analyze(unit, rules))
+                .effects((snapshot, unit) -> new DefaultSessionEffectPlanner().plan(snapshot, unit))
+                .committer((snapshot, plan) -> {
+                    committed.incrementAndGet();
+                    return new DefaultSessionEffectCommitter().commit(snapshot, plan);
+                })
+                .build();
         DefaultMetadataAccessFactory defaults = new DefaultMetadataAccessFactory();
         WorkflowMetadataAccessFactory alternate = context -> new ForwardingAccess(defaults.create(context));
         ScriptAnalysisResult actual = analyzer(alternate, services).analyzeScript(request, workflow(request));
@@ -70,8 +81,13 @@ public class AnalyzerStageSubstitutionTest {
     public void unexpectedStageFailureRetainsOriginalCauseAndSkipsCommit() {
         IllegalStateException original = new IllegalStateException("verifier implementation failed", new IllegalArgumentException("cause"));
         AtomicInteger commits = new AtomicInteger();
-        AnalyzerServices services = AnalyzerServices.builder().verifier((unit, demand) -> { throw original; })
-            .committer((snapshot, plan) -> { commits.incrementAndGet(); return new DefaultSessionEffectCommitter().commit(snapshot, plan); }).build();
+        AnalyzerServices services = AnalyzerServices.builder().verifier((unit, demand) -> {
+                    throw original;
+                })
+                .committer((snapshot, plan) -> {
+                    commits.incrementAndGet();
+                    return new DefaultSessionEffectCommitter().commit(snapshot, plan);
+                }).build();
         ScriptAnalysisRequest request = request("insert into db.output select 1");
         StatementAnalysisResult result = analyzer(new DefaultMetadataAccessFactory(), services).analyzeScript(request, workflow(request)).getStatements().get(0);
         assertEquals(StatementStatus.FAILED, result.getStatus());
@@ -85,9 +101,9 @@ public class AnalyzerStageSubstitutionTest {
     public void replacementStagesMustHonorResourceBoundary() {
         ScriptAnalysisRequest base = request("insert into db.output select 1");
         ScriptAnalysisRequest limited = new ScriptAnalysisRequest(base.getTask(), base.getSource(), base.getDialect(),
-            base.getInitialSession(), base.getMetadataContext(), base.getContract(), new ResourceLimits(1000, 10, 0, 1000, 10));
+                base.getInitialSession(), base.getMetadataContext(), base.getContract(), new ResourceLimits(1000, 10, 0, 1000, 10));
         for (AnalyzerServices services : Arrays.asList(AnalyzerServices.defaults(), AnalyzerServices.builder()
-            .verifier((unit, demand) -> new DefaultIrVerifier().verify(unit, demand)).build())) {
+                .verifier((unit, demand) -> new DefaultIrVerifier().verify(unit, demand)).build())) {
             StatementAnalysisResult result = analyzer(new DefaultMetadataAccessFactory(), services).analyzeScript(limited, workflow(limited)).getStatements().get(0);
             assertEquals("RESOURCE_LIMIT", result.getFailureCode().get());
         }
@@ -95,14 +111,14 @@ public class AnalyzerStageSubstitutionTest {
 
     private DefaultScriptLineageAnalyzer analyzer(WorkflowMetadataAccessFactory metadata, AnalyzerServices services) {
         return new DefaultScriptLineageAnalyzer(new DialectSyntaxFrontend<HiveParseArtifact>(new HiveDialectFactory()),
-            new DefaultSemanticBinder(), metadata, new DefaultScriptPreprocessor(), new DefaultViewTemplateCache(),
-            new DefinitionTextSourceProvider(), services);
+                new DefaultSemanticBinder(), metadata, new DefaultScriptPreprocessor(), new DefaultViewTemplateCache(),
+                new DefinitionTextSourceProvider(), services);
     }
 
     private ScriptAnalysisRequest request(String sql) {
         return new DefaultRequestAdapter().adapt(LineageAnalyzeRequest.builder().workflowId("wf").taskId("task").taskVersion("1")
-            .defaultDatabase("db").rawScript(sql).options(LineageAnalyzeOptions.builder().parseMode(LineageParseMode.TABLE_ONLY)
-                .includeIgnoredStatements(true).parseJoinConditions(true).build()).build());
+                .defaultDatabase("db").rawScript(sql).options(LineageAnalyzeOptions.builder().parseMode(LineageParseMode.TABLE_ONLY)
+                        .includeIgnoredStatements(true).parseJoinConditions(true).build()).build());
     }
 
     private WorkflowContext workflow(ScriptAnalysisRequest request) {
@@ -111,28 +127,43 @@ public class AnalyzerStageSubstitutionTest {
 
     private static final class ForwardingAccess implements WorkflowMetadataAccess {
         private final WorkflowMetadataAccess delegate;
+
         ForwardingAccess(WorkflowMetadataAccess delegate) {
             this.delegate = delegate;
         }
-        @Override public LookupResult<ObjectDescriptor> lookupObject(QualifiedName name, MetadataReadContext context) {
+
+        @Override
+        public LookupResult<ObjectDescriptor> lookupObject(QualifiedName name, MetadataReadContext context) {
             return delegate.lookupObject(name, context);
         }
-        @Override public LookupResult<RelationSchema> lookupSchema(QualifiedName name, MetadataReadContext context) {
+
+        @Override
+        public LookupResult<RelationSchema> lookupSchema(QualifiedName name, MetadataReadContext context) {
             return delegate.lookupSchema(name, context);
         }
-        @Override public LookupResult<RelationMetadata> lookupRelation(QualifiedName name, MetadataReadContext context) {
+
+        @Override
+        public LookupResult<RelationMetadata> lookupRelation(QualifiedName name, MetadataReadContext context) {
             return delegate.lookupRelation(name, context);
         }
-        @Override public LookupResult<ObjectDescriptor> lookupObject(QualifiedName name, MetadataReadContext context, ExternalReadBudget budget) {
+
+        @Override
+        public LookupResult<ObjectDescriptor> lookupObject(QualifiedName name, MetadataReadContext context, ExternalReadBudget budget) {
             return delegate.lookupObject(name, context, budget);
         }
-        @Override public LookupResult<RelationSchema> lookupSchema(QualifiedName name, MetadataReadContext context, ExternalReadBudget budget) {
+
+        @Override
+        public LookupResult<RelationSchema> lookupSchema(QualifiedName name, MetadataReadContext context, ExternalReadBudget budget) {
             return delegate.lookupSchema(name, context, budget);
         }
-        @Override public LookupResult<RelationMetadata> lookupRelation(QualifiedName name, MetadataReadContext context, ExternalReadBudget budget) {
+
+        @Override
+        public LookupResult<RelationMetadata> lookupRelation(QualifiedName name, MetadataReadContext context, ExternalReadBudget budget) {
             return delegate.lookupRelation(name, context, budget);
         }
-        @Override public MetadataReadManifest manifest() {
+
+        @Override
+        public MetadataReadManifest manifest() {
             return delegate.manifest();
         }
     }

@@ -16,13 +16,16 @@ import com.panfan.hivelineage.v2.ir.relation.Relations;
 import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 import com.panfan.hivelineage.v2.ir.statement.BoundScopeReference;
 import com.panfan.hivelineage.v2.ir.statement.VersionRef;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -44,7 +47,7 @@ public class DefaultIrVerifierTest {
         Relations.Scan unrelated = AnalysisFixtures.scan("unrelated", "b", "other", "id");
         Relations.Project project = new Relations.Project(new NodeId("project"), OutputSchema.known(Collections.singletonList(AnalysisFixtures.output("out"))),
                 new QueryBlockId("main"), 1, null, left.getId(), Collections.singletonList(new OutputAssignment(new SlotId("out"),
-                        AnalysisFixtures.ref("foreign.ref", "unrelated.id"))));
+                AnalysisFixtures.ref("foreign.ref", "unrelated.id"))));
         assertRejected(verify(AnalysisFixtures.unit(Arrays.<BoundRelation>asList(left, unrelated, project), Collections.emptyList()), BindingRequirement.OBJECTS), "IR_SLOT_UNREACHABLE");
     }
 

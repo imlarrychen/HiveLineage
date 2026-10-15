@@ -4,6 +4,7 @@ import com.panfan.hivelineage.v2.common.AnalysisStage;
 import com.panfan.hivelineage.v2.common.Diagnostic;
 import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.common.SourceSpan;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -72,7 +73,7 @@ public final class DefaultVariableResolver implements VariableResolver {
     private boolean fallbackAllowed(boolean template, String name, VariableOptions options) {
         return options.getPolicy() == VariableResolutionPolicy.LEGACY_FALLBACK
                 || options.getPolicy() == VariableResolutionPolicy.SPEC_VARIABLES
-                        && (template || options.getBuiltinFallbackVariables().contains(name));
+                && (template || options.getBuiltinFallbackVariables().contains(name));
     }
 
     private String lookup(VariableContext context, String namespace, String name) {
@@ -87,7 +88,7 @@ public final class DefaultVariableResolver implements VariableResolver {
     }
 
     private String unqualified(VariableContext context, String name) {
-        for (String namespace : new String[] { "", "default", "hiveconf", "hivevar", "runtime" }) {
+        for (String namespace : new String[]{"", "default", "hiveconf", "hivevar", "runtime"}) {
             Map<String, String> values = namespace(context, namespace);
             if (values != null && values.containsKey(name)) {
                 return values.get(name);

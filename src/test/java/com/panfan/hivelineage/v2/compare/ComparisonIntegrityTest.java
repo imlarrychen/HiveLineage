@@ -16,11 +16,14 @@ import com.panfan.hivelineage.v2.metadata.DefaultMetadataCache;
 import com.panfan.hivelineage.v2.metadata.MetadataSnapshot;
 import com.panfan.hivelineage.v2.metadata.SnapshotMetadataServices;
 import com.panfan.hivelineage.v2.metadata.WorkflowContext;
+
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.Test;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -32,7 +35,7 @@ public class ComparisonIntegrityTest {
         variables.put("hivevar:x", "A");
         variables.put("hiveconf:x", "B");
         LineageAnalyzeRequest original = LineageAnalyzeRequest.builder().workflowId("wf").taskId("task").taskVersion("1")
-            .defaultDatabase(null).runtimeVariables(variables).rawScript("select 1").build();
+                .defaultDatabase(null).runtimeVariables(variables).rawScript("select 1").build();
         ScriptAnalysisRequest request = new DefaultRequestAdapter().adapt(original);
         MetadataSnapshot snapshot = new MetadataSnapshot(request.getMetadataContext(), Collections.emptyList());
         SnapshotMetadataServices replay = new SnapshotMetadataServices(snapshot);
@@ -60,28 +63,28 @@ public class ComparisonIntegrityTest {
     @Test
     public void countColumnObjectSourcesAndItsOwnStatementIndexAreCompared() {
         ColumnLineage first = ColumnLineage.builder().targetColumn(new ColumnRef("db.out.count"))
-            .sourceObjects(Collections.singletonList(new DataObjectRef("db.a"))).expression("count(*)").statementIndex(0).build();
+                .sourceObjects(Collections.singletonList(new DataObjectRef("db.a"))).expression("count(*)").statementIndex(0).build();
         ColumnLineage second = ColumnLineage.builder().targetColumn(new ColumnRef("db.out.count"))
-            .sourceObjects(Collections.singletonList(new DataObjectRef("db.b"))).expression("count(*)").statementIndex(7).build();
+                .sourceObjects(Collections.singletonList(new DataObjectRef("db.b"))).expression("count(*)").statementIndex(7).build();
         StatementLineageResult left = StatementLineageResult.builder().workflowId("wf").taskId("task").taskVersion("1")
-            .statementId("wf_task_1_0").columnLineages(Collections.singletonList(first)).build();
+                .statementId("wf_task_1_0").columnLineages(Collections.singletonList(first)).build();
         StatementLineageResult right = StatementLineageResult.builder().workflowId("wf").taskId("task").taskVersion("1")
-            .statementId("wf_task_1_0").columnLineages(Collections.singletonList(second)).build();
+                .statementId("wf_task_1_0").columnLineages(Collections.singletonList(second)).build();
         assertTrue(LegacyStructureDiffer.compare(result(left), result(right)).getDifferences().stream()
-            .anyMatch(difference -> difference.getDescription().startsWith("columns:")));
+                .anyMatch(difference -> difference.getDescription().startsWith("columns:")));
     }
 
     private static StatementLineageResult statement(String direct, String physical, String message, String sql, String failure) {
         JoinCondition join = JoinCondition.builder().joinIndex(1).queryBlockPath("q0").joinTypeName("INNER_JOIN")
-            .directJoinObjects(Collections.singletonList(new DataObjectRef(direct)))
-            .joinTables(Collections.singletonList(new DataObjectRef(physical))).build();
+                .directJoinObjects(Collections.singletonList(new DataObjectRef(direct)))
+                .joinTables(Collections.singletonList(new DataObjectRef(physical))).build();
         return StatementLineageResult.builder().workflowId("wf").taskId("task").taskVersion("1").statementIndex(1)
-            .statementId("wf_task_1_1").parseStatusCode(0).rawSql(sql).failureMessage(failure)
-            .joinConditions(Collections.singletonList(join)).warnings(Collections.singletonList(new LineageWarning(WarningCode.METADATA_NOT_FOUND, message, 1))).build();
+                .statementId("wf_task_1_1").parseStatusCode(0).rawSql(sql).failureMessage(failure)
+                .joinConditions(Collections.singletonList(join)).warnings(Collections.singletonList(new LineageWarning(WarningCode.METADATA_NOT_FOUND, message, 1))).build();
     }
 
     private static LineageAnalyzeResult result(StatementLineageResult statement) {
         return LineageAnalyzeResult.builder().workflowId("wf").taskId("task").taskVersion("1")
-            .statements(Collections.singletonList(statement)).totalStatementCount(1).build();
+                .statements(Collections.singletonList(statement)).totalStatementCount(1).build();
     }
 }

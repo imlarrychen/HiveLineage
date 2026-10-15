@@ -7,9 +7,11 @@ import com.panfan.hivelineage.result.ColumnLineage;
 import com.panfan.hivelineage.result.LineageType;
 import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.stream.Collectors;
+
 import org.junit.Assert;
 import org.junit.Test;
 

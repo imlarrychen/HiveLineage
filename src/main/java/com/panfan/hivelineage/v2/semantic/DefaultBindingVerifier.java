@@ -26,6 +26,7 @@ import com.panfan.hivelineage.v2.ir.statement.VersionRef;
 import com.panfan.hivelineage.v2.ir.statement.QueryResult;
 import com.panfan.hivelineage.v2.ir.statement.PartitionScope;
 import com.panfan.hivelineage.v2.ir.statement.WriteAssignment;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -34,7 +35,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Validates existing identities and scope reachability; never repairs a bound reference. */
+/**
+ * Validates existing identities and scope reachability; never repairs a bound reference.
+ */
 public final class DefaultBindingVerifier implements BindingVerifier {
     @Override
     public DiagnosticBag verifyBinding(BoundAnalysisUnit unit, BindingDemand demand) {
@@ -86,8 +89,8 @@ public final class DefaultBindingVerifier implements BindingVerifier {
             }
             if (regionRequested && demand.getRequirements().contains(BindingRequirement.DATASET_VERSIONS)
                     && (relation instanceof Relations.Scan && ((Relations.Scan) relation).getVersion().getState() == VersionRef.State.NOT_REQUESTED
-                        || relation instanceof Relations.DefinitionInstance && ((Relations.DefinitionInstance) relation).getPhysicalObject().isPresent()
-                            && ((Relations.DefinitionInstance) relation).getVersion().getState() == VersionRef.State.NOT_REQUESTED)) {
+                    || relation instanceof Relations.DefinitionInstance && ((Relations.DefinitionInstance) relation).getPhysicalObject().isPresent()
+                    && ((Relations.DefinitionInstance) relation).getVersion().getState() == VersionRef.State.NOT_REQUESTED)) {
                 need(diagnostics, "Requested dataset read version was not bound", null);
             }
         }
@@ -125,7 +128,7 @@ public final class DefaultBindingVerifier implements BindingVerifier {
             if (demand.getRequirements().contains(BindingRequirement.DATASET_VERSIONS)
                     && (target == null || target.getKind() != BoundObjectReference.ObjectKind.VIEW)
                     && (write.getBeforeVersion().getState() == VersionRef.State.NOT_REQUESTED
-                        || write.getAfterVersion().getState() == VersionRef.State.NOT_REQUESTED)) {
+                    || write.getAfterVersion().getState() == VersionRef.State.NOT_REQUESTED)) {
                 need(diagnostics, "Requested dataset write versions were not bound", null);
             }
         }
@@ -199,9 +202,9 @@ public final class DefaultBindingVerifier implements BindingVerifier {
     }
 
     private void references(BoundExpression root, QueryBlockId block, Set<SlotId> available,
-            Set<RelationInstanceId> owners, Map<SlotId, QueryBlockId> slotBlocks,
-            Map<RelationInstanceId, Relations.Scan> scans, Map<NodeId, BoundRelation> relations, Map<NodeId, Set<SlotId>> outputs,
-            BoundAnalysisUnit unit, List<Diagnostic> diagnostics) {
+                            Set<RelationInstanceId> owners, Map<SlotId, QueryBlockId> slotBlocks,
+                            Map<RelationInstanceId, Relations.Scan> scans, Map<NodeId, BoundRelation> relations, Map<NodeId, Set<SlotId>> outputs,
+                            BoundAnalysisUnit unit, List<Diagnostic> diagnostics) {
         for (BoundExpression expression : VerificationSupport.flatten(root)) {
             if (expression instanceof Expressions.SlotRef) {
                 if (!available.contains(((Expressions.SlotRef) expression).getSlotId())) {

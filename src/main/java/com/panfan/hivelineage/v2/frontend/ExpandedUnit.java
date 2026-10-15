@@ -1,10 +1,13 @@
 package com.panfan.hivelineage.v2.frontend;
 
 import com.panfan.hivelineage.v2.common.ModelCollections;
+
 import java.util.List;
 import java.util.Objects;
 
-/** Expanded SQL text plus evidence; no tokens, AST, metadata or lineage facts. */
+/**
+ * Expanded SQL text plus evidence; no tokens, AST, metadata or lineage facts.
+ */
 public final class ExpandedUnit {
     private final ScriptUnit originalUnit;
     private final String expandedSourceId;

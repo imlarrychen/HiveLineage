@@ -36,6 +36,7 @@ import com.panfan.hivelineage.v2.syntax.UnknownExpressionSyntax;
 import com.panfan.hivelineage.v2.syntax.WindowCallSyntax;
 import com.panfan.hivelineage.v2.syntax.WindowFrameSyntax;
 import com.panfan.hivelineage.v2.syntax.WindowSpecificationSyntax;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -46,6 +47,7 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Arrays;
 import java.util.IdentityHashMap;
+
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
 
@@ -134,7 +136,7 @@ final class HiveExpressionNormalizer {
                 || "KW_NOT".equals(kind) || "TILDE".equals(kind))) {
             UnaryOperatorSyntax operator = "KW_NOT".equals(kind) ? UnaryOperatorSyntax.NOT
                     : "MINUS".equals(kind) ? UnaryOperatorSyntax.MINUS : "TILDE".equals(kind)
-                            ? UnaryOperatorSyntax.BITWISE_NOT : UnaryOperatorSyntax.PLUS;
+                                                                         ? UnaryOperatorSyntax.BITWISE_NOT : UnaryOperatorSyntax.PLUS;
             return new UnarySyntax(ast.id(node), ast.ref(node), operator, expression(ast.at(node, 0)));
         }
         return null;
@@ -374,16 +376,16 @@ final class HiveExpressionNormalizer {
 
     private static Map<String, BinaryOperatorSyntax> binaryOperators() {
         Map<String, BinaryOperatorSyntax> operators = new LinkedHashMap<String, BinaryOperatorSyntax>();
-        String[] names = { "PLUS", "MINUS", "STAR", "DIVIDE", "DIV", "MOD", "EQUAL", "EQUAL_NS", "NOTEQUAL",
+        String[] names = {"PLUS", "MINUS", "STAR", "DIVIDE", "DIV", "MOD", "EQUAL", "EQUAL_NS", "NOTEQUAL",
                 "LESSTHAN", "LESSTHANOREQUALTO", "GREATERTHAN", "GREATERTHANOREQUALTO", "KW_AND", "KW_OR",
-                "AMPERSAND", "BITWISEOR", "BITWISEXOR", "KW_LIKE", "KW_RLIKE", "KW_REGEXP" };
-        BinaryOperatorSyntax[] values = { BinaryOperatorSyntax.ADD, BinaryOperatorSyntax.SUBTRACT,
+                "AMPERSAND", "BITWISEOR", "BITWISEXOR", "KW_LIKE", "KW_RLIKE", "KW_REGEXP"};
+        BinaryOperatorSyntax[] values = {BinaryOperatorSyntax.ADD, BinaryOperatorSyntax.SUBTRACT,
                 BinaryOperatorSyntax.MULTIPLY, BinaryOperatorSyntax.DIVIDE, BinaryOperatorSyntax.DIVIDE,
                 BinaryOperatorSyntax.MODULO, BinaryOperatorSyntax.EQUAL, BinaryOperatorSyntax.NULL_SAFE_EQUAL,
                 BinaryOperatorSyntax.NOT_EQUAL, BinaryOperatorSyntax.LESS_THAN, BinaryOperatorSyntax.LESS_OR_EQUAL,
                 BinaryOperatorSyntax.GREATER_THAN, BinaryOperatorSyntax.GREATER_OR_EQUAL, BinaryOperatorSyntax.AND,
                 BinaryOperatorSyntax.OR, BinaryOperatorSyntax.BITWISE_AND, BinaryOperatorSyntax.BITWISE_OR,
-                BinaryOperatorSyntax.BITWISE_XOR, BinaryOperatorSyntax.LIKE, BinaryOperatorSyntax.RLIKE, BinaryOperatorSyntax.RLIKE };
+                BinaryOperatorSyntax.BITWISE_XOR, BinaryOperatorSyntax.LIKE, BinaryOperatorSyntax.RLIKE, BinaryOperatorSyntax.RLIKE};
         for (int index = 0; index < names.length; index++) {
             operators.put(names[index], values[index]);
         }

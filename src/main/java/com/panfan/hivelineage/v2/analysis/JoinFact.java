@@ -6,6 +6,7 @@ import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.ir.identity.QueryBlockId;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -23,7 +24,7 @@ public final class JoinFact {
 
     public JoinFact(int joinIndex, QueryBlockId queryBlockId, String queryBlockPath, JoinKind kind, Optional<NodeId> predicateId, List<LineageEndpoint> directReferences, List<LineageEndpoint> physicalReferences, List<SourceRef> lexicalReferences, DiagnosticBag diagnostics) {
         this(joinIndex, queryBlockId, queryBlockPath, kind, predicateId, directReferences, physicalReferences, lexicalReferences, diagnostics,
-            new JoinConditionSource(Optional.empty(), Optional.empty()));
+                new JoinConditionSource(Optional.empty(), Optional.empty()));
     }
 
     public JoinFact(int joinIndex, QueryBlockId queryBlockId, String queryBlockPath, JoinKind kind, Optional<NodeId> predicateId, List<LineageEndpoint> directReferences, List<LineageEndpoint> physicalReferences, List<SourceRef> lexicalReferences, DiagnosticBag diagnostics, JoinConditionSource conditionSource) {
@@ -38,7 +39,7 @@ public final class JoinFact {
         this.diagnostics = ModelChecks.value(diagnostics, "diagnostics");
         this.conditionSource = ModelChecks.value(conditionSource, "conditionSource");
         if (conditionSource.getPredicate().isPresent()
-            && (!predicateId.isPresent() || !predicateId.get().equals(conditionSource.getPredicate().get().getId()))) {
+                && (!predicateId.isPresent() || !predicateId.get().equals(conditionSource.getPredicate().get().getId()))) {
             throw new IllegalArgumentException("condition expression must match the declared predicate identity");
         }
         if (joinIndex == 0) {

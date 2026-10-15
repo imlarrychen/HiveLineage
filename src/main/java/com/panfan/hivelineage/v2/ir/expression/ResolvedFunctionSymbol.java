@@ -1,9 +1,12 @@
 package com.panfan.hivelineage.v2.ir.expression;
 
 import com.panfan.hivelineage.v2.common.QualifiedName;
+
 import java.util.Objects;
 
-/** Identifies a declared rule; does not load or execute a function class. */
+/**
+ * Identifies a declared rule; does not load or execute a function class.
+ */
 public final class ResolvedFunctionSymbol implements FunctionSymbol {
     private final QualifiedName name;
     private final FunctionKind kind;

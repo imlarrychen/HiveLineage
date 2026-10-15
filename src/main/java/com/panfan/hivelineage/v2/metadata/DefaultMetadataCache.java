@@ -5,7 +5,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.LongSupplier;
 
-/** Process cache. A batch additionally pins reads independently of expiry. */
+/**
+ * Process cache. A batch additionally pins reads independently of expiry.
+ */
 public final class DefaultMetadataCache implements MetadataCache {
     private final ConcurrentMap<MetadataCacheKey, Entry> entries = new ConcurrentHashMap<>();
     private final LongSupplier clock;
@@ -37,7 +39,7 @@ public final class DefaultMetadataCache implements MetadataCache {
             throw new IllegalArgumentException("metadata cache payload type mismatch");
         }
         return Optional.of(new RecordedLookup<>(key, type, DefaultMetadataCache.<T>cast(entry.result),
-            entry.lookupShape.orElse(ProviderCapabilities.LookupShape.UNKNOWN)));
+                entry.lookupShape.orElse(ProviderCapabilities.LookupShape.UNKNOWN)));
     }
 
     @Override

@@ -5,12 +5,15 @@ import com.panfan.hivelineage.v2.common.Diagnostic;
 import com.panfan.hivelineage.v2.common.ModelCollections;
 import com.panfan.hivelineage.v2.frontend.ExpandedUnit;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
+
 import java.util.Objects;
 import java.util.List;
 import java.util.Collections;
 import java.util.Optional;
 
-/** Prepared external definition; no task-local binding state or metadata callbacks. */
+/**
+ * Prepared external definition; no task-local binding state or metadata callbacks.
+ */
 public final class SyntaxTemplate {
     private final NodeId templateId;
     private final SyntaxStatement statement;

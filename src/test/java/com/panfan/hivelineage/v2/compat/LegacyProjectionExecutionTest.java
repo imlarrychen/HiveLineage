@@ -22,9 +22,11 @@ import com.panfan.hivelineage.v2.metadata.DefaultMetadataCache;
 import com.panfan.hivelineage.v2.metadata.DefaultV1MetadataAdapterFactory;
 import com.panfan.hivelineage.v2.metadata.LegacyMetadataBinding;
 import com.panfan.hivelineage.v2.metadata.WorkflowContext;
+
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Optional;
+
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -65,7 +67,7 @@ public class LegacyProjectionExecutionTest {
     @Test
     public void unqualifiedJoinNamesRemainDirectWhilePhysicalNamesAreQualified() {
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder().rawScript(
-                "select * from ods.left_table l join ods.right_table r on user_id=manager_id")
+                        "select * from ods.left_table l join ods.right_table r on user_id=manager_id")
                 .options(LineageAnalyzeOptions.builder().parseJoinConditions(true).build())
                 .metadataProvider(table -> HiveTableMetadata.table(table,
                         table.getTableName().equals("left_table") ? Arrays.asList("user_id") : Arrays.asList("manager_id"))).build();
@@ -169,7 +171,7 @@ public class LegacyProjectionExecutionTest {
     @Test
     public void expandedViewKeepsItsDirectInputSeparateFromItsPhysicalColumnSources() {
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder().rawScript(
-                "insert into dwd.t(id) select id from dim.v")
+                        "insert into dwd.t(id) select id from dim.v")
                 .options(LineageAnalyzeOptions.builder().expandViewLineage(true).build())
                 .metadataProvider(table -> table.getQualifiedName().equals("dim.v")
                         ? HiveTableMetadata.view(table, Arrays.asList("id"), "select id from ods.t")

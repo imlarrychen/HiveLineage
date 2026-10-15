@@ -6,6 +6,7 @@ import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
 import com.panfan.hivelineage.v2.ir.identity.RelationInstanceId;
 import com.panfan.hivelineage.v2.ir.relation.OutputSchema;
+
 import java.util.List;
 
 final class SourceBinding {

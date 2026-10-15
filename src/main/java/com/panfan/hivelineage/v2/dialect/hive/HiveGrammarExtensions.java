@@ -4,12 +4,15 @@ import com.panfan.hivelineage.v2.lexical.LexToken;
 import com.panfan.hivelineage.v2.lexical.LexedUnit;
 import com.panfan.hivelineage.v2.lexical.TokenChannel;
 import com.panfan.hivelineage.v2.lexical.TokenKind;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Token-level grammar extensions preserve the original immutable token buffer. */
+/**
+ * Token-level grammar extensions preserve the original immutable token buffer.
+ */
 final class HiveGrammarExtensions {
     static Set<Integer> cteColumnTokens(LexedUnit unit) {
         return cteColumnTokens(visible(unit));

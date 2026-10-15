@@ -3,7 +3,9 @@ package com.panfan.hivelineage.v2.session;
 import com.panfan.hivelineage.v2.common.DiagnosticBag;
 import com.panfan.hivelineage.v2.common.ModelChecks;
 
-/** Result state is always explicit, including retained state after rejection. */
+/**
+ * Result state is always explicit, including retained state after rejection.
+ */
 public final class SessionCommitResult {
     private final CommitOutcome outcome;
     private final SessionSnapshot snapshot;

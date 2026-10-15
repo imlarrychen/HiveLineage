@@ -6,11 +6,14 @@ import com.panfan.hivelineage.v2.ir.expression.BoundExpression;
 import com.panfan.hivelineage.v2.ir.expression.Expressions;
 import com.panfan.hivelineage.v2.ir.expression.FunctionSymbol;
 import com.panfan.hivelineage.v2.ir.expression.ResolvedFunctionSymbol;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/** Structural inference consumes declared overloads; unknown functions stay unknown. */
+/**
+ * Structural inference consumes declared overloads; unknown functions stay unknown.
+ */
 public final class DefaultTypeAnalyzer implements TypeAnalyzer {
     @Override
     public TypeAnalysisResult analyze(BoundExpression expression, FunctionCatalog functions) {

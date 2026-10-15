@@ -11,6 +11,7 @@ import com.panfan.hivelineage.v2.ir.TypeRef;
 import com.panfan.hivelineage.v2.ir.identity.DefinitionId;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
 import com.panfan.hivelineage.v2.ir.quality.SchemaState;
+
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -36,13 +38,13 @@ public class MetadataContractsTest {
         Diagnostic diagnostic = new Diagnostic(AnalysisStage.BINDING, "READ_FAILED", "read failed", null);
         DiagnosticBag bag = new DiagnosticBag(Collections.singletonList(diagnostic));
         List<LookupResult<String>> outcomes = Arrays.asList(
-            LookupResult.<String>unknown(bag),
-            LookupResult.<String>notFound(bag),
-            LookupResult.<String>capabilityMissing(bag),
-            LookupResult.<String>accessError(bag)
+                LookupResult.<String>unknown(bag),
+                LookupResult.<String>notFound(bag),
+                LookupResult.<String>capabilityMissing(bag),
+                LookupResult.<String>accessError(bag)
         );
         List<LookupStatus> expected = Arrays.asList(
-            LookupStatus.UNKNOWN, LookupStatus.NOT_FOUND, LookupStatus.CAPABILITY_MISSING, LookupStatus.ACCESS_ERROR
+                LookupStatus.UNKNOWN, LookupStatus.NOT_FOUND, LookupStatus.CAPABILITY_MISSING, LookupStatus.ACCESS_ERROR
         );
         for (int index = 0; index < outcomes.size(); index++) {
             assertEquals(expected.get(index), outcomes.get(index).getStatus());
@@ -168,9 +170,9 @@ public class MetadataContractsTest {
     public void manifestRetainsReadVersionAndAccessFailureWithoutClaimingGlobalSnapshot() {
         MetadataReadContext context = new MetadataReadContext("service", "cluster", Optional.<String>empty(), Collections.<String, String>emptyMap());
         MetadataReadRecord record = new MetadataReadRecord(
-            new MetadataCacheKey(context, name("ods", "users"), MetadataFacet.RELATION_SCHEMA),
-            LookupStatus.ACCESS_ERROR, provenance(), ProviderCapabilities.LookupShape.BUNDLED_LOOKUP,
-            MetadataVersion.unknown(), Optional.of("attempt-1")
+                new MetadataCacheKey(context, name("ods", "users"), MetadataFacet.RELATION_SCHEMA),
+                LookupStatus.ACCESS_ERROR, provenance(), ProviderCapabilities.LookupShape.BUNDLED_LOOKUP,
+                MetadataVersion.unknown(), Optional.of("attempt-1")
         );
         List<MetadataReadRecord> records = new ArrayList<>();
         records.add(record);
@@ -202,8 +204,8 @@ public class MetadataContractsTest {
             }
         };
         WorkflowContext workflow = new WorkflowContext("wf", context("service", "reader", "s1"),
-            Optional.<MetadataProvider>empty(), cache, Optional.<ObjectDescriptorProvider>empty(),
-            Optional.<RelationSchemaProvider>empty());
+                Optional.<MetadataProvider>empty(), cache, Optional.<ObjectDescriptorProvider>empty(),
+                Optional.<RelationSchemaProvider>empty());
         assertFalse(workflow.getMetadataProvider().isPresent());
         assertFalse(workflow.getObjectDescriptorProvider().isPresent());
         assertFalse(workflow.getRelationSchemaProvider().isPresent());
@@ -217,8 +219,8 @@ public class MetadataContractsTest {
         columns.add(column("id", 0));
         RelationSchema schema = new RelationSchema(SchemaState.KNOWN, columns, provenance(), MetadataVersion.known("schema-1"));
         RecordedLookup<RelationSchema> lookup = new RecordedLookup<>(
-            new MetadataCacheKey(readContext, name("ods", "users"), MetadataFacet.RELATION_SCHEMA),
-            RelationSchema.class, LookupResult.found(schema)
+                new MetadataCacheKey(readContext, name("ods", "users"), MetadataFacet.RELATION_SCHEMA),
+                RelationSchema.class, LookupResult.found(schema)
         );
         List<RecordedLookup<?>> lookups = new ArrayList<>();
         lookups.add(lookup);
@@ -240,8 +242,8 @@ public class MetadataContractsTest {
     public void snapshotRejectsMixedSourcesAndAccessContexts() {
         MetadataReadContext readContext = context("service", "reader", "s1");
         RecordedLookup<RelationSchema> lookup = new RecordedLookup<>(
-            new MetadataCacheKey(context("service", "admin", "s1"), name("ods", "users"), MetadataFacet.RELATION_SCHEMA),
-            RelationSchema.class, LookupResult.<RelationSchema>accessError(DiagnosticBag.empty())
+                new MetadataCacheKey(context("service", "admin", "s1"), name("ods", "users"), MetadataFacet.RELATION_SCHEMA),
+                RelationSchema.class, LookupResult.<RelationSchema>accessError(DiagnosticBag.empty())
         );
         assertEquals(LookupStatus.ACCESS_ERROR, lookup.getResult().getStatus());
         assertThrows(IllegalArgumentException.class, () -> {
@@ -257,12 +259,12 @@ public class MetadataContractsTest {
     public void recordedFoundPayloadMustMatchDeclaredRuntimeShape() {
         MetadataCacheKey key = new MetadataCacheKey(context("service", "reader", "s1"), name("ods", "users"), MetadataFacet.RELATION_SCHEMA);
         ObjectDescriptor wrongPayload = new ObjectDescriptor(new ObjectId("users"), name("ods", "users"),
-            ObjectDescriptor.Kind.TABLE, Optional.<DefinitionRef>empty(), provenance(), MetadataVersion.unknown());
+                ObjectDescriptor.Kind.TABLE, Optional.<DefinitionRef>empty(), provenance(), MetadataVersion.unknown());
         assertThrows(IllegalArgumentException.class, () -> {
             new RecordedLookup(key, RelationSchema.class, LookupResult.found(wrongPayload));
         });
         RecordedLookup<RelationSchema> unknown = new RecordedLookup<>(key, RelationSchema.class,
-            LookupResult.<RelationSchema>unknown(DiagnosticBag.empty()));
+                LookupResult.<RelationSchema>unknown(DiagnosticBag.empty()));
         assertEquals(LookupStatus.UNKNOWN, unknown.getResult().getStatus());
         assertFalse(unknown.getResult().getValue().isPresent());
     }

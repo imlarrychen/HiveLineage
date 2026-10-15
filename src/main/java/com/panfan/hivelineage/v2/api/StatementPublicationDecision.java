@@ -6,9 +6,12 @@ import com.panfan.hivelineage.v2.ir.statement.BoundAnalysisUnit;
 import com.panfan.hivelineage.v2.syntax.OtherStatementSyntax;
 import com.panfan.hivelineage.v2.syntax.QueryStatementSyntax;
 import com.panfan.hivelineage.v2.syntax.SyntaxStatement;
+
 import java.util.Optional;
 
-/** One policy decision shared by binding, analysis and result publication. */
+/**
+ * One policy decision shared by binding, analysis and result publication.
+ */
 final class StatementPublicationDecision {
     private final SyntaxStatement syntax;
     private final AnalysisContract contract;
@@ -25,9 +28,9 @@ final class StatementPublicationDecision {
             return !classification.formalCandidate;
         }
         return syntax instanceof QueryStatementSyntax
-            && ((QueryStatementSyntax) syntax).getQuery().getCtes().isEmpty()
-            && !contract.getCapabilities().supports(AnalysisCapability.JOIN_CONDITION)
-            && contract.getPublicationPolicy() == StatementPublicationPolicy.CURRENT_API;
+                && ((QueryStatementSyntax) syntax).getQuery().getCtes().isEmpty()
+                && !contract.getCapabilities().supports(AnalysisCapability.JOIN_CONDITION)
+                && contract.getPublicationPolicy() == StatementPublicationPolicy.CURRENT_API;
     }
 
     boolean formal(BoundAnalysisUnit unit) {
@@ -48,7 +51,7 @@ final class StatementPublicationDecision {
 
     private boolean hasLineageCapability() {
         return contract.getCapabilities().supports(AnalysisCapability.TABLE_LINEAGE)
-            || contract.getCapabilities().supports(AnalysisCapability.COLUMN_LINEAGE)
-            || contract.getCapabilities().supports(AnalysisCapability.EXTERNAL_DATA_LINEAGE);
+                || contract.getCapabilities().supports(AnalysisCapability.COLUMN_LINEAGE)
+                || contract.getCapabilities().supports(AnalysisCapability.EXTERNAL_DATA_LINEAGE);
     }
 }

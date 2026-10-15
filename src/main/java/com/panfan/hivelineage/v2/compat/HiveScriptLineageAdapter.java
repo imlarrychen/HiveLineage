@@ -10,6 +10,7 @@ import com.panfan.hivelineage.v2.metadata.DefaultV1MetadataAdapterFactory;
 import com.panfan.hivelineage.v2.metadata.LegacyMetadataBinding;
 import com.panfan.hivelineage.v2.metadata.MetadataProvider;
 import com.panfan.hivelineage.v2.metadata.WorkflowContext;
+
 import java.util.Optional;
 
 /**
@@ -41,10 +42,10 @@ public final class HiveScriptLineageAdapter implements CompatibleLineageAnalyzer
     public ScriptAnalysisResult analyzeNative(LineageAnalyzeRequest legacy) {
         ScriptAnalysisRequest request = requests.adapt(legacy);
         MetadataProvider provider = new DefaultV1MetadataAdapterFactory().adapt(new LegacyMetadataBinding(
-            Optional.ofNullable(legacy.getMetadataProvider()), Optional.ofNullable(legacy.getMetadataCache()), request.getMetadataContext(), false));
+                Optional.ofNullable(legacy.getMetadataProvider()), Optional.ofNullable(legacy.getMetadataCache()), request.getMetadataContext(), false));
         // Pin V2 reads within this script. Cross-call reuse and expiry belong to the supplied V1 cache.
         WorkflowContext workflow = new WorkflowContext(request.getTask().getWorkflowId(), request.getMetadataContext(), provider,
-            new DefaultMetadataCache());
+                new DefaultMetadataCache());
         return analyzer.analyzeScript(request, workflow);
     }
 }

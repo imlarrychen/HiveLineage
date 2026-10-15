@@ -32,11 +32,13 @@ import com.panfan.hivelineage.v2.syntax.SortItemSyntax;
 import com.panfan.hivelineage.v2.syntax.SyntaxExpression;
 import com.panfan.hivelineage.v2.syntax.SyntaxQuery;
 import com.panfan.hivelineage.v2.syntax.TableSampleSyntax;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.IdentityHashMap;
+
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 
 final class HiveQueryNormalizer {

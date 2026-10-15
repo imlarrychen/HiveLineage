@@ -2,9 +2,12 @@ package com.panfan.hivelineage.v2.metadata;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
 import com.panfan.hivelineage.v2.common.QualifiedName;
+
 import java.util.Objects;
 
-/** Source-scoped key shared across task versions, with independent capability facets. */
+/**
+ * Source-scoped key shared across task versions, with independent capability facets.
+ */
 public final class MetadataCacheKey {
     private final MetadataReadContext readContext;
     private final QualifiedName objectName;

@@ -6,6 +6,7 @@ import com.panfan.hivelineage.v2.ir.expression.BoundExpression;
 import com.panfan.hivelineage.v2.ir.expression.Expressions;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
 import com.panfan.hivelineage.v2.ir.identity.SlotId;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -14,7 +15,9 @@ final class OutputAliasExpander {
     private OutputAliasExpander() {
     }
 
-    /** Output aliases are expressions when evaluated alongside the SELECT assignments. */
+    /**
+     * Output aliases are expressions when evaluated alongside the SELECT assignments.
+     */
     static BoundExpression expand(BoundExpression expression, Map<SlotId, BoundExpression> assignments) {
         if (expression instanceof Expressions.SlotRef) {
             Expressions.SlotRef reference = (Expressions.SlotRef) expression;
@@ -37,10 +40,10 @@ final class OutputAliasExpander {
             List<Expressions.WhenThen> branches = new ArrayList<>();
             for (Expressions.WhenThen branch : value.getBranches()) {
                 branches.add(new Expressions.WhenThen(expand(branch.getCondition(), assignments),
-                    expand(branch.getValue(), assignments)));
+                        expand(branch.getValue(), assignments)));
             }
             return new Expressions.Case(id, type, source, branches,
-                value.getElseValue().isPresent() ? expand(value.getElseValue().get(), assignments) : null);
+                    value.getElseValue().isPresent() ? expand(value.getElseValue().get(), assignments) : null);
         }
         if (expression instanceof Expressions.Cast) {
             Expressions.Cast value = (Expressions.Cast) expression;
@@ -53,12 +56,12 @@ final class OutputAliasExpander {
         if (expression instanceof Expressions.Subscript) {
             Expressions.Subscript value = (Expressions.Subscript) expression;
             return new Expressions.Subscript(id, type, source, expand(value.getExpression(), assignments),
-                expand(value.getIndex(), assignments));
+                    expand(value.getIndex(), assignments));
         }
         if (expression instanceof Expressions.InSubquery) {
             Expressions.InSubquery value = (Expressions.InSubquery) expression;
             return new Expressions.InSubquery(id, type, source, expand(value.getValue(), assignments),
-                value.getQueryRoot(), value.getResultSlot(), value.getNegated());
+                    value.getQueryRoot(), value.getResultSlot(), value.getNegated());
         }
         if (expression instanceof Expressions.UnknownExpression) {
             Expressions.UnknownExpression value = (Expressions.UnknownExpression) expression;

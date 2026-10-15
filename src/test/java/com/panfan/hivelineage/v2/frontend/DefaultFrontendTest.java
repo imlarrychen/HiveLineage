@@ -2,9 +2,11 @@ package com.panfan.hivelineage.v2.frontend;
 
 import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.common.SourceSpan;
+
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
 import org.junit.Assert;
 import org.junit.Test;
 

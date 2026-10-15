@@ -6,13 +6,16 @@ import com.panfan.hivelineage.v2.ir.identity.SlotId;
 import com.panfan.hivelineage.v2.ir.relation.BoundRelation;
 import com.panfan.hivelineage.v2.ir.relation.OutputAssignment;
 import com.panfan.hivelineage.v2.ir.relation.Relations;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Project combines pre-analyzed expressions with an independently preserved input rowset. */
+/**
+ * Project combines pre-analyzed expressions with an independently preserved input rowset.
+ */
 public final class CompositionalProjectRule implements RelationLineageRule {
     @Override
     public RelationFacts analyze(BoundRelation relation, List<RelationFacts> inputs, Map<NodeId, ExpressionFacts> expressions, LineageRuleContext context) {

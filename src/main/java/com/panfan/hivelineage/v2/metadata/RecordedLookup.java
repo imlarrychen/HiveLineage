@@ -1,9 +1,12 @@
 package com.panfan.hivelineage.v2.metadata;
 
 import com.panfan.hivelineage.v2.common.ModelChecks;
+
 import java.util.Optional;
 
-/** Captures the actual immutable metadata payload and its explicit lookup outcome. */
+/**
+ * Captures the actual immutable metadata payload and its explicit lookup outcome.
+ */
 public final class RecordedLookup<T> {
     private final MetadataCacheKey key;
     private final Class<T> payloadType;

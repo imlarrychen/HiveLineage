@@ -2,9 +2,12 @@ package com.panfan.hivelineage.v2.syntax;
 
 import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
+
 import java.util.Objects;
 
-/** Function syntax only; function behavior and symbol binding belong to the Binder. */
+/**
+ * Function syntax only; function behavior and symbol binding belong to the Binder.
+ */
 public final class CallSyntax extends SyntaxExpression {
     private final SyntaxName functionName;
     private final CallArgumentsSyntax arguments;

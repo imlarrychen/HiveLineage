@@ -30,6 +30,7 @@ import com.panfan.hivelineage.v2.syntax.MergeUpdateSyntax;
 import com.panfan.hivelineage.v2.syntax.NamedFromSyntax;
 import com.panfan.hivelineage.v2.syntax.SyntaxExpression;
 import com.panfan.hivelineage.v2.syntax.UpdateStatementSyntax;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -46,31 +47,31 @@ final class ModificationBinder {
 
     void update(UpdateStatementSyntax statement) {
         ReferenceScope scope = new ReferenceScope(work, null, new ScopeId(statement.getNodeId().getValue() + "/scope"),
-            new QueryBlockId("root"), "", statement.getCtes());
+                new QueryBlockId("root"), "", statement.getCtes());
         BoundRelation relation = new QueryBinder(work).from(statement.getTarget(), scope, false);
         ObjectId target = scope.sources.get(0).objectId;
         BoundExpression condition = statement.getWhere() == null || !work.requested(BindingRequirement.CONDITION_FIELDS)
-            ? null : expressions.bind(statement.getWhere(), scope);
+                ? null : expressions.bind(statement.getWhere(), scope);
         write(new NodeId(statement.getNodeId().getValue() + "/write"), target, relation, BoundWrite.WriteMode.UPDATE,
-            assignments(statement.getAssignments(), target, scope), condition);
+                assignments(statement.getAssignments(), target, scope), condition);
     }
 
     void delete(DeleteStatementSyntax statement) {
         ReferenceScope scope = new ReferenceScope(work, null, new ScopeId(statement.getNodeId().getValue() + "/scope"),
-            new QueryBlockId("root"), "", statement.getCtes());
+                new QueryBlockId("root"), "", statement.getCtes());
         BoundRelation relation = new QueryBinder(work).from(statement.getTarget(), scope, false);
         ObjectId target = scope.sources.get(0).objectId;
         BoundExpression condition = statement.getWhere() == null || !work.requested(BindingRequirement.CONDITION_FIELDS)
-            ? null : expressions.bind(statement.getWhere(), scope);
+                ? null : expressions.bind(statement.getWhere(), scope);
         write(new NodeId(statement.getNodeId().getValue() + "/write"), target, relation, BoundWrite.WriteMode.DELETE,
-            Collections.<WriteAssignment>emptyList(), condition);
+                Collections.<WriteAssignment>emptyList(), condition);
     }
 
     void merge(MergeStatementSyntax statement) {
         ReferenceScope scope = new ReferenceScope(work, null, new ScopeId(statement.getNodeId().getValue() + "/scope"),
-            new QueryBlockId("root"), "", statement.getCtes());
+                new QueryBlockId("root"), "", statement.getCtes());
         NamedFromSyntax targetSyntax = new NamedFromSyntax(new NodeId(statement.getNodeId().getValue() + "/target"),
-            statement.getSourceRef(), statement.getBody().getTarget().getName(), statement.getBody().getTarget().getAlias(), null);
+                statement.getSourceRef(), statement.getBody().getTarget().getName(), statement.getBody().getTarget().getAlias(), null);
         QueryBinder queries = new QueryBinder(work);
         BoundRelation targetRelation = queries.from(targetSyntax, scope, false);
         ObjectId target = scope.sources.get(0).objectId;
@@ -79,10 +80,10 @@ final class ModificationBinder {
         List<SlotMapping> mappings = BindingWork.mappings(targetRelation.getOutputSchema());
         mappings.addAll(BindingWork.mappings(sourceRelation.getOutputSchema()));
         BoundRelation relation = new Relations.Join(new NodeId(statement.getNodeId().getValue() + "/merge-input"),
-            BindingWork.combined(targetRelation.getOutputSchema(), sourceRelation.getOutputSchema(), false),
-            scope.block, statement.getSourceRef().getSpan().getStart(), statement.getSourceRef(), targetRelation.getId(),
-            sourceRelation.getId(), Relations.JoinType.FULL, Relations.JoinForm.EXPLICIT, match, mappings,
-            Collections.<Relations.JoinPredicate>emptyList());
+                BindingWork.combined(targetRelation.getOutputSchema(), sourceRelation.getOutputSchema(), false),
+                scope.block, statement.getSourceRef().getSpan().getStart(), statement.getSourceRef(), targetRelation.getId(),
+                sourceRelation.getId(), Relations.JoinType.FULL, Relations.JoinForm.EXPLICIT, match, mappings,
+                Collections.<Relations.JoinPredicate>emptyList());
         work.put(relation);
         int index = 0;
         for (MergeClauseSyntax clause : statement.getBody().getClauses()) {
@@ -90,16 +91,16 @@ final class ModificationBinder {
             BoundExpression condition = match;
             if (match != null) {
                 condition = expressions.operator(new NodeId(id.getValue() + "/match-kind"), null,
-                    "merge_" + clause.getMatchKind().name().toLowerCase(java.util.Locale.ROOT), Collections.singletonList(match));
+                        "merge_" + clause.getMatchKind().name().toLowerCase(java.util.Locale.ROOT), Collections.singletonList(match));
             }
             if (clause.getCondition() != null && work.requested(BindingRequirement.CONDITION_FIELDS)) {
                 BoundExpression predicate = expressions.bind(clause.getCondition(), scope);
                 condition = condition == null ? predicate : expressions.operator(new NodeId(id.getValue() + "/condition"), null,
-                    "and", Arrays.asList(condition, predicate));
+                        "and", Arrays.asList(condition, predicate));
             }
             if (clause.getAction() instanceof MergeUpdateSyntax) {
                 write(id, target, relation, BoundWrite.WriteMode.UPDATE,
-                    assignments(((MergeUpdateSyntax) clause.getAction()).getAssignments(), target, scope), condition);
+                        assignments(((MergeUpdateSyntax) clause.getAction()).getAssignments(), target, scope), condition);
             } else if (clause.getAction() instanceof MergeDeleteSyntax) {
                 write(id, target, relation, BoundWrite.WriteMode.DELETE, Collections.<WriteAssignment>emptyList(), condition);
             } else {
@@ -145,18 +146,18 @@ final class ModificationBinder {
     private void write(NodeId id, ObjectId target, BoundRelation source, BoundWrite.WriteMode mode,
                        List<WriteAssignment> assignments, BoundExpression condition) {
         VersionRef before = work.requested(BindingRequirement.DATASET_VERSIONS)
-            ? work.context.getSession().getDatasetVersions().containsKey(target)
-                ? work.context.getSession().getDatasetVersions().get(target).getVersion()
-                : VersionRef.known(new DatasetVersionId(target.getValue() + "/session/"
-                    + work.context.getSession().getInitialContext().getSessionId() + "/script-entry")) : VersionRef.notRequested();
+                ? work.context.getSession().getDatasetVersions().containsKey(target)
+                  ? work.context.getSession().getDatasetVersions().get(target).getVersion()
+                  : VersionRef.known(new DatasetVersionId(target.getValue() + "/session/"
+                                                          + work.context.getSession().getInitialContext().getSessionId() + "/script-entry")) : VersionRef.notRequested();
         VersionRef after = work.requested(BindingRequirement.DATASET_VERSIONS)
-            ? VersionRef.known(new DatasetVersionId(target.getValue() + "/session/"
-                + work.context.getSession().getInitialContext().getSessionId() + "/write/" + id.getValue()))
-            : VersionRef.notRequested();
+                ? VersionRef.known(new DatasetVersionId(target.getValue() + "/session/"
+                                                        + work.context.getSession().getInitialContext().getSessionId() + "/write/" + id.getValue()))
+                : VersionRef.notRequested();
         work.writes.add(new BoundWrite(id, target, before, after, mode, assignments,
-            new PartitionScope(PartitionScope.Kind.UNPARTITIONED, Collections.<PartitionScope.Assignment>emptyList()), condition,
-            work.requested(BindingRequirement.SINK_MAPPING) ? MappingCoverage.COMPLETE : MappingCoverage.NOT_REQUESTED,
-            Collections.<UnknownMapping>emptyList(), source.getId()));
+                new PartitionScope(PartitionScope.Kind.UNPARTITIONED, Collections.<PartitionScope.Assignment>emptyList()), condition,
+                work.requested(BindingRequirement.SINK_MAPPING) ? MappingCoverage.COMPLETE : MappingCoverage.NOT_REQUESTED,
+                Collections.<UnknownMapping>emptyList(), source.getId()));
         work.queryResults.add(new QueryResult(source.getId(), source.getQueryBlockId(), source.getOutputSchema(), QueryResult.Role.MAIN));
     }
 }

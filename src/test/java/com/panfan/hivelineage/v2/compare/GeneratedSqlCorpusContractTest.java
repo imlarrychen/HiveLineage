@@ -9,6 +9,7 @@ import com.panfan.hivelineage.v2.api.TaskIdentity;
 import com.panfan.hivelineage.v2.metadata.LegacyMetadataBinding;
 import com.panfan.hivelineage.v2.metadata.MetadataReadContext;
 import com.panfan.hivelineage.v2.testing.LegacyCorpusMetadataFixture;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -20,10 +21,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
 import org.junit.Assert;
 import org.junit.Test;
 
-/** Reuses the actual corpus and provider without pretending a V2 SQL engine exists. */
+/**
+ * Reuses the actual corpus and provider without pretending a V2 SQL engine exists.
+ */
 public class GeneratedSqlCorpusContractTest {
     private static final Path CORPUS = Paths.get("src/test/resources/hql/generated");
 
@@ -36,7 +40,7 @@ public class GeneratedSqlCorpusContractTest {
         for (CorpusCase item : cases) {
             identities.add(item.getRelativePath());
             Assert.assertEquals(new String(Files.readAllBytes(CORPUS.resolve(item.getRelativePath())), StandardCharsets.UTF_8),
-                item.getSource().getText());
+                    item.getSource().getText());
             Assert.assertEquals("V1", item.getTask().getTaskVersion());
             Assert.assertEquals(item.getRelativePath(), item.getSource().getSourceId());
         }
@@ -49,7 +53,7 @@ public class GeneratedSqlCorpusContractTest {
     @Test
     public void intentionalParseFailureRemainsPartOfTheCorpusContract() throws IOException {
         CorpusCase recovery = corpusCases().stream()
-            .filter(item -> item.getRelativePath().equals("lineage_case_11.sql")).findFirst().get();
+                .filter(item -> item.getRelativePath().equals("lineage_case_11.sql")).findFirst().get();
         Assert.assertEquals(1, recovery.getExpectedFailureCount());
         Assert.assertTrue(recovery.getSource().getText().contains("dwd.parse_recovery_target"));
         Assert.assertTrue(recovery.getSource().getText().contains("dwd.parse_error_target"));
@@ -60,7 +64,7 @@ public class GeneratedSqlCorpusContractTest {
         HiveMetadataProvider provider = LegacyCorpusMetadataFixture.provider();
         HiveMetadataCache cache = new HiveMetadataCache();
         MetadataReadContext context = new MetadataReadContext("generated-fixture", "default",
-            Optional.empty(), Collections.emptyMap());
+                Optional.empty(), Collections.emptyMap());
         LegacyMetadataBinding binding = new LegacyMetadataBinding(Optional.of(provider), Optional.of(cache), context, false);
         Assert.assertSame(provider, binding.getProvider().get());
         Assert.assertSame(cache, binding.getCache().get());
@@ -76,8 +80,8 @@ public class GeneratedSqlCorpusContractTest {
         List<Path> files;
         try (Stream<Path> paths = Files.walk(CORPUS)) {
             files = paths.filter(Files::isRegularFile)
-                .filter(path -> path.getFileName().toString().endsWith(".sql"))
-                .sorted().collect(Collectors.toList());
+                    .filter(path -> path.getFileName().toString().endsWith(".sql"))
+                    .sorted().collect(Collectors.toList());
         }
         List<CorpusCase> cases = new ArrayList<>();
         for (Path file : files) {

@@ -2,7 +2,9 @@ package com.panfan.hivelineage.v2.common;
 
 import java.util.List;
 
-/** Structured name preserving parts; dialect normalization belongs to binding. */
+/**
+ * Structured name preserving parts; dialect normalization belongs to binding.
+ */
 public final class QualifiedName {
     private final List<String> parts;
 

@@ -1,9 +1,12 @@
 package com.panfan.hivelineage.v2.frontend;
 
 import com.panfan.hivelineage.v2.common.SourceRef;
+
 import java.util.Objects;
 
-/** An immutable script boundary; no variable expansion or SQL interpretation is performed. */
+/**
+ * An immutable script boundary; no variable expansion or SQL interpretation is performed.
+ */
 public final class ScriptUnit {
     private final String sourceId;
     private final int statementIndex;
