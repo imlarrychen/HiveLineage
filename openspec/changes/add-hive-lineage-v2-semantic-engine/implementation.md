@@ -2,16 +2,18 @@
 
 V2 独立入口位于 `com.panfan.hivelineage.v2`。V1 源码、默认入口、既有 SQL、原 Markdown 快照和 Maven 配置保留。
 
+生产类型按功能命名：原生入口为 `ScriptLineageAnalyzer` / `DefaultScriptLineageAnalyzer`，请求和结果为 `ScriptAnalysisRequest` / `ScriptAnalysisResult`，兼容入口为 `HiveScriptLineageAdapter`，CLI 与 JSON 输出分别为 `ScriptLineageCli`、`LineageJsonRenderer`。迁移表见 [README](../../../README.md#package-layout-and-api-migration)。v2 测试按被测功能包组织，独立辅助类位于 `v2.testing`，跨模块契约位于 `v2.contracts`；既有 v1 代码和测试保持不变，SQL 资源不移动。
+
 ## 入口
 
 兼容入口接收已有请求、返回已有 DTO：
 
 ```java
-HiveLineageAnalyzer analyzer = new HiveV2LineageAnalyzer();
+HiveLineageAnalyzer analyzer = new HiveScriptLineageAdapter();
 LineageAnalyzeResult result = analyzer.analyzeScript(existingRequest);
 ```
 
-`HiveV2LineageAnalyzer.analyzeNative(existingRequest)` 同时提供完整 V2 结果。原生入口是 `DefaultV2LineageAnalyzer.analyzeScript(V2AnalyzeRequest, WorkflowContext)`；工作流批次使用该类的 `analyze(WorkflowBatchRequest, WorkflowContext)`。业务 `taskVersion` 不作为引擎版本，结果单独记录 `EngineIdentity`。
+`HiveScriptLineageAdapter.analyzeNative(existingRequest)` 同时提供完整 V2 结果。原生入口是 `DefaultScriptLineageAnalyzer.analyzeScript(ScriptAnalysisRequest, WorkflowContext)`；工作流批次使用该类的 `analyze(WorkflowBatchRequest, WorkflowContext)`。业务 `taskVersion` 不作为引擎版本，结果单独记录 `EngineIdentity`。
 
 ## 分层实现
 
@@ -57,7 +59,7 @@ Join 直接对象中的基础表使用物理名称，CTE/派生表使用逻辑�
 复制 `config/lineage-analyzer-v2.example.properties` 后，运行：
 
 ```text
-com.panfan.hivelineage.v2.cli.LineageAnalyzeV2Cli <config-path>
+com.panfan.hivelineage.v2.cli.ScriptLineageCli <config-path>
 ```
 
 支持已有配置项，并增加 `lineage.parseJoinConditions`、`lineage.v2.jsonOutputPath`。JDBC 配置可省略，缺少元数据会保留明确未知与诊断。Markdown 和 JSON 默认写入 `target/lineage-v2/`，不会覆盖 V1 快照。有失败语句返回退出状态 2；成功或可诊断的部分成功返回 0。
@@ -68,7 +70,7 @@ JSON 包含完整依赖角色、关系输出、写入、未知诊断、闭合的
 
 ## 对比与自验证
 
-`DefaultGeneratedSqlCorpusLoader` 递归直接读取 `src/test/resources/hql/generated/**/*.sql`。新增文件自动进入测试分母；`GeneratedV2MetadataFixture` 通过同包桥复用既有元数据，未复制 SQL 或修改原 Provider fixture。
+`DefaultGeneratedSqlCorpusLoader` 递归直接读取 `src/test/resources/hql/generated/**/*.sql`。新增文件自动进入测试分母；`v2.testing.LegacyCorpusMetadataFixture` 为比对测试提供原配置的元数据契约，测试辅助独立维护在 v2 包内，不修改既有 v1 fixture 或 SQL。
 
 `DefaultLineageComparisonRunner` 要求显式 MetadataSnapshot。V1/V2 使用相同 payload、业务身份与选项，分别创建 Cache 和 Session；`DefaultLineageDifferenceRenderer` 输出结构差异。差异默认 `PENDING_REVIEW`，不能把本次 V2 输出自动批准为标准答案。
 
@@ -82,6 +84,8 @@ python3 scripts/run-v2-validation.py --suite v2
 python3 scripts/run-v2-validation.py --suite legacy-oracle
 ```
 
-脚本直接读取项目测试源码和 Maven 依赖，绕开测试插件执行器的本地缓存限制。旧断言对比只在临时目录替换分析器入口，保留原 SQL、fixture 和期望；失败不自动更新期望。选到原 JDBC 集成测试或其 V2 oracle 副本时，执行器自动注册 test-scope 的 `JdbcMetadataConnectionStub`，临时安装 `lineage.mysql.*` 属性，使原五项断言通过独立内存 JDBC URL 实际执行。原 Provider 的参数查询、ResultSet 映射与血缘流程保持真实，Connection / Statement / ResultSet 的关闭同样验证；结束时恢复属性并注销驱动。此模式验证连接边界及应用逻辑，真实 MySQL 驱动协议和服务由独立环境验证。V1 AST 构造器专用故障注入仍保留为显式 assumption skip。已有 classpath 可用 `--classpath-file` 指定，`--no-compile` 使用已编译结果。
+脚本直接读取项目测试源码和 Maven 依赖。`--suite all` 在临时工作目录中为既有 v1 语料测试提供原始 18 份 SQL 和快照，并运行原测试字节码；全部 v2 扩展资源仍由 v2 测试读取。原 JDBC 五项测试由临时子类继承，子类使用 `JdbcMetadataConnectionRule` 安装内存连接桩和作用域内的 `lineage.mysql.*` 属性；不向原 v1 类添加 Rule，不改原方法、Assume、fixture 或断言。测试结束后恢复属性并注销驱动。此模式验证连接边界及应用逻辑，真实 MySQL 驱动协议和服务由独立环境验证。
+
+`--suite legacy-oracle` 只在临时源码副本替换分析器入口；V1 AST 构造器故障注入只替换为 `ViewFrontendFaultAnalyzerFactory` 的独立前端故障注入，保留原 SQL、fixture 和期望，失败不自动更新。统计测试的故意失败夹具保存为 `.java.txt`，运行时在临时目录编译，不进入 IDE 测试发现路径。已有 classpath 可用 `--classpath-file` 指定，`--no-compile` 使用已编译结果。既有 `scripts/run-tests.sh` 继续按原方式执行 Maven，不为新增 v2 资源提供这层隔离。
 
 具体通过结果、历史行为差异与逐场景证据以 `coverage.md` 和本轮验证报告为准；模型存在或 SQL 无解析错误不等于血缘正确。

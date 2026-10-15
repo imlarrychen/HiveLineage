@@ -1,7 +1,7 @@
 package com.panfan.hivelineage.v2.compat;
 
-import com.panfan.hivelineage.v2.api.V2AnalyzeResult;
+import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
 
 public interface LegacyResultProjector {
-    LegacyProjection project(V2AnalyzeResult result);
+    LegacyProjection project(ScriptAnalysisResult result);
 }

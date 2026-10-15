@@ -7,7 +7,7 @@ import com.panfan.hivelineage.v2.api.AnalysisBasis;
 import com.panfan.hivelineage.v2.api.AnalysisContract;
 import com.panfan.hivelineage.v2.api.StatementAnalysisResult;
 import com.panfan.hivelineage.v2.api.StatementStatus;
-import com.panfan.hivelineage.v2.api.V2AnalyzeResult;
+import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
 import com.panfan.hivelineage.v2.export.DefaultSourceRenderer;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,7 +16,7 @@ import java.util.Optional;
 /** Projects declared facts and renders source attachments; no Parser, Binder or metadata call. */
 public final class DefaultLegacyResultProjector implements LegacyResultProjector {
     @Override
-    public LegacyProjection project(V2AnalyzeResult result) {
+    public LegacyProjection project(ScriptAnalysisResult result) {
         List<ProjectionLimitation> limitations = new ArrayList<ProjectionLimitation>();
         Optional<AnalysisContract> contract = result.getBasis().map(AnalysisBasis::getContract);
         LegacyStatementProjector projector = new LegacyStatementProjector(new DefaultSourceRenderer(result.getSources()), contract, limitations);

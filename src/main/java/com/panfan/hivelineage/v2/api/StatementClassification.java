@@ -72,6 +72,12 @@ final class StatementClassification {
             if ("USE".equals(other.getClassification())) {
                 return new StatementClassification("USE", null, true);
             }
+            String classification = other.getClassification();
+            if ("TOK_CREATE_MATERIALIZED_VIEW".equals(classification)
+                || "TOK_ALTER_MATERIALIZED_VIEW_REBUILD".equals(classification)
+                || "TOK_IMPORT".equals(classification) || "TOK_EXPORT".equals(classification)) {
+                return new StatementClassification(classification.substring(4), null, true);
+            }
             if (other.getUnsupportedReason() == null || "INVALID_DDL".equals(other.getUnsupportedReason())) {
                 String kind = other.getClassification();
                 String type = "TOK_CREATEDATABASE".equals(kind) ? "CREATE_DATABASE" : "TOK_CREATEMACRO".equals(kind) ? "CREATE_TEMPORARY_MACRO"

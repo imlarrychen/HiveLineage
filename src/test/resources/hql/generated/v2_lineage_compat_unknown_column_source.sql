@@ -1,0 +1,1 @@
+insert into dwd.t(id) select missing_alias.id from ods.t

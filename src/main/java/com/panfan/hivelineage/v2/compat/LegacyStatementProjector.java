@@ -11,7 +11,6 @@ import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.result.TableLineage;
 import com.panfan.hivelineage.result.WarningCode;
 import com.panfan.hivelineage.v2.analysis.ColumnEndpoint;
-import com.panfan.hivelineage.v2.analysis.ConstantEndpoint;
 import com.panfan.hivelineage.v2.analysis.Dependency;
 import com.panfan.hivelineage.v2.analysis.DependencyRole;
 import com.panfan.hivelineage.v2.analysis.JoinFact;
@@ -30,8 +29,9 @@ import com.panfan.hivelineage.v2.export.SourceRenderer;
 import com.panfan.hivelineage.v2.export.BoundNameIndex;
 import com.panfan.hivelineage.v2.export.BoundExpressionFormatter;
 import com.panfan.hivelineage.v2.export.BoundInputObjectProjector;
+import com.panfan.hivelineage.v2.export.ColumnDerivationClassifier;
+import com.panfan.hivelineage.v2.export.ColumnDerivationKind;
 import com.panfan.hivelineage.v2.ir.FieldIdentity;
-import com.panfan.hivelineage.v2.ir.expression.BoundExpression;
 import com.panfan.hivelineage.v2.ir.expression.Expressions;
 import com.panfan.hivelineage.v2.ir.identity.FieldId;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
@@ -216,13 +216,13 @@ final class LegacyStatementProjector {
                 sourceObjects.add(new DataObjectRef(source));
             }
             Optional<String> expression = expressions.format(assignment.getExpression());
-            LineageType derivation = type(dependencies, sourceColumns, expressions, assignment.getExpression());
+            ColumnDerivationKind kind = ColumnDerivationClassifier.classify(expressions, assignment.getExpression(), dependencies);
+            LineageType derivation = kind == ColumnDerivationKind.UNKNOWN ? LineageType.DERIVED : LineageType.valueOf(kind.name());
             result.add(ColumnLineage.builder().targetColumn(names.column(write.getTargetObject(), assignment.getTargetField())
                     .map(ColumnRef::new).orElse(null)).sourceColumns(sourceColumns).sourceObjects(sourceObjects)
                     .expression(expression.orElse(null)).expressionExtracted(expressions.extracted(assignment.getExpression()))
                     .lineageType(derivation)
-                    .functionNames(derivation == LineageType.CONSTANT ? java.util.Collections.emptyList()
-                            : expressions.functionsWithOccurrences(assignment.getExpression()))
+                    .functionNames(expressions.functionsWithOccurrences(assignment.getExpression()))
                     .complexExpression(derivation != LineageType.CONSTANT && expressions.complex(assignment.getExpression()))
                     .statementIndex(statement.getIdentity().getStatementIndex()).build());
         }
@@ -297,23 +297,6 @@ final class LegacyStatementProjector {
             }
         }
         return result;
-    }
-
-    private LineageType type(List<Dependency> dependencies, List<ColumnRef> columns, BoundExpressionFormatter formatter,
-                              BoundExpression expression) {
-        boolean constant = !dependencies.isEmpty();
-        for (Dependency dependency : dependencies) {
-            if (!(dependency.getSource() instanceof ConstantEndpoint)) {
-                constant = false;
-            }
-            if (dependency.getSource() instanceof UnknownEndpoint) {
-                return LineageType.DERIVED;
-            }
-        }
-        if (constant) {
-            return LineageType.CONSTANT;
-        }
-        return columns.size() == 1 && !formatter.complex(expression) ? LineageType.DIRECT : LineageType.DERIVED;
     }
 
     private boolean include(Dependency dependency, BoundNameIndex names) {

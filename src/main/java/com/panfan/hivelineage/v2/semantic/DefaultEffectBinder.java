@@ -11,10 +11,15 @@ import com.panfan.hivelineage.v2.ir.identity.ObjectId;
 import com.panfan.hivelineage.v2.ir.identity.SlotId;
 import com.panfan.hivelineage.v2.ir.relation.OutputSchema;
 import com.panfan.hivelineage.v2.ir.relation.OutputSlot;
+import com.panfan.hivelineage.v2.ir.relation.UnknownOutputSegment;
+import com.panfan.hivelineage.v2.ir.quality.SchemaState;
 import com.panfan.hivelineage.v2.ir.statement.BoundEffect;
 import com.panfan.hivelineage.v2.ir.statement.Effects;
 import com.panfan.hivelineage.v2.ir.statement.VersionRef;
 import com.panfan.hivelineage.v2.metadata.LookupStatus;
+import com.panfan.hivelineage.v2.metadata.ObjectDescriptor;
+import com.panfan.hivelineage.v2.session.CatalogEntry;
+import com.panfan.hivelineage.v2.session.OverlayEntry;
 import com.panfan.hivelineage.v2.syntax.ColumnDefinitionSyntax;
 import com.panfan.hivelineage.v2.syntax.CommandStatementSyntax;
 import com.panfan.hivelineage.v2.syntax.DefinitionBodySyntax;
@@ -64,11 +69,24 @@ public final class DefaultEffectBinder implements EffectBinder {
             DefinitionBodySyntax body = ((DefinitionStatementSyntax) statement).getDefinition();
             if (body.getQuery() == null) {
                 QualifiedName name = SemanticNames.qualify(body.getName(), context, body.getOptions().isTemporary());
+                boolean creation = body.getKind() == DefinitionKindSyntax.CREATE_TABLE || body.getKind() == DefinitionKindSyntax.CREATE_VIEW;
+                CatalogEntry local = creation ? null : local(body, name, context);
+                if (local != null) {
+                    name = local.getObject().getName();
+                }
                 ObjectId object = new ObjectId(context.getMetadataContext().getSourceId() + ":" + context.getMetadataContext().getClusterName()
                     + ":" + name.getDisplayName());
+                if (local != null) {
+                    object = local.getObject().getObjectId();
+                }
                 Effects.ObjectKind kind = body.getOptions().isTemporary() ? Effects.ObjectKind.TEMPORARY_TABLE
                     : body.getKind() == DefinitionKindSyntax.CREATE_VIEW || body.getKind() == DefinitionKindSyntax.DROP_VIEW
+                        || body.getKind() == DefinitionKindSyntax.ALTER_VIEW
                     ? Effects.ObjectKind.VIEW : Effects.ObjectKind.TABLE;
+                if (local != null) {
+                    kind = local.getObject().getKind() == ObjectDescriptor.Kind.TEMPORARY_TABLE ? Effects.ObjectKind.TEMPORARY_TABLE
+                        : local.getObject().getKind() == ObjectDescriptor.Kind.VIEW ? Effects.ObjectKind.VIEW : Effects.ObjectKind.TABLE;
+                }
                 Effects.Precondition precondition = new Effects.Precondition(
                     body.getOptions().isIfNotExists() ? Effects.Precondition.Kind.OBJECT_ABSENT
                         : body.getOptions().isIfExists() ? Effects.Precondition.Kind.OBJECT_PRESENT : Effects.Precondition.Kind.ALWAYS,
@@ -90,6 +108,10 @@ public final class DefaultEffectBinder implements EffectBinder {
                     effects.add(new Effects.DropObject(id, Effects.Certainty.CERTAIN, precondition, object, kind, name));
                 } else if (body.getKind() == DefinitionKindSyntax.CREATE_TABLE || body.getKind() == DefinitionKindSyntax.CREATE_VIEW) {
                     List<OutputSlot> slots = new ArrayList<>();
+                    List<String> partitions = new ArrayList<>();
+                    for (ColumnDefinitionSyntax column : body.getSchema().getPartitionColumns()) {
+                        partitions.add(SemanticNames.normalize(column.getName().getValue()));
+                    }
                     List<ColumnDefinitionSyntax> columns = new ArrayList<>(body.getSchema().getColumns());
                     columns.addAll(body.getSchema().getPartitionColumns());
                     int position = 0;
@@ -99,11 +121,18 @@ public final class DefaultEffectBinder implements EffectBinder {
                         slots.add(new OutputSlot(new SlotId(id.getValue() + "/column-" + position++), columnName,
                             SemanticTypes.declared(column.getType()), field));
                     }
+                    OutputSchema schema = OutputSchema.known(slots);
+                    if (body.getSchema().getLikeTable() != null) {
+                        schema = new OutputSchema(SchemaState.UNKNOWN, Collections.singletonList(
+                            new UnknownOutputSegment(new NodeId(id.getValue() + "/like-schema"), "CREATE_LIKE_SCHEMA_UNKNOWN")));
+                        diagnostics.add(new Diagnostic(AnalysisStage.BINDING, "CREATE_LIKE_SCHEMA_UNKNOWN",
+                            "CREATE LIKE source schema has not been inferred", statement.getSourceRef()));
+                    }
                     effects.add(new Effects.CreateObject(id, certainty, precondition,
-                        new Effects.ObjectShape(object, name, kind, OutputSchema.known(slots), VersionRef.notRequested(),
+                        new Effects.ObjectShape(object, name, kind, schema, VersionRef.notRequested(),
                             body.getOptions().isTemporary() ? SemanticNames.temporaryLookupNames(body.getName(), context)
-                                : Collections.singletonList(name))));
-                } else if (body.getKind() == DefinitionKindSyntax.ALTER_TABLE) {
+                                : Collections.singletonList(name), partitions)));
+                } else if (body.getKind() == DefinitionKindSyntax.ALTER_TABLE || body.getKind() == DefinitionKindSyntax.ALTER_VIEW) {
                     effects.addAll(new CatalogActionBinder(context).alter(body, name, object, id, precondition));
                 } else if (body.getKind() == DefinitionKindSyntax.TRUNCATE_TABLE) {
                     effects.add(new Effects.UnknownEffect(id, Effects.Certainty.UNKNOWN, precondition,
@@ -112,5 +141,19 @@ public final class DefaultEffectBinder implements EffectBinder {
             }
         }
         return new EffectBindingResult(effects, new DiagnosticBag(diagnostics));
+    }
+
+    private CatalogEntry local(DefinitionBodySyntax body, QualifiedName name, BindingContext context) {
+        boolean view = body.getKind() == DefinitionKindSyntax.DROP_VIEW || body.getKind() == DefinitionKindSyntax.ALTER_VIEW;
+        if (!view) {
+            QualifiedName requested = SemanticNames.name(body.getName());
+            for (CatalogEntry entry : context.getSession().getTemporaryCatalog().values()) {
+                if (entry.getLookupNames().contains(requested) || entry.getLookupNames().contains(name)) {
+                    return entry;
+                }
+            }
+        }
+        OverlayEntry overlay = context.getSession().getPersistentOverlay().get(name);
+        return overlay == null ? null : overlay.getEntry().orElse(null);
     }
 }

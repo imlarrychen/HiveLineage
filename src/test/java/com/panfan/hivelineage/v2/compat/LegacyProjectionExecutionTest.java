@@ -8,12 +8,12 @@ import com.panfan.hivelineage.result.ColumnLineage;
 import com.panfan.hivelineage.result.LineageAnalyzeResult;
 import com.panfan.hivelineage.result.LineageType;
 import com.panfan.hivelineage.result.StatementLineageResult;
-import com.panfan.hivelineage.v2.api.V2AnalyzeResult;
-import com.panfan.hivelineage.v2.api.V2AnalyzeRequest;
+import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
+import com.panfan.hivelineage.v2.api.ScriptAnalysisRequest;
 import com.panfan.hivelineage.v2.api.AnalysisContract;
 import com.panfan.hivelineage.v2.api.AnalysisCapability;
 import com.panfan.hivelineage.v2.api.AnalysisCapabilities;
-import com.panfan.hivelineage.v2.api.DefaultV2LineageAnalyzer;
+import com.panfan.hivelineage.v2.api.DefaultScriptLineageAnalyzer;
 import com.panfan.hivelineage.v2.export.DefaultFormalLineageRecordExporter;
 import com.panfan.hivelineage.v2.export.DefaultJoinConditionRecordExporter;
 import com.panfan.hivelineage.v2.export.DefaultLineageRecordExporter;
@@ -69,7 +69,7 @@ public class LegacyProjectionExecutionTest {
                 .options(LineageAnalyzeOptions.builder().parseJoinConditions(true).build())
                 .metadataProvider(table -> HiveTableMetadata.table(table,
                         table.getTableName().equals("left_table") ? Arrays.asList("user_id") : Arrays.asList("manager_id"))).build();
-        com.panfan.hivelineage.result.JoinCondition join = new HiveV2LineageAnalyzer().analyzeScript(request)
+        com.panfan.hivelineage.result.JoinCondition join = new HiveScriptLineageAdapter().analyzeScript(request)
                 .getStatements().get(0).getJoinConditions().get(0);
         Assert.assertEquals("user_id", join.getDirectJoinColumns().get(0).getQualifiedName());
         Assert.assertEquals("manager_id", join.getDirectJoinColumns().get(1).getQualifiedName());
@@ -79,7 +79,7 @@ public class LegacyProjectionExecutionTest {
 
     @Test
     public void multiTargetProjectionKeepsAllEdgesAndReportsTheSingularOutputLimitation() {
-        V2AnalyzeResult nativeResult = nativeResult("from ods.t a insert into dwd.x(id) select a.id "
+        ScriptAnalysisResult nativeResult = nativeResult("from ods.t a insert into dwd.x(id) select a.id "
                 + "insert into dwd.y(name) select a.name");
         LegacyProjection projection = new DefaultLegacyResultProjector().project(nativeResult);
         StatementLineageResult statement = projection.getResult().getStatements().get(0);
@@ -124,7 +124,7 @@ public class LegacyProjectionExecutionTest {
 
     @Test
     public void fullExportsReuseSinkFactsAndRetainStatementIdentity() {
-        V2AnalyzeResult result = nativeResult("insert into dwd.t(id) select a.id from ods.t a join ods.u b on a.id=b.id");
+        ScriptAnalysisResult result = nativeResult("insert into dwd.t(id) select a.id from ods.t a join ods.u b on a.id=b.id");
         DefaultFormalLineageRecordExporter exporter = new DefaultFormalLineageRecordExporter(new DefaultSourceRenderer(result.getSources()), false);
         Assert.assertEquals("dwd.t", exporter.exportTables(result.getStatements().get(0)).get(0).getTarget().getDisplayName());
         Assert.assertEquals("id", exporter.exportColumns(result.getStatements().get(0)).get(0).getTarget().getFieldPath().get(0));
@@ -148,7 +148,7 @@ public class LegacyProjectionExecutionTest {
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder().workflowId("wf").taskId("task").rawScript(script)
                 .defaultDatabase("default").options(LineageAnalyzeOptions.builder().includeTemporaryLineage(true).build())
                 .metadataProvider(table -> HiveTableMetadata.table(table, Arrays.asList("id", "name"))).build();
-        V2AnalyzeResult nativeResult = new HiveV2LineageAnalyzer().analyzeNative(request);
+        ScriptAnalysisResult nativeResult = new HiveScriptLineageAdapter().analyzeNative(request);
         StatementLineageResult insert = new DefaultLegacyResultProjector().project(nativeResult).getResult()
                 .getStatements().get(1);
         Assert.assertTrue(insert.getColumnLineages().get(0).getSourceColumns().stream()
@@ -174,7 +174,7 @@ public class LegacyProjectionExecutionTest {
                 .metadataProvider(table -> table.getQualifiedName().equals("dim.v")
                         ? HiveTableMetadata.view(table, Arrays.asList("id"), "select id from ods.t")
                         : HiveTableMetadata.table(table, Arrays.asList("id"))).build();
-        StatementLineageResult statement = new HiveV2LineageAnalyzer().analyzeScript(request).getStatements().get(0);
+        StatementLineageResult statement = new HiveScriptLineageAdapter().analyzeScript(request).getStatements().get(0);
         Assert.assertEquals(1, statement.getInputObjects().size());
         Assert.assertEquals("dim.v", statement.getInputObjects().get(0).getQualifiedName());
         Assert.assertEquals("VIEW_DEFINITION", statement.getTableLineages().get(0).getOperation());
@@ -187,7 +187,7 @@ public class LegacyProjectionExecutionTest {
     @Test
     public void externalLoadPublishesItsUriWithoutInventingExternalColumns() {
         LineageAnalyzeRequest legacy = request("load data inpath 'hdfs://cluster/source/data.csv' into table dwd.t");
-        V2AnalyzeRequest base = new DefaultRequestAdapter().adapt(legacy);
+        ScriptAnalysisRequest base = new DefaultRequestAdapter().adapt(legacy);
         EnumSet<AnalysisCapability> capabilities = EnumSet.copyOf(base.getContract().getCapabilities().getCapabilities());
         capabilities.add(AnalysisCapability.EXTERNAL_DATA_LINEAGE);
         AnalysisContract old = base.getContract();
@@ -195,12 +195,12 @@ public class LegacyProjectionExecutionTest {
                 old.getDefinitionPolicy(), old.getStarMappingPolicy(), old.getPublicationPolicy(), old.isIncludeTemporaryLineage(),
                 old.isIncludeIgnoredStatements(), old.isExpandViewLineage(), old.getMaxViewExpandDepth(), old.isFailFast(),
                 old.getFallbackVariableValue());
-        V2AnalyzeRequest request = new V2AnalyzeRequest(base.getTask(), base.getSource(), base.getDialect(), base.getInitialSession(),
+        ScriptAnalysisRequest request = new ScriptAnalysisRequest(base.getTask(), base.getSource(), base.getDialect(), base.getInitialSession(),
                 base.getMetadataContext(), contract, base.getResourceLimits());
         WorkflowContext workflow = new WorkflowContext("wf", base.getMetadataContext(),
                 new DefaultV1MetadataAdapterFactory().adapt(new LegacyMetadataBinding(Optional.of(legacy.getMetadataProvider()),
                         Optional.empty(), base.getMetadataContext(), false)), new DefaultMetadataCache());
-        V2AnalyzeResult result = new DefaultV2LineageAnalyzer().analyzeScript(request, workflow);
+        ScriptAnalysisResult result = new DefaultScriptLineageAnalyzer().analyzeScript(request, workflow);
         StatementLineageResult projected = new DefaultLegacyResultProjector().project(result).getResult().getStatements().get(0);
         Assert.assertEquals("hdfs://cluster/source/data.csv", projected.getInputObjects().get(0).getQualifiedName());
         Assert.assertEquals("hdfs://cluster/source/data.csv", projected.getTableLineages().get(0)
@@ -224,7 +224,7 @@ public class LegacyProjectionExecutionTest {
     public void compatibilityWarningsDoNotTurnUnrequestedWidthsIntoUnknownProjectedColumns() {
         String sql = "with tmp1 as(select id as renamed from ods.t) insert into dwd.t(id) "
                 + "select x.renamed from tmp1 x join ods.u u on x.renamed=u.id";
-        V2AnalyzeResult result = nativeResult(sql);
+        ScriptAnalysisResult result = nativeResult(sql);
         StatementLineageResult statement = new DefaultLegacyResultProjector().project(result).getResult().getStatements().get(0);
         Assert.assertTrue(statement.getWarnings().isEmpty());
         Assert.assertEquals("ods.t.id", statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName());
@@ -232,7 +232,7 @@ public class LegacyProjectionExecutionTest {
 
     @Test
     public void invalidDdlHasOneCompatibilityWarningAndPreservesNativeFrontendDiagnostics() {
-        V2AnalyzeResult result = nativeResult("alter table dwd.t set tblproperties（'comment'='bad'");
+        ScriptAnalysisResult result = nativeResult("alter table dwd.t set tblproperties（'comment'='bad'");
         StatementLineageResult statement = new DefaultLegacyResultProjector().project(result).getResult().getStatements().get(0);
         Assert.assertEquals(Integer.valueOf(3), statement.getParseStatusCode());
         Assert.assertEquals(1, statement.getWarnings().size());
@@ -242,7 +242,7 @@ public class LegacyProjectionExecutionTest {
 
     @Test
     public void parserFailureCodesAreAdaptedWithoutChangingNativeFailureEvidence() {
-        V2AnalyzeResult result = nativeResult("insert into dwd.t select from");
+        ScriptAnalysisResult result = nativeResult("insert into dwd.t select from");
         Assert.assertEquals("SQL_PARSE_FAILED", result.getStatements().get(0).getFailureCode().get());
         Assert.assertEquals("UNSUPPORTED", result.getStatements().get(0).getStatementType());
         Assert.assertEquals("UNKNOWN", new DefaultLegacyResultProjector().project(result).getResult()
@@ -258,7 +258,7 @@ public class LegacyProjectionExecutionTest {
                 .metadataProvider(table -> table.getQualifiedName().equals("dim.v")
                         ? HiveTableMetadata.view(table, Arrays.asList("id"), "select missing.id as id from ods.t")
                         : HiveTableMetadata.table(table, Arrays.asList("id"))).build();
-        V2AnalyzeResult result = new HiveV2LineageAnalyzer().analyzeNative(request);
+        ScriptAnalysisResult result = new HiveScriptLineageAdapter().analyzeNative(request);
         StatementLineageResult statement = new DefaultLegacyResultProjector().project(result).getResult().getStatements().get(0);
         Assert.assertEquals(1, statement.getColumnLineages().size());
         Assert.assertEquals("dim.v.id", statement.getColumnLineages().get(0).getSourceColumns().get(0).getQualifiedName());
@@ -274,7 +274,7 @@ public class LegacyProjectionExecutionTest {
 
     @Test
     public void partialSetMappingsKeepNativeProofAndApplyTheLegacyAtomicProjectionPolicy() {
-        V2AnalyzeResult result = nativeResult("with q as(select missing.id as id from ods.t union all "
+        ScriptAnalysisResult result = nativeResult("with q as(select missing.id as id from ods.t union all "
                 + "select a.id as id from ods.t a) insert into dwd.t(id) select q.id from q");
         LegacyProjection projected = new DefaultLegacyResultProjector().project(result);
         ColumnLineage column = projected.getResult().getStatements().get(0).getColumnLineages().get(0);
@@ -286,11 +286,11 @@ public class LegacyProjectionExecutionTest {
     }
 
     private LineageAnalyzeResult analyze(String sql) {
-        return new HiveV2LineageAnalyzer().analyzeScript(request(sql));
+        return new HiveScriptLineageAdapter().analyzeScript(request(sql));
     }
 
-    private V2AnalyzeResult nativeResult(String sql) {
-        return new HiveV2LineageAnalyzer().analyzeNative(request(sql));
+    private ScriptAnalysisResult nativeResult(String sql) {
+        return new HiveScriptLineageAdapter().analyzeNative(request(sql));
     }
 
     private LineageAnalyzeRequest request(String sql) {

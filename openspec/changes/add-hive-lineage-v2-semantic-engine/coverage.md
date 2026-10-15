@@ -2,7 +2,7 @@
 
 ## 1. 状态与使用方式
 
-方案已批准，V2 已实现独立前端、按需绑定、验证、纯 IR 推导、Metadata/Session 编排和兼容输出。本表逐行记录实际语义断言，不以解析成功率代替血缘正确性。2026-10-12 的独立 javac/JUnit 验证中，OpenSpecConformanceTest 38 个测试、Binder 19 个测试、原 JSON 示例 2 个测试、既有目标映射回归 6 个测试共 65 个定向测试通过；测试数与下表 77 个规范追踪行是不同口径。全仓统一测试、184 个既有断言对照及环境集成记录见 [validation.md](validation.md)。
+方案已批准，V2 已实现独立前端、按需绑定、验证、纯 IR 推导、Metadata/Session 编排和兼容输出。本表逐行记录实际语义断言，不以解析成功率代替血缘正确性。2026-10-12 的独立 javac/JUnit 验证中，LineageBehaviorIntegrationTest 38 个测试、Binder 19 个测试、原 JSON 示例 2 个测试、既有目标映射回归 6 个测试共 65 个定向测试通过；测试数与下表 77 个规范追踪行是不同口径。全仓统一测试、184 个既有断言对照及环境集成记录见 [validation.md](validation.md)。
 
 下表覆盖原两份 spec 的全部“场景”及“示例”标题，保留源行定位。来源文档不作修改。简称 engine、compat 分别指本变更的内核需求和兼容需求。
 
@@ -41,7 +41,7 @@
 | L-15 | [只解析表血缘](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L155) | engine: 渐进绑定；compat: 正交能力 | 执行前规划；字段访问按需 | 已通过；`C.formalInsertAndModesKeepTableAndColumnCapabilitiesOrthogonal` |
 | L-16 | [只解析字段血缘](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L165) | engine: 渐进绑定；compat: 正交能力 | 执行前规划；字段访问按需 | 已通过；`C.formalInsertAndModesKeepTableAndColumnCapabilitiesOrthogonal` |
 | L-17 | [同时解析表血缘和字段血缘](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L174) | engine: 渐进绑定；compat: 正交能力 | 执行前规划；字段访问按需 | 已通过；`C.formalInsertAndModesKeepTableAndColumnCapabilitiesOrthogonal` |
-| L-18 | [表血缘解析不依赖字段元数据](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L182) | engine: 渐进绑定；compat: 正交能力 | 执行前规划；字段访问按需 | 已通过；`C.tableOnlyMissingMetadataNeverLoadsColumnsOrWarns`；轻量视图判定见 `V2ApiIntegrationTest.tableOnlyStarAndSubqueryTraverseObjectsWithoutSchema`；V1 bundled Provider 的对象读取可能附带字段，能力声明显式说明 |
+| L-18 | [表血缘解析不依赖字段元数据](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L182) | engine: 渐进绑定；compat: 正交能力 | 执行前规划；字段访问按需 | 已通过；`C.tableOnlyMissingMetadataNeverLoadsColumnsOrWarns`；轻量视图判定见 `DefaultScriptLineageAnalyzerIntegrationTest.tableOnlyStarAndSubqueryTraverseObjectsWithoutSchema`；V1 bundled Provider 的对象读取可能附带字段，能力声明显式说明 |
 | L-19 | [计算表达式字段血缘](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L194) | engine: 表达式 / 依赖角色；compat: 字段投影 | 旧表达式、分类、窗口与分区 | 已通过；`C.arithmeticFunctionConstantAndUnknownUdfKeepExactDependencies` |
 | L-20 | [函数表达式字段血缘](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L213) | engine: 表达式 / 依赖角色；compat: 字段投影 | 旧表达式、分类、窗口与分区 | 已通过；`C.arithmeticFunctionConstantAndUnknownUdfKeepExactDependencies` |
 | L-21 | [常量字段血缘](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L230) | engine: 表达式 / 依赖角色；compat: 字段投影 | 旧表达式、分类、窗口与分区 | 已通过；`C.arithmeticFunctionConstantAndUnknownUdfKeepExactDependencies` |
@@ -63,14 +63,14 @@
 | L-37 | [生产元数据可由 Metastore MySQL 适配](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L460) | compat: Provider / 缓存；engine: 生命周期 | 单源作用域、批次固定、版本无关 | 已通过（接口适配）；`M.adapterPreservesOrderedColumnsAndViewContext`；既有 MySQL Provider 可经同一 V1 adapter 使用，真实 MySQL/JDBC 集成待环境启用，未声称本轮连接生产库 |
 | L-38 | [同一张表出现在多个任务中](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L467) | compat: Provider / 缓存；engine: 生命周期 | 单源作用域、批次固定、版本无关 | 已通过；`C.metadataAndDefinitionSyntaxAreReusedAcrossTasksAndVersions`；实际 metadata 加载与 definition parse 各一次 |
 | L-39 | [任务版本不影响元数据缓存](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L474) | compat: Provider / 缓存；engine: 生命周期 | 单源作用域、批次固定、版本无关 | 已通过；`C.metadataAndDefinitionSyntaxAreReusedAcrossTasksAndVersions`；实际 metadata 加载与 definition parse 各一次 |
-| L-40 | [只解析表血缘不触发字段元数据加载](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L482) | compat: Provider / 缓存；engine: 生命周期 | 单源作用域、批次固定、版本无关 | 已通过；`C.tableOnlyMissingMetadataNeverLoadsColumnsOrWarns`；轻量视图判定见 `V2ApiIntegrationTest.tableOnlyStarAndSubqueryTraverseObjectsWithoutSchema`；V1 bundled Provider 的对象读取可能附带字段，能力声明显式说明 |
+| L-40 | [只解析表血缘不触发字段元数据加载](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L482) | compat: Provider / 缓存；engine: 生命周期 | 单源作用域、批次固定、版本无关 | 已通过；`C.tableOnlyMissingMetadataNeverLoadsColumnsOrWarns`；轻量视图判定见 `DefaultScriptLineageAnalyzerIntegrationTest.tableOnlyStarAndSubqueryTraverseObjectsWithoutSchema`；V1 bundled Provider 的对象读取可能附带字段，能力声明显式说明 |
 | L-41 | [临时表作为最终目标的上游](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L494) | compat: 临时对象；engine: Slot / Session | 旧显示名、默认穿透和可选边界 | 已通过；`C.temporaryObjectsNormalizeNamesAndTakePriorityOverMetadata`；Session 遮蔽、限定与不限定临时名匹配 |
 | L-42 | [带库名的临时表使用统一临时库](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L502) | compat: 临时对象；engine: Slot / Session | 旧显示名、默认穿透和可选边界 | 已通过；`C.temporaryObjectsNormalizeNamesAndTakePriorityOverMetadata`；Session 遮蔽、限定与不限定临时名匹配 |
 | L-43 | [CTE 不作为临时表节点输出](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L516) | compat: ScriptDefinitionStore；engine: Scope | 本语句 CTE + 前序来源兼容目录 | 已通过；`C.ctasCteExpandsFieldsWithoutPhysicalOrTemporaryCteObject` |
 | L-44 | [兼容后续语句引用前序纯查询 CTE](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L534) | compat: ScriptDefinitionStore；engine: Scope | 本语句 CTE + 前序来源兼容目录 | 已通过；`C.pureQueryCteCanBeReusedWithoutCreatingPhysicalCteObjects`；只在 CURRENT_API_CTE_REUSE 下跨句保存结构模板 |
-| L-45 | [通过元数据判断输入对象是否为视图](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L549) | engine: 视图模板；compat: 视图边界 | Provider 识别、边界、缓存及 VIEW_* | 已通过；`C.viewsKeepBoundaryEdgesAndExpandUnderlyingSourcesWhenEnabled`；`V2ApiIntegrationTest.metadataViewUsesCreationDatabaseAndFailuresRecover` |
+| L-45 | [通过元数据判断输入对象是否为视图](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L549) | engine: 视图模板；compat: 视图边界 | Provider 识别、边界、缓存及 VIEW_* | 已通过；`C.viewsKeepBoundaryEdgesAndExpandUnderlyingSourcesWhenEnabled`；`DefaultScriptLineageAnalyzerIntegrationTest.metadataViewUsesCreationDatabaseAndFailuresRecover` |
 | L-46 | [临时表优先于 Hive 元数据](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L558) | engine: 视图模板；compat: 视图边界 | Provider 识别、边界、缓存及 VIEW_* | 已通过；`C.temporaryObjectsNormalizeNamesAndTakePriorityOverMetadata`；Session 遮蔽、限定与不限定临时名匹配 |
-| L-47 | [读取视图时展开到真实上游表](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L566) | engine: 视图模板；compat: 视图边界 | Provider 识别、边界、缓存及 VIEW_* | 已通过；`C.viewsKeepBoundaryEdgesAndExpandUnderlyingSourcesWhenEnabled`；`V2ApiIntegrationTest.metadataViewUsesCreationDatabaseAndFailuresRecover` |
+| L-47 | [读取视图时展开到真实上游表](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L566) | engine: 视图模板；compat: 视图边界 | Provider 识别、边界、缓存及 VIEW_* | 已通过；`C.viewsKeepBoundaryEdgesAndExpandUnderlyingSourcesWhenEnabled`；`DefaultScriptLineageAnalyzerIntegrationTest.metadataViewUsesCreationDatabaseAndFailuresRecover` |
 | L-48 | [重复读取同一视图时复用展开缓存](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L580) | engine: 视图模板；compat: 视图边界 | Provider 识别、边界、缓存及 VIEW_* | 已通过；`C.metadataAndDefinitionSyntaxAreReusedAcrossTasksAndVersions`；实际 metadata 加载与 definition parse 各一次 |
 | L-49 | [视图定义缺失时降级](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L588) | engine: 视图模板；compat: 视图边界 | Provider 识别、边界、缓存及 VIEW_* | 已通过；`C.missingViewDefinitionIsRecoverableWithSpecificWarning` |
 | L-50 | [视图递归展开深度限制](../add-hive-sql-lineage-analyzer/specs/hive-sql-lineage/spec.md#L596) | engine: 视图模板；compat: 视图边界 | Provider 识别、边界、缓存及 VIEW_* | 已通过；`C.viewCycleAndDepthAreRecoverableWithSpecificWarnings` |
@@ -82,25 +82,25 @@
 
 | ID | 原场景或示例 | V2 实现机制 | 目标契约 | 实现 / 测试 / 结论 |
 |---|---|---|---|---|
-| J-01 | [Join 条件不计入正式血缘](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L9) | compat: 独立 Join / 独立导出 | 无正式边；独立记录补齐身份 | 已通过；`C.joinDefaultsAndJoinOnlyPublicationAreIndependentOfFormalLineage`；`V2ApiIntegrationTest.qualifiedJoinOnlyNeedsNoColumnMetadataIncludingUnrelatedStars` |
+| J-01 | [Join 条件不计入正式血缘](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L9) | compat: 独立 Join / 独立导出 | 无正式边；独立记录补齐身份 | 已通过；`C.joinDefaultsAndJoinOnlyPublicationAreIndependentOfFormalLineage`；`DefaultScriptLineageAnalyzerIntegrationTest.qualifiedJoinOnlyNeedsNoColumnMetadataIncludingUnrelatedStars` |
 | J-02 | [Join 条件解析结果可单独持久化](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L20) | compat: 独立 Join / 独立导出 | 无正式边；独立记录补齐身份 | 已通过；`C.joinDefaultsAndJoinOnlyPublicationAreIndependentOfFormalLineage`；`C.standaloneJoinRecordsActuallyCarryReadableDirectAndPhysicalPresentation`：真实 exporter 填独立身份、可读类型、direct 别名、physical 全名及完整条件 |
-| J-03 | [默认不解析 Join 条件](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L32) | compat: 正交能力；engine: DemandPlanner | 默认关；原生 JOIN_CONDITION 单选 | 已通过；`C.joinDefaultsAndJoinOnlyPublicationAreIndependentOfFormalLineage`；`V2ApiIntegrationTest.qualifiedJoinOnlyNeedsNoColumnMetadataIncludingUnrelatedStars` |
-| J-04 | [开启 Join 条件解析](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L40) | compat: 正交能力；engine: DemandPlanner | 默认关；原生 JOIN_CONDITION 单选 | 已通过；`C.joinDefaultsAndJoinOnlyPublicationAreIndependentOfFormalLineage`；`V2ApiIntegrationTest.qualifiedJoinOnlyNeedsNoColumnMetadataIncludingUnrelatedStars` |
-| J-05 | [只解析 Join 条件](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L48) | compat: 正交能力；engine: DemandPlanner | 默认关；原生 JOIN_CONDITION 单选 | 已通过；`C.joinDefaultsAndJoinOnlyPublicationAreIndependentOfFormalLineage`；`V2ApiIntegrationTest.qualifiedJoinOnlyNeedsNoColumnMetadataIncludingUnrelatedStars` |
+| J-03 | [默认不解析 Join 条件](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L32) | compat: 正交能力；engine: DemandPlanner | 默认关；原生 JOIN_CONDITION 单选 | 已通过；`C.joinDefaultsAndJoinOnlyPublicationAreIndependentOfFormalLineage`；`DefaultScriptLineageAnalyzerIntegrationTest.qualifiedJoinOnlyNeedsNoColumnMetadataIncludingUnrelatedStars` |
+| J-04 | [开启 Join 条件解析](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L40) | compat: 正交能力；engine: DemandPlanner | 默认关；原生 JOIN_CONDITION 单选 | 已通过；`C.joinDefaultsAndJoinOnlyPublicationAreIndependentOfFormalLineage`；`DefaultScriptLineageAnalyzerIntegrationTest.qualifiedJoinOnlyNeedsNoColumnMetadataIncludingUnrelatedStars` |
+| J-05 | [只解析 Join 条件](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L48) | compat: 正交能力；engine: DemandPlanner | 默认关；原生 JOIN_CONDITION 单选 | 已通过；`C.joinDefaultsAndJoinOnlyPublicationAreIndependentOfFormalLineage`；`DefaultScriptLineageAnalyzerIntegrationTest.qualifiedJoinOnlyNeedsNoColumnMetadataIncludingUnrelatedStars` |
 | J-06 | [单条 Join 子句](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L79) | compat: Join 完整输出；engine: Scope | 全局序号、查询块、直接/物理引用；见 D-04 | 已通过；`C.fullOnFunctionsSingleSidedAndRepeatedFieldsStayInOneRecord` |
 | J-07 | [连续 Join 子句](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L104) | compat: Join 完整输出；engine: Scope | 全局序号、查询块、直接/物理引用；见 D-04 | 已通过；`C.sequentialJoinsKeepInnerToOuterOrderAndOneBasedIndices` |
 | J-08 | [多个 CTE 中存在不连续 Join](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L128) | compat: Join 完整输出；engine: Scope | 全局序号、查询块、直接/物理引用；见 D-04 | 已通过；`C.cteDerivedAndExistsJoinsHaveStableGlobalIndicesAndDeclaredPaths`；CTE→root→子块排序、共享子查询序号；原 JSON 逐字段断言见 J-12 |
 | J-09 | [子查询中存在不连续 Join](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L160) | compat: Join 完整输出；engine: Scope | 全局序号、查询块、直接/物理引用；见 D-04 | 已通过；`C.cteDerivedAndExistsJoinsHaveStableGlobalIndicesAndDeclaredPaths`；CTE→root→子块排序、共享子查询序号；原 JSON 逐字段断言见 J-13 |
 | J-10 | [Join 直接对象是前序临时表](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L186) | compat: Join 完整输出；engine: Scope | 全局序号、查询块、直接/物理引用；见 D-04 | 已通过；`C.temporaryJoinRetainsDirectBoundaryAndDoesNotReplayHistoricalJoins` |
 | J-11 | [临时表字段无法唯一追溯时保留直接字段](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L216) | compat: Join 完整输出；engine: Scope | 全局序号、查询块、直接/物理引用；见 D-04 | 已通过；`C.unknownTemporaryFieldRetainsOnlyProvablePhysicalJoinSource`；候选集合不当成已证明来源 |
-| J-12 | [CTE 中不连续 Join 的解析输出](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L246) | compat: Join 完整输出；engine: Scope | 全局序号、查询块、直接/物理引用；见 D-04 | 已通过；`OpenSpecJoinExamplesTest.cteJsonExampleMatchesEveryDeclaredFieldAcrossNativeAndLegacyViews`；原 JSON 每个身份、序号、路径、类型、完整 ON、direct / physical 列表直接对 native 记录比较；旧 DTO 差异另行验证 |
-| J-13 | [子查询中不连续 Join 的解析输出](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L371) | compat: Join 完整输出；engine: Scope | 全局序号、查询块、直接/物理引用；见 D-04 | 已通过；`OpenSpecJoinExamplesTest.existsJsonExampleMatchesEveryDeclaredFieldAcrossNativeAndLegacyViews`；原 JSON 逐字段比较，关联子查询 WHERE 字段不混入 ON |
+| J-12 | [CTE 中不连续 Join 的解析输出](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L246) | compat: Join 完整输出；engine: Scope | 全局序号、查询块、直接/物理引用；见 D-04 | 已通过；`JoinOutputExampleContractTest.cteJsonExampleMatchesEveryDeclaredFieldAcrossNativeAndLegacyViews`；原 JSON 每个身份、序号、路径、类型、完整 ON、direct / physical 列表直接对 native 记录比较；旧 DTO 差异另行验证 |
+| J-13 | [子查询中不连续 Join 的解析输出](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L371) | compat: Join 完整输出；engine: Scope | 全局序号、查询块、直接/物理引用；见 D-04 | 已通过；`JoinOutputExampleContractTest.existsJsonExampleMatchesEveryDeclaredFieldAcrossNativeAndLegacyViews`；原 JSON 逐字段比较，关联子查询 WHERE 字段不混入 ON |
 | J-14 | [保留完整 ON 条件表达式](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L467) | compat: Join 完整输出；engine: 源码引用 | 完整 ON、单侧条件、不混 WHERE 过滤 | 已通过；`C.fullOnFunctionsSingleSidedAndRepeatedFieldsStayInOneRecord`；直接 lexical 与旧解析后物理名称见 D-04 |
 | J-15 | [函数表达式 Join 条件](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L484) | compat: Join 完整输出；engine: 源码引用 | 完整 ON、单侧条件、不混 WHERE 过滤 | 已通过；`C.fullOnFunctionsSingleSidedAndRepeatedFieldsStayInOneRecord`；直接 lexical 与旧解析后物理名称见 D-04 |
 | J-16 | [ON 条件中只有单侧字段](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L507) | compat: Join 完整输出；engine: 源码引用 | 完整 ON、单侧条件、不混 WHERE 过滤 | 已通过；`C.fullOnFunctionsSingleSidedAndRepeatedFieldsStayInOneRecord`；直接 lexical 与旧解析后物理名称见 D-04 |
 | J-17 | [重复字段只输出一次](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L531) | compat: Join 完整输出 | 完整名去重、首次出现顺序 | 已通过；`C.fullOnFunctionsSingleSidedAndRepeatedFieldsStayInOneRecord`；直接 lexical 与旧解析后物理名称见 D-04 |
 | J-18 | [Join 类型枚举值](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L553) | compat: Join 编码映射 | 内部明确类型；旧编码见 D-03 | 已通过；`C.joinTypesNormalizeWithoutInventingCrossConditions`；Hive 可解析拼法已过；`C.reservedAntiUnknownAndCrossKindsRetainTheirNumericExportContract` 验收保留类型码；Hive 4.0.1 不支持 LEFT ANTI JOIN SQL 拼法，不静默改成 SEMI |
-| J-19 | [带别名字段不依赖字段元数据](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L578) | engine: 条件字段绑定；compat: 元数据访问 | 限定字段不读 schema；歧义按需查 | 已通过；`B.joinOnlyDoesNotExpandUnrelatedProjectionOrLoadQualifiedPhysicalFields`；`V2ApiIntegrationTest.qualifiedJoinOnlyNeedsNoColumnMetadataIncludingUnrelatedStars` 检查 schema=0 |
+| J-19 | [带别名字段不依赖字段元数据](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L578) | engine: 条件字段绑定；compat: 元数据访问 | 限定字段不读 schema；歧义按需查 | 已通过；`B.joinOnlyDoesNotExpandUnrelatedProjectionOrLoadQualifiedPhysicalFields`；`DefaultScriptLineageAnalyzerIntegrationTest.qualifiedJoinOnlyNeedsNoColumnMetadataIncludingUnrelatedStars` 检查 schema=0 |
 | J-20 | [未限定字段可按需依赖字段元数据](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L586) | engine: 条件字段绑定；compat: 元数据访问 | 限定字段不读 schema；歧义按需查 | 已通过；`C.unqualifiedAmbiguousJoinUsesMetadataAndKeepsTheConditionText` |
 | J-21 | [CTE 字段无法唯一追溯时保留直接字段](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L595) | engine: 条件字段绑定；compat: 元数据访问 | 限定字段不读 schema；歧义按需查 | 已通过；`C.ambiguousCteRetainsDirectReferenceWithoutInventingPhysicalField`；x.id 显示引用保留，仅 y 的可证明物理来源传播 |
 | J-22 | [逗号连接的 Where 关联条件必须输出](../add-hive-sql-lineage-analyzer/specs/hive-sql-join-condition/spec.md#L631) | compat: 隐式 Join / 能力登记 | 隐式 WHERE 要支持；无 ON CROSS 可不输出 | 已通过；`C.commaWhereEmitsOnlyCrossSourceConjunctsAndPreservesFullOn`；逗号 code7/IMPLICIT 与无 ON CROSS 分开 |
@@ -111,16 +111,16 @@
 
 | 缩写 | 文件 |
 |---|---|
-| C | [OpenSpecConformanceTest](../../../src/test/java/com/panfan/hivelineage/v2/conformance/OpenSpecConformanceTest.java) |
+| C | [LineageBehaviorIntegrationTest](../../../src/test/java/com/panfan/hivelineage/v2/api/LineageBehaviorIntegrationTest.java) |
 | B | [DefaultSemanticBinderTest](../../../src/test/java/com/panfan/hivelineage/v2/semantic/DefaultSemanticBinderTest.java) |
-| A | [V2ArchitectureContractTest](../../../src/test/java/com/panfan/hivelineage/v2/V2ArchitectureContractTest.java) |
+| A | [ArchitectureContractTest](../../../src/test/java/com/panfan/hivelineage/v2/contracts/ArchitectureContractTest.java) |
 | M | [MetadataImplementationsTest](../../../src/test/java/com/panfan/hivelineage/v2/metadata/MetadataImplementationsTest.java) |
 | F | [DefaultFrontendTest](../../../src/test/java/com/panfan/hivelineage/v2/frontend/DefaultFrontendTest.java) |
-| O | [V2OutputContractTest](../../../src/test/java/com/panfan/hivelineage/v2/V2OutputContractTest.java) |
+| O | [OutputContractTest](../../../src/test/java/com/panfan/hivelineage/v2/contracts/OutputContractTest.java) |
 | J | [DefaultJoinConditionAnalysisTest](../../../src/test/java/com/panfan/hivelineage/v2/analysis/DefaultJoinConditionAnalysisTest.java) |
 | P | [LegacyProjectionExecutionTest](../../../src/test/java/com/panfan/hivelineage/v2/compat/LegacyProjectionExecutionTest.java) |
 
-原 J-12 / J-13 的 SQL 与 JSON 原文保存在[独立 fixture](../../../src/test/resources/v2/openspec/README.md)，[OpenSpecJoinExamplesTest](../../../src/test/java/com/panfan/hivelineage/v2/conformance/OpenSpecJoinExamplesTest.java) 直接逐字段比较 native 记录。示例 rawSql 的省略号保留，实际 rawSql 另与完整原 SQL 比较；前置忽略的 USE 语句使零基 statementIndex 为示例声明的 1，不改预期身份。native 的 directObjects 对物理表保存完整对象名、对 CTE / 派生保存逻辑名；directColumns 保留别名，旧 DTO 的解析后字段名称另有明确期望。
+原 J-12 / J-13 的 SQL 与 JSON 原文保存在[独立 fixture](../../../src/test/resources/v2/openspec/README.md)，[JoinOutputExampleContractTest](../../../src/test/java/com/panfan/hivelineage/v2/export/JoinOutputExampleContractTest.java) 直接逐字段比较 native 记录。示例 rawSql 的省略号保留，实际 rawSql 另与完整原 SQL 比较；前置忽略的 USE 语句使零基 statementIndex 为示例声明的 1，不改预期身份。native 的 directObjects 对物理表保存完整对象名、对 CTE / 派生保存逻辑名；directColumns 保留别名，旧 DTO 的解析后字段名称另有明确期望。
 
 ## 5. OpenSpec 之外的 V1 回归与产品能力
 
@@ -146,12 +146,12 @@
 ## 6. generated 集复用契约
 
 - 路径：`src/test/resources/hql/generated/**/*.sql`，当前 18 个文件，新增文件自动进入。
-- 复用源：`GeneratedSqlTestSetTest.generatedMetadataProvider()`，通过新增同包桥访问，不改旧测试、不复制元数据。
+- 原配置元数据契约：`v2.testing.LegacyCorpusMetadataFixture`，独立维护 v2 比对测试辅助，不修改既有 v1 测试和 SQL。
 - 基线配置：TABLE_AND_COLUMN、expandViewLineage=true、includeTemporaryLineage=true、fallbackVariableValue=fallback_value；其他默认值保持原配置。
 - 业务身份、数据库、变量和元数据一致；引擎版本另记；每文件 Session 独立。
 - `lineage_case_11.sql`：既有配置预期一条失败、后续成功，比较状态、位置、目标及返回记录。
 - 其他用例先比较原结果，再按经确认语义验收；不能以“零失败”证明全部血缘正确。
-- 三模式全量矩阵见 `GeneratedV2EngineRegressionTest`；Join-only、临时/忽略/视图组合与元数据调用见专项测试。原配置逐例完整 sink 来源比对见 `GeneratedV2OriginalConfigurationTest`，完整旧 DTO 差异见 validation.md。
+- 三模式全量矩阵见 `GeneratedSqlCompatibilityRegressionTest`；Join-only、临时/忽略/视图组合与元数据调用见专项测试。原配置逐例完整 sink 来源比对见 `GeneratedSqlConfigurationComparisonTest`，完整旧 DTO 差异见 validation.md。
 - V2 报告在 `target/lineage-v2/`，原快照不覆盖；标准答案人工确认后独立维护。
 
 ## 7. 新模型专项验收

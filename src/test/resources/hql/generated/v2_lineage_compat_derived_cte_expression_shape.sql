@@ -1,0 +1,1 @@
+with q as (select u.id as direct_id,upper(u.name) as calculated_name,cast(42 as bigint) as calculated_constant from ods.t u) insert into dwd.t(id,name,amount) select x.direct_id,x.calculated_name,x.calculated_constant from (select * from q) x

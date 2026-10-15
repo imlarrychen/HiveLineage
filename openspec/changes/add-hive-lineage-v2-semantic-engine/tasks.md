@@ -28,7 +28,7 @@
 
 - [x] 1.1 新增 V2 包、兼容入口和原生请求，不改 V1 默认入口。
 - [x] 1.2 新增 GeneratedSqlCorpusLoader，动态递归读取 SQL，使用稳定相对路径身份。
-- [x] 1.3 新增同包 fixture 桥复用现有 generatedMetadataProvider，不改旧测试或复制 SQL。
+- [x] 1.3 使用 `v2.testing.LegacyCorpusMetadataFixture` 提供原配置元数据契约；测试辅助独立放在 v2 包，不改既有 v1 测试或 SQL。
 - [x] 1.4 新增 fixed-metadata 双运行入口，业务身份一致，Session 隔离。
 - [x] 1.5 新增结构差异模型，V1/V2 报告与旧快照分开。
 
@@ -119,3 +119,12 @@
 - [x] 8.5 按用户要求新增 JVM/JDBC 连接桩，使原五项及 V2 oracle JDBC 断言实跑，自动恢复属性与注销驱动。
 - [x] 8.6 验证参数查询、过滤排序、SQLException/ACCESS_ERROR、捕获重放及资源关闭；V1/V2 共同场景实跑。
 - [x] 8.7 连接桩接入后重新通过全仓 702 项、V2 专项 395 项及原断言 199/200（一项 AST 注入 skip），更新验收证据。
+
+
+## 9. IntelliJ 测试发现与入口一致性修复
+
+- [x] 9.1 定位用户 JDK 26 / IntelliJ 堆栈，移出公共嵌套故意失败夹具，保留真实 JUnit 统计测试及发现隔离回归。
+- [x] 9.2 归档无源码的旧临时 oracle 字节码，恢复模块测试输出与真实项目源的一致性。
+- [x] 9.3 JDBC 桩改由每方法 JUnit Rule 安装，普通入口验证原五项全部通过、属性/驱动恢复。
+- [x] 9.4 oracle 故障注入改为 test-only V2 前端适配，保留原 fixture/断言，200 项无跳过实际执行。
+- [x] 9.5 使用用户同一 JDK 26 与 IntelliJ JUnitStarter 对全部可发现类复跑，707 项零失败、零跳过；Java 8 API 与脚本回归通过。

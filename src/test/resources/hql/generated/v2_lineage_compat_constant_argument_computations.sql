@@ -1,0 +1,1 @@
+insert into dwd.t(id,name,amount,qty) select cast(42 as bigint),concat('a','b'),1+2,case when true then 1 else 0 end from ods.t

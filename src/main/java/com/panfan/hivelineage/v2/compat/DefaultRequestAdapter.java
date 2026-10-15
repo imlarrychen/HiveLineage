@@ -12,7 +12,7 @@ import com.panfan.hivelineage.v2.api.SourceDocument;
 import com.panfan.hivelineage.v2.api.StarMappingPolicy;
 import com.panfan.hivelineage.v2.api.StatementPublicationPolicy;
 import com.panfan.hivelineage.v2.api.TaskIdentity;
-import com.panfan.hivelineage.v2.api.V2AnalyzeRequest;
+import com.panfan.hivelineage.v2.api.ScriptAnalysisRequest;
 import com.panfan.hivelineage.v2.api.VariablePolicy;
 import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.common.SourceRef;
@@ -41,7 +41,7 @@ public final class DefaultRequestAdapter implements RequestAdapter {
     }
 
     @Override
-    public V2AnalyzeRequest adapt(LineageAnalyzeRequest request) {
+    public ScriptAnalysisRequest adapt(LineageAnalyzeRequest request) {
         TaskIdentity task = new TaskIdentity(text(request.getWorkflowId(), "default"), text(request.getTaskId(), "task"),
             text(request.getTaskVersion(), "1"));
         String sessionId = task.getWorkflowId() + ":" + task.getTaskId() + ":" + task.getTaskVersion();
@@ -70,7 +70,7 @@ public final class DefaultRequestAdapter implements RequestAdapter {
             options.isIncludeTemporaryLineage(), options.isIncludeIgnoredStatements(), options.isExpandViewLineage(),
             Math.max(0, options.getMaxViewExpandDepth()), options.isFailFast(), options.getFallbackVariableValue());
         DialectProfile dialect = new DialectProfile("hive", "4.0.1", "v2", Collections.<String>emptySet());
-        return new V2AnalyzeRequest(task, new SourceDocument("script:" + sessionId, text(request.getRawScript(), "")), dialect,
+        return new ScriptAnalysisRequest(task, new SourceDocument("script:" + sessionId, text(request.getRawScript(), "")), dialect,
             session, reads, contract, new ResourceLimits(16_000_000, 64, 1_000_000, 2_000_000, 100_000));
     }
 

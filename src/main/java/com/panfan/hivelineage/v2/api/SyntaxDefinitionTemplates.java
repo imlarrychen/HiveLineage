@@ -28,7 +28,9 @@ final class SyntaxDefinitionTemplates {
         if (syntax instanceof DefinitionStatementSyntax) {
             SyntaxQuery query = ((DefinitionStatementSyntax) syntax).getDefinition().getQuery();
             if (query != null) {
-                bodies.put(new DefinitionId(syntax.getNodeId().getValue() + "/definition"), queryStatement(query));
+                // A view's declared columns can rename its query outputs by position.
+                // Keep the declaration so later references retain those public column names.
+                bodies.put(new DefinitionId(syntax.getNodeId().getValue() + "/definition"), syntax);
                 addCtes(bodies, query.getCtes());
             }
         } else if (syntax instanceof InsertStatementSyntax) {

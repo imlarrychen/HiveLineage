@@ -1,0 +1,30 @@
+package com.panfan.hivelineage.v2.testing.runnerfixtures;
+
+import org.junit.Assume;
+import org.junit.Ignore;
+import org.junit.Test;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+public class MixedFixture {
+    @Test
+    public void passes() {
+        assertTrue(true);
+    }
+
+    @Test
+    public void skips() {
+        Assume.assumeTrue("method prerequisite unavailable", false);
+    }
+
+    @Test
+    public void fails() {
+        fail("intentional runner fixture");
+    }
+
+    @Ignore("intentional ignored runner fixture")
+    @Test
+    public void ignored() {
+        fail("ignored fixture must not execute");
+    }
+}

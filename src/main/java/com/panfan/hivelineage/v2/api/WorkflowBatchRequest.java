@@ -6,9 +6,9 @@ import java.util.List;
 
 public final class WorkflowBatchRequest {
     private final String workflowId;
-    private final List<V2AnalyzeRequest> tasks;
+    private final List<ScriptAnalysisRequest> tasks;
 
-    public WorkflowBatchRequest(String workflowId, List<V2AnalyzeRequest> tasks) {
+    public WorkflowBatchRequest(String workflowId, List<ScriptAnalysisRequest> tasks) {
         this.workflowId = ModelChecks.text(workflowId, "workflowId");
         this.tasks = ModelCollections.immutableList(tasks);
     }
@@ -17,7 +17,7 @@ public final class WorkflowBatchRequest {
         return workflowId;
     }
 
-    public List<V2AnalyzeRequest> getTasks() {
+    public List<ScriptAnalysisRequest> getTasks() {
         return tasks;
     }
 }

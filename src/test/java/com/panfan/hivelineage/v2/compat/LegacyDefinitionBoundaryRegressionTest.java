@@ -9,7 +9,7 @@ import com.panfan.hivelineage.result.ColumnRef;
 import com.panfan.hivelineage.result.LineageType;
 import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.result.TableLineage;
-import com.panfan.hivelineage.v2.api.V2AnalyzeResult;
+import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
 import com.panfan.hivelineage.v2.export.DefaultFormalLineageRecordExporter;
 import java.util.Arrays;
 import java.util.Collections;
@@ -23,7 +23,7 @@ public class LegacyDefinitionBoundaryRegressionTest {
     @Test
     public void generatedOutputUsesItsFunctionAndKeepsTheOriginalSqlAttachment() {
         String sql = "insert into dwd.t(name) select tag from ods.t lateral view explode(tags) exploded as tag";
-        V2AnalyzeResult result = nativeResult(sql, false);
+        ScriptAnalysisResult result = nativeResult(sql, false);
         ColumnLineage column = legacy(result, 0).getColumnLineages().get(0);
         Assert.assertEquals("explode(tags)", column.getExpression());
         Assert.assertEquals(LineageType.DERIVED, column.getLineageType());
@@ -36,7 +36,7 @@ public class LegacyDefinitionBoundaryRegressionTest {
 
     @Test
     public void expandedViewKeepsLegacyFieldBoundariesAndNativePhysicalProof() {
-        V2AnalyzeResult result = nativeResult("insert into dwd.t(name) select name from dim.v", false);
+        ScriptAnalysisResult result = nativeResult("insert into dwd.t(name) select name from dim.v", false);
         StatementLineageResult statement = legacy(result, 0);
         ColumnLineage sink = target(statement, "dwd.t.name");
         ColumnLineage definition = target(statement, "dim.v.name");
@@ -55,7 +55,7 @@ public class LegacyDefinitionBoundaryRegressionTest {
 
     @Test
     public void mixedViewAndDirectPhysicalInputsDoNotLoseTheDirectFieldOfTheSameTable() {
-        V2AnalyzeResult result = nativeResult("insert into dwd.t(id) select v.id+b.id "
+        ScriptAnalysisResult result = nativeResult("insert into dwd.t(id) select v.id+b.id "
                 + "from dim.v v join ods.t b on v.id=b.id", false);
         ColumnLineage sink = target(legacy(result, 0), "dwd.t.id");
         Assert.assertEquals(new LinkedHashSet<String>(Arrays.asList("dim.v.id", "ods.t.id")), columns(sink));
@@ -68,7 +68,7 @@ public class LegacyDefinitionBoundaryRegressionTest {
         String sql = "create temporary table first_tmp as select id from ods.t; "
                 + "create temporary table second_tmp as select id from first_tmp; "
                 + "insert into dwd.t(id) select id from second_tmp";
-        V2AnalyzeResult result = nativeResult(sql, true);
+        ScriptAnalysisResult result = nativeResult(sql, true);
         StatementLineageResult statement = legacy(result, 2);
         String first = "seele_tmp_db_wf_task.first_tmp.id";
         String second = "seele_tmp_db_wf_task.second_tmp.id";
@@ -94,11 +94,11 @@ public class LegacyDefinitionBoundaryRegressionTest {
                 .filter(column -> name.equals(column.getTargetColumn().getQualifiedName())).findFirst().get();
     }
 
-    private static StatementLineageResult legacy(V2AnalyzeResult result, int index) {
+    private static StatementLineageResult legacy(ScriptAnalysisResult result, int index) {
         return new DefaultLegacyResultProjector().project(result).getResult().getStatements().get(index);
     }
 
-    private static V2AnalyzeResult nativeResult(String sql, boolean includeTemporary) {
+    private static ScriptAnalysisResult nativeResult(String sql, boolean includeTemporary) {
         LineageAnalyzeRequest request = LineageAnalyzeRequest.builder().workflowId("wf").taskId("task")
                 .rawScript(sql).defaultDatabase("default").options(LineageAnalyzeOptions.builder()
                         .parseMode(LineageParseMode.TABLE_AND_COLUMN).expandViewLineage(true)
@@ -106,6 +106,6 @@ public class LegacyDefinitionBoundaryRegressionTest {
                 .metadataProvider(table -> "dim.v".equals(table.getQualifiedName())
                         ? HiveTableMetadata.view(table, Arrays.asList("id", "name"), "select id,upper(name) name from ods.t")
                         : HiveTableMetadata.table(table, Arrays.asList("id", "name", "tags"))).build();
-        return new HiveV2LineageAnalyzer().analyzeNative(request);
+        return new HiveScriptLineageAdapter().analyzeNative(request);
     }
 }

@@ -69,18 +69,25 @@ public final class Effects {
         private final OutputSchema schema;
         private final VersionRef version;
         private final List<QualifiedName> lookupNames;
+        private final List<String> partitionColumns;
 
         public ObjectShape(ObjectId objectId, QualifiedName name, ObjectKind kind, OutputSchema schema, VersionRef version) {
             this(objectId, name, kind, schema, version, Collections.singletonList(name));
         }
 
         public ObjectShape(ObjectId objectId, QualifiedName name, ObjectKind kind, OutputSchema schema, VersionRef version, List<QualifiedName> lookupNames) {
+            this(objectId, name, kind, schema, version, lookupNames, Collections.<String>emptyList());
+        }
+
+        public ObjectShape(ObjectId objectId, QualifiedName name, ObjectKind kind, OutputSchema schema, VersionRef version,
+                           List<QualifiedName> lookupNames, List<String> partitionColumns) {
             this.objectId = Objects.requireNonNull(objectId, "objectId");
             this.name = Objects.requireNonNull(name, "name");
             this.kind = Objects.requireNonNull(kind, "kind");
             this.schema = Objects.requireNonNull(schema, "schema");
             this.version = Objects.requireNonNull(version, "version");
             this.lookupNames = ModelCollections.immutableList(lookupNames);
+            this.partitionColumns = ModelCollections.immutableList(partitionColumns);
             if (!this.lookupNames.contains(name)) {
                 throw new IllegalArgumentException("object lookup names must include its declared name");
             }
@@ -108,6 +115,10 @@ public final class Effects {
 
         public List<QualifiedName> getLookupNames() {
             return lookupNames;
+        }
+
+        public List<String> getPartitionColumns() {
+            return partitionColumns;
         }
     }
 

@@ -1,0 +1,1 @@
+create view dim.computed_view as select concat(upper(name),cast(id as string)) as name from ods.t; insert into dwd.t(name) select name from dim.computed_view

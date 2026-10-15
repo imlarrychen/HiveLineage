@@ -1,0 +1,4 @@
+-- 统计与分区修复只做审计，不访问数据或 metastore 写接口。
+ANALYZE TABLE ods.users COMPUTE STATISTICS;
+ANALYZE TABLE ods.users PARTITION(dt='20261015') COMPUTE STATISTICS FOR COLUMNS;
+MSCK REPAIR TABLE ods.users;

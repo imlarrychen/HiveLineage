@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
+import org.apache.hadoop.hive.ql.parse.HiveParser;
 
 final class HiveExpressionNormalizer {
     private static final Map<String, BinaryOperatorSyntax> BINARY = binaryOperators();
@@ -115,18 +116,19 @@ final class HiveExpressionNormalizer {
     }
 
     private SyntaxExpression literal(ASTNode node) {
-        String kind = ast.kind(node);
+        String kind = ast.kind(node).toUpperCase(Locale.ROOT);
         String spelling = node.getText();
         LiteralKind literalKind = LiteralKind.NUMBER;
-        if (kind.contains("StringLiteral")) {
+        if (kind.contains("STRINGLITERAL")) {
             literalKind = LiteralKind.STRING;
         } else if (kind.contains("NULL")) {
             literalKind = LiteralKind.NULL;
         } else if ("KW_TRUE".equals(kind) || "KW_FALSE".equals(kind)) {
             literalKind = LiteralKind.BOOLEAN;
-        } else if (kind.contains("DATE")) {
+        } else if (node.getType() == HiveParser.TOK_DATELITERAL || kind.contains("DATE")) {
             literalKind = LiteralKind.DATE;
-        } else if (kind.contains("TIMESTAMP")) {
+        } else if (node.getType() == HiveParser.TOK_TIMESTAMPLITERAL
+                || node.getType() == HiveParser.TOK_TIMESTAMPLOCALTZLITERAL || kind.contains("TIMESTAMP")) {
             literalKind = LiteralKind.TIMESTAMP;
         } else if (kind.contains("INTERVAL")) {
             literalKind = LiteralKind.INTERVAL;

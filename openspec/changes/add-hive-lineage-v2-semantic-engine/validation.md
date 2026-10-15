@@ -1,12 +1,32 @@
 # V2 具体实现验收记录
 
-初次验证日期：2026-10-12；后续复核及连接桩验收：2026-10-13。最新结果见文末“JDBC 连接桩验收”。用户已批准方案并授权完成剩余开发；本记录覆盖具体实现阶段，前一轮接口与模型记录仍保留在 [contracts.md](contracts.md)。入口与配置见 [implementation.md](implementation.md)。
+初次验证日期：2026-10-12；最新复核见“2026-10-15：包结构与入口命名重构验收”。本记录覆盖具体实现阶段，前一轮接口与模型记录仍保留在 [contracts.md](contracts.md)。入口与配置见 [implementation.md](implementation.md)。
 
 ## 交付范围
 
 新增 `com.panfan.hivelineage.v2` 的独立词法、语法、归一化、Binder、Bound IR 校验、纯 IR 血缘与 Join、Session 效果、元数据适配/缓存/录制/重放、兼容投影、原生 JSON、记录导出、比较与 CLI。V1 源码、默认入口、旧测试、SQL、快照及 POM 均未修改，也未执行切换、删除、发布或持久化。
 
+当前交付按功能命名 Java 类型，v2 测试镜像功能包，独立辅助与跨模块契约分别位于 `v2.testing` 和 `v2.contracts`。完整扩展回归通过 v2 验证入口执行：原 v1 语料测试在临时工作目录只读取原始 18 份 SQL 和快照，JDBC 连接桩安装在继承原测试方法的临时子类，既有 v1 源码和断言保持不变。下文保留历史运行结果，包名和测试名称已同步到当前入口。
+
 实现不是将 V1 分析流程包装为新接口。Lexer/Parser 不读取元数据；Binder 生成绑定结构和定义准备需求；推导仅消费带当前能力证书的 Bound IR。手工 IR 测试不需要 SQL、Hive Parser 或 Provider；架构测试约束禁止依赖。独立 `ScriptSourceProvider` 可读取 opaque 定义引用，统一前端负责准备，读取预算与元数据共享。
+
+## 2026-10-15：包结构与入口命名重构验收
+
+生产入口按功能重命名，v2 专用测试统一归入 `com.panfan.hivelineage.v2`，窄功能测试与实现包对应；CLI 和比较测试分为独立测试类。历史语料的元数据由 `v2.testing.LegacyCorpusMetadataFixture` 独立提供，不再借助 v1 测试的包级访问。
+
+重构前后逐文件核对：110 个既有 v1/共享 Java 源文件与本地重构前提交逐字节一致；移除的四个原根包文件均是迁入 v2 的专用测试或 fixture。`src` 内 187 个 SQL/HQL 文件（其中 generated 目录 185 个）的路径、名称与 SHA-256 均未改变。
+
+| 验证 | 实际结果 | 证据 |
+| --- | --- | --- |
+| 清理旧类后的编译 | 删除 `target/classes`、`target/test-classes` 后离线 `test-compile` 成功，源码与目标级别为 Java 8 | OpenJDK 17、Maven 离线执行 |
+| 全仓扩展回归 | 1176 项全部通过：主组 1169、独立 JDBC 5、原始语料 2；0 failure/skip/ignored | `target/v2-package-reorganization-all.log` |
+| 旧断言使用 v2 适配入口 | 200 项全部通过，0 failure/skip/ignored | `target/v2-package-reorganization-oracle.log` |
+| 验证脚本自身 | Python 11 项全部通过，包括三组运行上下文及 classpath 隔离 | `target/v2-package-reorganization-python.log` |
+| 文档引用和示例 | 924 个本地链接/源码引用有效；139 个 SQL 代码块逐字符保持，其中手册 82 个；README 与手册共 8 个 Java 示例通过 `--release 8` 编译 | 文档静态复核；手册辅助类与适配入口另经实际调用验证 |
+
+JDBC 临时子类只继承原五个测试方法并声明连接桩 Rule，在独立进程执行；它不进入主测试组的 classpath。原始语料测试仍执行原 bytecode，在临时工作目录读取原始 18 份 SQL 与未修改的快照。oracle 在临时目录适配测试副本，保留原断言。临时目录在运行结束后清理。
+
+完整回归使用 `scripts/run-v2-validation.py --suite all`；旧 Maven/IDE 入口的原始资源扫描及外部 JDBC 前提保持原样。这里的 JDBC 通过结果来自内存连接桩，不代表已经连接实时 MySQL 或 Metastore。
 
 ## 自动化结果（2026-10-12 首次验收）
 
@@ -17,9 +37,9 @@
 | 原 V1 断言使用 V2 入口 | 27 个原测试类、200 项；194 通过，0 失败，6 项显式 skip | `target/v2-validation-oracle.log` |
 | Java 8 API/字节码编译 | 487 个新增生产源码、51 个测试/fixture 源码通过 `javac --release 8` | `target/v2-release8-verification.txt` |
 | generated 原配置双运行 | 18/18 语句统计与全部 sink 字段来源一致；15/18 完整旧 DTO 零差异 | `target/v2-generated-original.log`、`target/lineage-v2/comparison/original-config-summary.md` |
-| generated 三模式矩阵 | 18 文件 × TABLE_ONLY / COLUMN_ONLY / TABLE_AND_COLUMN，共 54 次实际分析 | `GeneratedV2EngineRegressionTest`，纳入全仓/V2 套件 |
+| generated 三模式矩阵 | 18 文件 × TABLE_ONLY / COLUMN_ONLY / TABLE_AND_COLUMN，共 54 次实际分析 | `GeneratedSqlCompatibilityRegressionTest`，纳入全仓/V2 套件 |
 | 原 OpenSpec 追踪 | 53 个血缘场景 + 24 个 Join 场景，共 77 行，包含策略分歧和方言限制 | [coverage.md](coverage.md) |
-| 实际 CLI 与 JSON | 成功进程退出 0；失败进程退出 2；JSON 能解析，样例 22 个证据节点的父引用闭合 | `V2ComparisonAndCliTest`、`target/lineage-v2/cli-verification/` |
+| 实际 CLI 与 JSON | 成功进程退出 0；失败进程退出 2；JSON 能解析，样例 22 个证据节点的父引用闭合 | `cli.ScriptLineageCliTest`、`compare.DefaultLineageComparisonRunnerTest`、`target/lineage-v2/cli-verification/` |
 
 初次验收脚本动态发现当时 87 个含 `@Test` 的测试源，无漏选。`Tests` 包含已启动的方法以及方法级 assumption skip；类级 skip、类级失败和 ignored 单列，不能将其计为通过。专门测试覆盖 `BeforeClass` 假设不满足，避免通过数变成负数。
 
@@ -29,7 +49,7 @@
 
 ## 原配置完整比较
 
-`GeneratedV2OriginalConfigurationTest` 直接递归读取 `src/test/resources/hql/generated/**/*.sql`，通过同包桥复用 `GeneratedSqlTestSetTest.generatedMetadataProvider()`，没有复制 SQL 或修改旧 fixture。保持 `wf_generated` / 文件名去 `.sql` / `V1` 业务标识及原始 `TABLE_AND_COLUMN`、展开视图、包含临时血缘、`fallback_value` 配置，Join 和返回忽略语句保持默认关闭。
+`compare.GeneratedSqlConfigurationComparisonTest` 直接递归读取 `src/test/resources/hql/generated/**/*.sql`，使用 `testing.LegacyCorpusMetadataFixture` 提供的原配置元数据契约，不修改既有 v1 fixture 或 SQL。保持 `wf_generated` / 文件名去 `.sql` / `V1` 业务标识及原始 `TABLE_AND_COLUMN`、展开视图、包含临时血缘、`fallback_value` 配置，Join 和返回忽略语句保持默认关闭。
 
 基线断言逐例检查统计、每个返回语句的业务身份、状态和正式血缘标记，以及 sink 的类型、模式、目标、完整输入对象、表边和每个目标字段的来源字段与来源对象。完整比较另捕获两套引擎所需的联合读取集合，冻结 payload、缺失状态及读取上下文，再在独立 Cache 和 Session 中调用两套引擎。`LegacyStructureDiffer` 比较所有旧 DTO 字段，包括 raw/normalized SQL、列 sourceObjects、warning 消息及失败信息；没有自动更新旧 expected。
 
@@ -67,7 +87,7 @@ python3 scripts/run-v2-validation.py --suite legacy-oracle --offline
 
 脚本使用 `test-compile` 和 Maven 依赖清单，直接执行 JUnitCore。当前离线环境缺少 Surefire 3.2.5 运行依赖，因此保留 POM 并使用新增执行器；完整编译与实际测试都已执行。已有产物可传 `--no-compile --classpath-file target/v2-maven-classpath.txt`。
 
-完整原配置报告的 Java 入口为 `com.panfan.hivelineage.GeneratedV2OriginalConfigurationTest.main`；先执行基线断言，再生成冻结比较报告。OpenSpec 验证命令：
+完整原配置报告的 Java 入口为 `com.panfan.hivelineage.v2.compare.GeneratedSqlConfigurationComparisonTest.main`；先执行基线断言，再生成冻结比较报告。OpenSpec 验证命令：
 
 ```text
 OPENSPEC_TELEMETRY=0 openspec validate add-hive-lineage-v2-semantic-engine --type change --strict --no-interactive
@@ -90,7 +110,7 @@ Hive 4.0.1 不接受 `LEFT ANTI JOIN` SQL 拼法；IR 和导出保留其类型�
 
 触发点是 `src/test/resources/hql/generated/lineage_case_09.sql:9` 的 `my_udf(score, level_code)`。函数目录没有这个函数的声明，`ExpressionBinder:205` 绑定为 OpaqueFunctionSymbol；`analysis/ExpressionFactsResolver:92-102` 保留参数的已知来源，同时添加未知行为依赖。实际 `udf_score` 来源仍为 `ods.user_feature.score` 和 `ods.user_feature.level_code`，五个目标赋值完整。
 
-实测 native 状态为 SUCCESS，质量为 UNDETERMINED / PARTIAL / UNKNOWN；legacy 状态为成功 0。状态由 `api/DefaultV2LineageAnalyzer:248-255` 根据发布、绑定及提交决定，不根据推导质量重新归类。状态与质量是不同维度，调用方不能只看 SUCCESS 判定来源完整；当前未知 UDF 规范也要求不把已知来源加未知行为变为整条失败。
+实测 native 状态为 SUCCESS，质量为 UNDETERMINED / PARTIAL / UNKNOWN；legacy 状态为成功 0。状态由 `api/DefaultScriptLineageAnalyzer:248-255` 根据发布、绑定及提交决定，不根据推导质量重新归类。状态与质量是不同维度，调用方不能只看 SUCCESS 判定来源完整；当前未知 UDF 规范也要求不把已知来源加未知行为变为整条失败。
 
 但原生列表有两条完全相同的 OPAQUE_FUNCTION 诊断。`analysis/FactSupport:212-219` 从关系输出和写入传播的 UnknownEndpoint 汇总时未去重；兼容投影已经合成一条。应按 stage/code/message/source 去重用户诊断，保留所有不同目标的依赖边和证据路径。不能通过删未知依赖来消除差异。
 
@@ -101,7 +121,7 @@ Hive 4.0.1 不接受 `LEFT ANTI JOIN` SQL 拼法；IR 和导出保留其类型�
 定位出的实际问题：
 
 1. `compat/LegacyStatementProjector:359-372` 对旧枚举没有的 HIVE_SYNTAX_ERROR 和 SQL_PARSE_FAILED 走默认 UNKNOWN_COLUMN_LINEAGE。没有血缘产物的语法失败不应归为字段来源未知。可在不修改 V1 枚举的前提下映射为既有 UNSUPPORTED_STATEMENT，并在消息中保留原生错误代码；详细原生诊断继续保留 SYNTAX 阶段。
-2. `api/DefaultV2LineageAnalyzer:188-189` 生成通用 StageFailure，`262-266` 将其文本存为 failureMessage；具体 `cannot recognize input near 'from' ... in select clause` 只在诊断中。主消息应优先采用具体 parser 诊断，无具体诊断再回退通用消息。
+2. `api/DefaultScriptLineageAnalyzer:188-189` 生成通用 StageFailure，`262-266` 将其文本存为 failureMessage；具体 `cannot recognize input near 'from' ... in select clause` 只在诊断中。主消息应优先采用具体 parser 诊断，无具体诊断再回退通用消息。
 3. `compare/LegacyStructureDiffer:61-62` 把 failureMessage 变更归为 MAPPING，仅因其不属于少数特判字段。当前三条中这一条不是字段映射差异，应归为 DIAGNOSTIC；不会改变差异数量或自动接受结果。
 
 现有 `LegacyProjectionExecutionTest:244` 检查类型、状态及 failureCode，没有验证 warning 类别和具体主消息；原配置基线也没有把 warning/failureMessage 作为 JUnit 的一致性门禁，完整 differ 才发现它们。因此“测试全部通过”不能证明这里的投影语义正确。
@@ -134,14 +154,14 @@ Hive 4.0.1 不接受 `LEFT ANTI JOIN` SQL 拼法；IR 和导出保留其类型�
 
 原 `HiveViewAndTemporaryLineageTest:489-520` 使用 V1 的 HiveAstParserAdapter 构造器，在遇到 bad_view_marker 时抛错，只断言视图输入边界和 VIEW_EXPANSION_FAILED。`scripts/run-v2-validation.py:49-57` 在临时副本中显式替换这一个方法为 Assume；原 V1 文件仍由全仓测试执行，未改动。
 
-V2 的 `api/V2AuditEvidenceIntegrationTest:77-98` 在独立 SyntaxFrontend 注入同一异常，覆盖原两个业务断言，并检查返回两条结果、失败计数为零。它没有逐字段断言第二条映射；独立 case11 矩阵与原配置基线则验证另一类真实语法失败后的正式输出和完整来源。可用 V2 前端注入重建 oracle fixture 来取消此结构性 skip，无须给生产 V2 添加旧 AST 依赖。
+V2 的 `api/AuditEvidenceIntegrationTest:77-98` 在独立 SyntaxFrontend 注入同一异常，覆盖原两个业务断言，并检查返回两条结果、失败计数为零。它没有逐字段断言第二条映射；独立 case11 矩阵与原配置基线则验证另一类真实语法失败后的正式输出和完整来源。可用 V2 前端注入重建 oracle fixture 来取消此结构性 skip，无须给生产 V2 添加旧 AST 依赖。
 
 ### F-01：预期 SQL 失败、历史测试失败与当前测试结果必须分开
 
 - case11 的 expectedFailureCount 是 1，三模式矩阵和原配置测试都实际执行失败语句与恢复断言，JUnit 通过；它没有被跳过。
 - 最后一次全仓：681 / 676 pass / 0 fail / 5 method skip；oracle：200 / 194 pass / 0 fail / 6 method skip；V2：374 / 374 pass / 0 skip。五项 MySQL 在两套验证中重复出现，不能相加为十个不同问题。
 - `target/v2-junit-full.log` 的 202 个历史失败全部与 Hadoop shaded InputBootstrapper 缺失 / HiveConf 初始化失败相关；是早期 classpath 问题。`v2-reused-v1-tests.log` 的 91 失败、`v2-reused-v1-tests-latest.log` 的 25 失败以及 API/style 中间日志也是修复前记录。25 个失败方法全部仍存在于当前 oracle 源，没有通过删除或跳过消除；最后 200 项验证已通过可执行断言。文件名 latest 不能替代时间和最终日志识别。
-- 本轮再次执行只含 `V2ValidationRunnerTest` 的离线 Maven test，进程在 Surefire 3.2.5 依赖解析阶段退出 1，测试未启动。原始记录为 `target/v2-surefire-diagnostic.log`：surefire-common/api/booter/shared-utils 等尚未缓存，离线无法获取。这是 PluginResolutionException，不是测试断言失败；应在可用的依赖环境补齐后再使用 Maven test。
+- 本轮再次执行只含 `ValidationRunnerTest` 的离线 Maven test，进程在 Surefire 3.2.5 依赖解析阶段退出 1，测试未启动。原始记录为 `target/v2-surefire-diagnostic.log`：surefire-common/api/booter/shared-utils 等尚未缓存，离线无法获取。这是 PluginResolutionException，不是测试断言失败；应在可用的依赖环境补齐后再使用 Maven test。
 - 现有 surefire-reports 只有 40 个 V1 报告、307 项、0 failure/error、5 skip；不含本轮 V2 结果。681 项的依据是 test-compile 后直接 JUnitCore 执行器的最终日志，不能用旧 Surefire 报告代替。
 
 ### 修复优先级与验证要求
@@ -181,3 +201,32 @@ python3 scripts/run-v2-validation.py --suite v2 --offline
 新的真实 Provider 桩样例生成 `select user_id, user_name from ods_it.user_base_it union all select user_id, user_name from ods_it.user_other_it`，再消费 `dim_it.v_user_it`。两入口均零失败、sink 字段保留视图边界；V1 的 view-definition 字段仅保留第一个基础来源，V2 对应字段与物理证据保留两个来源。
 
 共同兼容断言使用原五项中的单源视图场景；多源方法对两个参数行都实际断言 Provider 的完整合成 SQL 和资源关闭，V2 行另验证两个物理来源。未把 V1 丢失第二来源的行为自动写成正确 expected，也未修改 V1。此前 D-01 / D-02 / D-03 的诊断待修项继续保留，本次连接桩不改变其结论。
+
+
+## 2026-10-13：IntelliJ 完整包扫描失败与跳过修复
+
+用户提供的真实命令使用 OpenJDK 26.0.1、IntelliJ JUnitStarter，堆栈指向 ValidationRunnerTest 的公共嵌套 MixedFixture、UnavailableFixture、BrokenFixture。它们用于验证统计器的失败/assumption/ignored 计数，IDE 却将其作为普通测试独立发现；先前脚本只枚举顶层源文件，因此没有暴露这一入口问题。
+
+本轮将夹具移到 `src/test/resources/v2/runner-fixtures/*.java.txt`，用 RuntimeRunnerFixtures 在外部临时目录动态编译并通过隔离 ClassLoader 执行真实 JUnit 生命周期。计数断言保留，未把故意失败改成假成功或 Ignore；这些夹具不再是项目测试 classpath 中的测试类。新增回归验证应用 ClassLoader 无法发现它们，清理了三个旧嵌套 classfile。
+
+完整字节码发现还找到 26 个旧临时 oracle 测试类及三个相关辅助字节码，共 29 文件遗留在 target/test-classes。它们没有当前项目源码，来自早期临时对比构建，IDE 因而多扫 184 项旧测试；其中 JDBC 五项仍带旧的连接前提。现已归档至 `target/v2-historical-build-artifacts/oracle-before-ide-fix/`，保留 manifest，再移出测试 classpath。当前 oracle 仍在独立临时目录编译，原 27 类的 200 项断言全部实际执行。
+
+同时修复另外两处入口差异：
+
+- JDBC 连接桩能力由 `v2.metadata.JdbcMetadataConnectionRule` 提供。当前交付通过临时子类继承原 `JdbcMetadataColumnV2ProviderIntegrationTest` 的五个方法并安装 Rule，原类不添加 import 或字段；fixture、Assume 和断言完全保留。历史的 5/5 连接桩结果只证明被执行的连接桩场景，不能解释为独立运行原 v1 类时无需外部连接条件。
+- oracle 对已知 AST 故障注入只替换临时构造器片段为真实 V2 SyntaxFrontend 故障，不再将整个方法替换为 Assume。未知构造器适配会明确报错。新增 Java 回归验证故障确实触发、视图边界/warning 保留、后续正式字段映射正确；Python 四项验证构造器之外的代码/断言保留，以及注释/字面量不误判。
+
+使用用户同一 JDK 26 与本机 IntelliJ JUnitStarter 验证：
+
+| 入口 | 结果 | 证据 |
+| --- | --- | --- |
+| IntelliJ 运行 ValidationRunnerTest | 5 项全部通过，退出 0，没有 failure/ignored 事件 | target/v2-intellij-starter.log |
+| 全部公共带 @Test 的编译类发现（包含嵌套检查） | 91 类，没有可发现的嵌套测试夹具 | target/v2-ide-discovery.log |
+| IntelliJ JUnitStarter 运行该完整发现集合 | 707 started / 707 finished / 0 failed / 0 ignored，退出 0 | target/v2-intellij-package-suite.log、target/v2-ide-result-summary.json |
+| 相同 JDK 的全仓执行器 | 707 项全部通过，0 failure/skip/ignored | target/v2-ide-all-jdk26.log |
+| 原 27 类断言使用 V2 | 200 项全部通过，0 failure/skip/ignored | target/v2-ide-oracle-jdk26.log |
+| 验证脚本自身 | Python 4 项全部通过 | target/v2-validation-script-tests.log |
+
+全部 60 个相关测试/fixture 源码通过 javac --release 8；动态夹具使用运行时 JDK 编译，只在当前 VM 和临时目录中使用。旧 SQL、原视图故障测试和生产实现未改。此前 8.3 / 8.4 的诊断待修项属于独立审阅结果，本轮没有将它们抹掉；case11 的非法 SQL 仍按预期失败及恢复进行验证。
+
+本节的 IDE 全包证据替代此前仅顶层枚举的“零跳过”结论。重新运行完整包测试会发现当前 91 类，历史临时 oracle classfile 已移出模块测试输出。

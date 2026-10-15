@@ -14,6 +14,8 @@ import com.panfan.hivelineage.v2.api.StatementAnalysisResult;
 import com.panfan.hivelineage.v2.export.BoundExpressionFormatter;
 import com.panfan.hivelineage.v2.export.BoundInputObjectProjector;
 import com.panfan.hivelineage.v2.export.BoundNameIndex;
+import com.panfan.hivelineage.v2.export.ColumnDerivationClassifier;
+import com.panfan.hivelineage.v2.export.ColumnDerivationKind;
 import com.panfan.hivelineage.v2.ir.TypeRef;
 import com.panfan.hivelineage.v2.ir.expression.Expressions;
 import com.panfan.hivelineage.v2.ir.identity.NodeId;
@@ -123,12 +125,14 @@ final class LegacyBoundaryProjector {
             return;
         }
         Optional<String> text = expressions.format(expression);
+        ColumnDerivationKind kind = ColumnDerivationClassifier.classify(expressions, expression, dependencies.getDependencies());
+        LineageType derivation = kind == ColumnDerivationKind.UNKNOWN ? LineageType.DERIVED : LineageType.valueOf(kind.name());
         result.add(ColumnLineage.builder().targetColumn(new ColumnRef(target)).sourceColumns(columns)
                 .sourceObjects(objects(selected)).expression(text.orElse(null))
                 .expressionExtracted(expressions.extracted(expression))
-                .lineageType(columns.size() == 1 && !expressions.complex(expression) ? LineageType.DIRECT : LineageType.DERIVED)
+                .lineageType(derivation)
                 .functionNames(expressions.functions(expression))
-                .complexExpression(expressions.complex(expression))
+                .complexExpression(derivation != LineageType.CONSTANT && expressions.complex(expression))
                 .statementIndex(statement.getIdentity().getStatementIndex()).build());
     }
 

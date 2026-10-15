@@ -149,6 +149,10 @@ LineageAnalyzeResult result = analyzer.analyzeScript(LineageAnalyzeRequest.build
 - `DERIVED`：目标字段由源字段经过函数或表达式加工得到，例如 `insert into test_a(a1) select b1 + b2 from test_b` 产生 `(test_b.b1, test_b.b2) -> test_a.a1`。
 - `CONSTANT`：目标字段由常量赋值得到，例如 `insert into test_a(a1) select 't1' from test_b` 会在解析结果中保留 `expression = constant('t1')`、`sourceColumns = []`；静态分区 `insert overwrite table test_a partition(dt='20260701') select b1 from test_b` 会保留 `dt` 的常量赋值信息。
 
+v2 按绑定后的值表达式统一分类。函数、CAST、算术、聚合及窗口表达式即使只有常量参数，也属于 `DERIVED`；字面量和纯字面量集合属于 `CONSTANT`。`sourceColumns` 为空不能单独作为常量判据。每条字段结果通过 `functionNames` 展示使用的函数，包含嵌套函数和 UDF；例如 `concat(upper(name), cast(id as string))` 保留 `concat`、`upper`、`cast`。完整约定见 [Column Lineage Expression Handling](docs/hive-sql-lineage-reference.md#column-lineage-expression-handling)。
+
+v1 兼容结果使用 `ColumnLineage.getLineageType()` 和 `getFunctionNames()`；v2 原生记录使用 `ColumnLineageRecord.getDerivation()` 和 `getFunctionNames()`。v2 JSON 在 `statements[].columnLineages[]` 中同时展示类型、函数、表达式和质量，原生未知类型保留为 `UNKNOWN`。Markdown 输出中的 `Type`、`Expression`、`Functions` 列用于直接查阅这些信息。
+
 字段血缘表达式口径：
 
 - 普通常量字段不产生源字段，表达式统一记录为 `constant(...)`。例如 `insert into test_a(a1) select 't1' from test_b` 输出 `sourceColumns = []`、`expression = constant('t1')`、`lineageType = CONSTANT`。
@@ -267,6 +271,71 @@ LineageAnalyzeResult result = new HiveScriptLineageAnalyzer().analyzeScript(
         .build()
 );
 ```
+
+## 保留 v1 入参，切换到 v2 引擎
+
+已有调用可以直接把 `HiveScriptLineageAnalyzer` 替换为 [HiveScriptLineageAdapter.java](src/main/java/com/panfan/hivelineage/v2/compat/HiveScriptLineageAdapter.java)。`LineageAnalyzeRequest`、`LineageAnalyzeOptions`、`LineageAnalyzeResult`、`HiveMetadataProvider` 和 `HiveMetadataCache` 继续使用现有 v1 类型；上例创建的 JDBC `provider` 也可以直接复用。
+
+```java
+import com.panfan.hivelineage.metadata.HiveMetadataCache;
+import com.panfan.hivelineage.request.LineageAnalyzeOptions;
+import com.panfan.hivelineage.request.LineageAnalyzeRequest;
+import com.panfan.hivelineage.request.LineageParseMode;
+import com.panfan.hivelineage.result.LineageAnalyzeResult;
+import com.panfan.hivelineage.v2.compat.HiveScriptLineageAdapter;
+
+// provider 沿用上例的 HiveMetadataProvider 实例。
+LineageAnalyzeResult result = new HiveScriptLineageAdapter().analyzeScript(
+    LineageAnalyzeRequest.builder()
+        .workflowId("wf_001")
+        .taskId("task_001")
+        .taskVersion("V1")
+        .defaultDatabase("default")
+        .metadataProvider(provider)
+        .metadataCache(new HiveMetadataCache())
+        .rawScript("insert overwrite table dwd.user_profile select * from ods.user_base;")
+        .options(LineageAnalyzeOptions.builder()
+            .parseMode(LineageParseMode.TABLE_AND_COLUMN)
+            .build())
+        .build()
+);
+```
+
+如果通过统一接口持有分析器，后续只需替换初始化处：
+
+```java
+import com.panfan.hivelineage.core.HiveLineageAnalyzer;
+import com.panfan.hivelineage.core.HiveScriptLineageAnalyzer;
+import com.panfan.hivelineage.v2.compat.HiveScriptLineageAdapter;
+
+HiveLineageAnalyzer analyzer = new HiveScriptLineageAdapter();
+// 切回 v1：HiveLineageAnalyzer analyzer = new HiveScriptLineageAnalyzer();
+// 后续仍调用 analyzer.analyzeScript(existingRequest)。
+```
+
+`taskVersion("V1")` 是业务任务版本，不决定使用哪个解析引擎；引擎由分析器实现类决定。原有 `HiveScriptLineageAnalyzer` 仍使用 v1，默认行为不变。
+
+适配层内部由 `DefaultRequestAdapter` 将 v1 请求和选项转换为 v2 请求，`DefaultV1MetadataAdapterFactory` 复用 v1 provider/cache，`DefaultLegacyResultProjector` 将 v2 结果转换回 v1 返回类型。无法完整表达在 v1 返回模型中的信息会记录为 warning；需要 v2 原生结果时，可调用 `HiveScriptLineageAdapter.analyzeNative(existingRequest)`，返回 `ScriptAnalysisResult`。
+
+跨调用的元数据复用由请求中的 `HiveMetadataCache` 控制：共享同一个缓存可以减少查询，新建缓存或缓存 TTL 到期后会重新读取元数据。v2 在单次脚本内固定已读取的元数据，避免脚本中途因缓存到期而改变分析依据。
+
+<a id="package-layout-and-api-migration"></a>
+
+### 包结构与入口迁移
+
+v2 引擎、兼容适配、CLI、比较和导出代码统一位于 `com.panfan.hivelineage.v2` 下，类名按功能命名。已有 v1 实现、请求、选项、结果、元数据接口和测试保持不变；v2 适配层复用这些既有契约。共享的 `JdbcMetadataColumnV2Provider` 保留原包及名称，其中 `V2` 对应元数据表 `metadata_column_v2`，不代表分析引擎版本。
+
+| 原 v2 类型名 | 当前类型 | 用途 |
+| --- | --- | --- |
+| `HiveV2LineageAnalyzer` | [HiveScriptLineageAdapter](src/main/java/com/panfan/hivelineage/v2/compat/HiveScriptLineageAdapter.java) | 接收 v1 请求，返回兼容结果或原生结果 |
+| `V2LineageAnalyzer` | [ScriptLineageAnalyzer](src/main/java/com/panfan/hivelineage/v2/api/ScriptLineageAnalyzer.java) | 原生脚本分析接口 |
+| `DefaultV2LineageAnalyzer` | [DefaultScriptLineageAnalyzer](src/main/java/com/panfan/hivelineage/v2/api/DefaultScriptLineageAnalyzer.java) | 原生脚本分析的默认实现 |
+| `V2AnalyzeRequest` | [ScriptAnalysisRequest](src/main/java/com/panfan/hivelineage/v2/api/ScriptAnalysisRequest.java) | 原生请求、会话与能力配置 |
+| `V2AnalyzeResult` | [ScriptAnalysisResult](src/main/java/com/panfan/hivelineage/v2/api/ScriptAnalysisResult.java) | 原生脚本结果、质量及证据 |
+| `LineageAnalyzeV2Cli` | [ScriptLineageCli](src/main/java/com/panfan/hivelineage/v2/cli/ScriptLineageCli.java) | 命令行分析与文件输出 |
+| `V2JsonRenderer` | [LineageJsonRenderer](src/main/java/com/panfan/hivelineage/v2/export/LineageJsonRenderer.java) | 原生结构化 JSON 输出 |
+
+v2 测试位于同一 `v2` 包树，按被测功能划分为 `api`、`semantic`、`dialect.hive`、`session`、`metadata`、`compat`、`compare`、`export` 等子包；独立测试辅助类放在 `testing`，跨模块契约放在 `contracts`。测试 SQL 继续保存在 `src/test/resources/hql/generated`。配置文件名、`lineage.v2.jsonOutputPath` 和引擎版本标识继续保留。
 
 ## 真实脚本试跑
 
@@ -396,6 +465,10 @@ CLI 结束时也会在终端打印：
 
 ## 当前支持的 SQL 口径
 
+面向使用者的统一参考文档为 [Hive SQL Lineage Reference](docs/hive-sql-lineage-reference.md)。文档按查询、表达式、写入、DDL、会话与接口配置分章，各语法条目提供语法、示例、血缘结果和限制，附函数索引与关键字索引。可直接查阅 [TRUNCATE](docs/hive-sql-lineage-reference.md#ddl-truncate)、[嵌套 UNION ALL](docs/hive-sql-lineage-reference.md#query-insert-union-derived)、[视图定义](docs/hive-sql-lineage-reference.md#write-create-view)及 [v1 请求适配](docs/hive-sql-lineage-reference.md#configuration-basic)。
+
+开发验证资料另见[语法覆盖矩阵](docs/v2-sql-syntax-coverage-matrix.md)、[SQL 资源与运行说明](src/test/resources/hql/generated/v2_syntax_coverage.md)和 [DDL 覆盖审计](src/test/resources/hql/generated/v2_keyword_ddl_coverage_audit.md)；这些资料不表示全部 Hive 关键字及语法组合均已支持。
+
 会产生正式血缘的典型语句：
 
 - `insert into/overwrite table ... select ...`
@@ -454,11 +527,21 @@ CLI 结束时也会在终端打印：
 
 ## 测试
 
-运行全部本地测试：
+包含 v2 扩展语法的完整回归使用独立验证入口：
+
+```bash
+python3 scripts/run-v2-validation.py --suite all
+```
+
+该入口运行 v2 测试，并在临时工作目录中用原 18 份 SQL 和快照运行既有 v1 语料测试；JDBC 原五项测试通过临时子类安装内存连接桩。v1 源码、断言和语料保持不变，新增 v2 SQL 由 v2 测试验证。仅运行 v2 测试可使用 `--suite v2`，原断言切换适配入口的对比使用 `--suite legacy-oracle`。
+
+既有 v1 本地测试命令继续保留：
 
 ```bash
 bash scripts/run-tests.sh
 ```
+
+该命令在当前工作目录直接执行 Maven，既有语料测试会读取 generated 目录的全部 SQL，要求语料符合 v1 支持范围；新增 v2 语法不属于该旧入口的支持承诺。真实 JDBC 测试仍遵循下述外部连接条件，命令本身不安装连接桩。当前扩展仓库的完整验证请使用前面的 v2 专用入口。
 
 如果使用 JDK 9 及以上版本运行 Maven 测试，`pom.xml` 会自动给 Surefire 增加下面的 JVM 参数，用于兼容 Hive/Hadoop 依赖中的反射访问：
 
@@ -466,11 +549,11 @@ bash scripts/run-tests.sh
 --add-opens=java.base/java.net=ALL-UNNAMED
 ```
 
-如果在 IDE 中直接运行 [HiveLineageAnalyzerTest.java](src/test/java/com/panfan/hivelineage/HiveLineageAnalyzerTest.java) 的 `main` 方法，也需要在该运行配置的 VM options 中手动加入同样参数。否则可能出现 `StringInternUtils` 访问 `java.net.URI.string` 被 Java 模块系统拒绝的异常。
+如果在 IDE 中直接运行 JUnit 或单独调用分析器，也需要在该运行配置的 VM options 中手动加入同样参数。否则可能出现 `StringInternUtils` 访问 `java.net.URI.string` 被 Java 模块系统拒绝的异常。
 
-该命令会运行：
+既有 v1 测试包括：
 
-- [HiveLineageAnalyzerTest.java](src/test/java/com/panfan/hivelineage/HiveLineageAnalyzerTest.java)
+- [HiveScriptProcessingTest.java](src/test/java/com/panfan/hivelineage/HiveScriptProcessingTest.java)
 - [GeneratedSqlTestSetTest.java](src/test/java/com/panfan/hivelineage/GeneratedSqlTestSetTest.java)
 - [JdbcMetadataColumnV2ProviderIntegrationTest.java](src/test/java/com/panfan/hivelineage/JdbcMetadataColumnV2ProviderIntegrationTest.java)
 
@@ -535,7 +618,7 @@ mvn -q \
 - [lineage_parse_results.md](src/test/resources/hql/generated/lineage_parse_results.md)
 - Join 条件人工核验报告运行后输出到 `target/lineage-output/join-condition-parse-results.md`。
 
-[GeneratedSqlTestSetTest.java](src/test/java/com/panfan/hivelineage/GeneratedSqlTestSetTest.java) 会扫描 `src/test/resources/hql/generated` 下的 `.sql` 文件并逐个调用 `HiveScriptLineageAnalyzer`，断言生成测试集不出现解析失败。后续新增 SQL 测试集时，只要放到该目录即可被纳入这条测试链路。
+[GeneratedSqlTestSetTest.java](src/test/java/com/panfan/hivelineage/GeneratedSqlTestSetTest.java) 会扫描 `src/test/resources/hql/generated` 下的 `.sql` 文件并逐个调用 `HiveScriptLineageAnalyzer`，断言生成测试集不出现解析失败。它保持原 v1 语法与元数据契约；v2 完整验证入口在临时目录为它提供原始 18 份资源，新增 v2 SQL 由功能包下的专门测试处理。
 
 `lineage_parse_results.md` 用于人工核验，按 SQL 文件分节记录测试 SQL 和对应解析结果。修改解析逻辑或测试 SQL 后，可以先编译测试类，再运行生成器刷新该文件：
 

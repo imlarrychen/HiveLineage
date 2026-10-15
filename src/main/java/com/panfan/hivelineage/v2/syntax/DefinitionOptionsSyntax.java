@@ -10,6 +10,8 @@ public final class DefinitionOptionsSyntax {
     private final boolean ifExists;
     private final Map<String, String> properties;
     private final SyntaxExpression location;
+    private final boolean orReplace;
+    private final String comment;
 
     public DefinitionOptionsSyntax(
             boolean temporary,
@@ -18,12 +20,26 @@ public final class DefinitionOptionsSyntax {
             boolean ifExists,
             Map<String, String> properties,
             SyntaxExpression location) {
+        this(temporary, external, ifNotExists, ifExists, properties, location, false, null);
+    }
+
+    public DefinitionOptionsSyntax(
+            boolean temporary,
+            boolean external,
+            boolean ifNotExists,
+            boolean ifExists,
+            Map<String, String> properties,
+            SyntaxExpression location,
+            boolean orReplace,
+            String comment) {
         this.temporary = temporary;
         this.external = external;
         this.ifNotExists = ifNotExists;
         this.ifExists = ifExists;
         this.properties = ModelCollections.immutableMap(properties);
         this.location = location;
+        this.orReplace = orReplace;
+        this.comment = comment;
     }
 
     public boolean isTemporary() {
@@ -48,5 +64,17 @@ public final class DefinitionOptionsSyntax {
 
     public SyntaxExpression getLocation() {
         return location;
+    }
+
+    public boolean isOrReplace() {
+        return orReplace;
+    }
+
+    public boolean getOrReplace() {
+        return orReplace;
+    }
+
+    public String getComment() {
+        return comment;
     }
 }

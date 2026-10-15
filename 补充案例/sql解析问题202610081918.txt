@@ -1,0 +1,53 @@
+原始语句：
+insert into OPT_DATA_BOARD_BBK_OPT_757.sopr_tsk_dtl_lmt partition(biz_date)
+ select distinct 
+ A.dw_stat_dt,A.dat_dt,A.tsk_enc,A.evt_enc,A.brn_nbr,A.tlr_nbr,A.eac_id,A.cust_id,A.cust_nm,A.cust_ctg_cd,A.ccy_cd,
+ A.trx_amt,A.crt_tm,A.start_tm,A.end_tm,A.hung_sec,A.tm_csm,A.tm_wrk,A.opr_cd,A.key_val,A.evt_id,A.tsk_sts_ind,
+ A.dat_src_ind,A.loc_ip,A.csh_ind,A.seq_nbr,A.bat_cnt,A.if_start,A.mnt_dt,A.mnt_tm,
+ '',regexp_replace(date_sub(CURRENT_DATE,2),'-','') biz_date
+ from ods_data_757.sopr_tsk_dtl A
+ where A.dw_stat_dt in (select max(B.dw_stat_dt) from ods_data_757.sopr_tsk_dtl B)
+变量替换后的语句：
+insert into OPT_DATA_BOARD_BBK_OPT_757.sopr_tsk_dtl_lmt partition(biz_date)
+ select distinct 
+ A.dw_stat_dt,A.dat_dt,A.tsk_enc,A.evt_enc,A.brn_nbr,A.tlr_nbr,A.eac_id,A.cust_id,A.cust_nm,A.cust_ctg_cd,A.ccy_cd,
+ A.trx_amt,A.crt_tm,A.start_tm,A.end_tm,A.hung_sec,A.tm_csm,A.tm_wrk,A.opr_cd,A.key_val,A.evt_id,A.tsk_sts_ind,
+ A.dat_src_ind,A.loc_ip,A.csh_ind,A.seq_nbr,A.bat_cnt,A.if_start,A.mnt_dt,A.mnt_tm,
+ '',regexp_replace(date_sub(CURRENT_DATE,2),'-','') biz_date
+ from ods_data_757.sopr_tsk_dtl A
+ where A.dw_stat_dt in (select max(B.dw_stat_dt) from ods_data_757.sopr_tsk_dtl B)
+错误信息：
+[{"warningCode":"UNSUPPORTED_STATEMENT","message":"Unsupported statement","statementIndex":17}]
+
+
+
+
+
+原始语句：
+INSERT OVERWRITE TABLE ${destination_db_name}.${destination_tb_name}
+ SELECT * FROM ${origin_db_name}.${origin_tb_name}
+ WHERE ${partition_key} = ETL_HQT.bdpdatefunc('${work_day}',1,'yyyyMMdd',-1)
+ UNION ALL
+ SELECT A.* FROM ${destination_db_name}.${destination_tb_name} A
+ LEFT JOIN (
+ SELECT * FROM ${origin_db_name}.${origin_tb_name}
+ WHERE ${partition_key} = ETL_HQT.bdpdatefunc('${work_day}',1,'yyyyMMdd',-1)
+ ) B
+ ON ${condition_on}
+ WHERE ${condition_where}
+
+变量替换后的语句：
+INSERT OVERWRITE TABLE his_bbk_851.lj01_buq_eva_dta_t
+ SELECT * FROM ods_data_851.lj01_buq_eva_dta_t
+ WHERE biz_date = ETL_HQT.bdpdatefunc('20260915',1,'yyyyMMdd',-1)
+ UNION ALL
+ SELECT A.* FROM his_bbk_851.lj01_buq_eva_dta_t A
+ LEFT JOIN (
+ SELECT * FROM ods_data_851.lj01_buq_eva_dta_t
+ WHERE biz_date = ETL_HQT.bdpdatefunc('20260915',1,'yyyyMMdd',-1)
+ ) B
+ ON a.eva_eev_nbr=b.eva_eev_nbr
+ WHERE b.eva_eev_nbr is null
+
+错误信息：
+Set operation branch columns do not align

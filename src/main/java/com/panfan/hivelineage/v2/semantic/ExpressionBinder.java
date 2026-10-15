@@ -245,16 +245,8 @@ final class ExpressionBinder {
 
     private BoundExpression window(WindowCallSyntax syntax, ReferenceScope scope) {
         Expressions.Call call = call(syntax.getCall(), scope);
-        WindowSpecificationSyntax specification = syntax.getWindow();
-        if (specification.getBaseWindowName() != null) {
-            com.panfan.hivelineage.v2.syntax.NamedWindowSyntax named = scope.windows.get(
-                SemanticNames.normalize(specification.getBaseWindowName().getValue()));
-            if (named != null) {
-                specification = named.getSpecification();
-            } else {
-                work.warn("UNKNOWN_WINDOW", "Window definition is unavailable", syntax.getSourceRef());
-            }
-        }
+        WindowSpecificationSyntax specification = WindowSpecificationResolver.resolve(
+            syntax.getWindow(), scope, work, syntax.getSourceRef());
         List<BoundExpression> partitions = new ArrayList<>();
         for (SyntaxExpression partition : specification.getPartitionBy()) {
             partitions.add(bind(partition, scope));

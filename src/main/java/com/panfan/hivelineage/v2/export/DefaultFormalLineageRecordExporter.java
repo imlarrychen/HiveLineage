@@ -1,11 +1,9 @@
 package com.panfan.hivelineage.v2.export;
 
 import com.panfan.hivelineage.v2.analysis.ColumnEndpoint;
-import com.panfan.hivelineage.v2.analysis.ConstantEndpoint;
 import com.panfan.hivelineage.v2.analysis.Dependency;
 import com.panfan.hivelineage.v2.analysis.DependencyRole;
 import com.panfan.hivelineage.v2.analysis.LineageEndpoint;
-import com.panfan.hivelineage.v2.analysis.UnknownEndpoint;
 import com.panfan.hivelineage.v2.api.SourceDocument;
 import com.panfan.hivelineage.v2.api.StatementAnalysisResult;
 import com.panfan.hivelineage.v2.common.QualifiedName;
@@ -86,16 +84,12 @@ public final class DefaultFormalLineageRecordExporter implements FormalLineageRe
                 .orElseThrow(() -> new IllegalArgumentException("Write target has no bound declaration"));
         ColumnAddress target = new ColumnAddress(targetObject, Collections.singletonList(assignment.getTargetField().getDisplayName()));
         Map<String, ColumnAddress> sources = new LinkedHashMap<String, ColumnAddress>();
-        boolean constant = true;
-        boolean unknown = false;
-        boolean observed = false;
+        List<Dependency> dependencies = new ArrayList<Dependency>();
         for (Dependency dependency : statement.getLineage().get().getWriteDependencies()) {
             if (!target(dependency, write, assignment.getTargetField())) {
                 continue;
             }
-            observed = true;
-            constant = constant && dependency.getSource() instanceof ConstantEndpoint;
-            unknown = unknown || dependency.getSource() instanceof UnknownEndpoint;
+            dependencies.add(dependency);
             if (dependency.getSource() instanceof ColumnEndpoint && dependency.getRole() != DependencyRole.ROWSET
                     && include(dependency, names)) {
                 ColumnEndpoint field = (ColumnEndpoint) dependency.getSource();
@@ -110,9 +104,7 @@ public final class DefaultFormalLineageRecordExporter implements FormalLineageRe
                 }
             }
         }
-        ColumnDerivationKind kind = unknown ? ColumnDerivationKind.UNKNOWN : constant && observed ? ColumnDerivationKind.CONSTANT
-                : sources.size() == 1 && !expressions.complex(assignment.getExpression())
-                        ? ColumnDerivationKind.DIRECT : ColumnDerivationKind.DERIVED;
+        ColumnDerivationKind kind = ColumnDerivationClassifier.classify(expressions, assignment.getExpression(), dependencies);
         Optional<String> expression = expressions.format(assignment.getExpression());
         return new ColumnLineageRecord(statement.getIdentity(), target, new ArrayList<ColumnAddress>(sources.values()), kind,
                 new RenderedExpression(expression, expressions.extracted(assignment.getExpression())),

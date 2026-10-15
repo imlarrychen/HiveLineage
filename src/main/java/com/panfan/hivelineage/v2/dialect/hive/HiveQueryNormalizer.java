@@ -113,7 +113,12 @@ final class HiveQueryNormalizer {
 
     private QueryClausesSyntax clauses(ASTNode node) {
         List<NamedWindowSyntax> windows = new ArrayList<NamedWindowSyntax>();
-        for (ASTNode named : ast.children(ast.child(node, "TOK_WINDOW"))) {
+        ASTNode windowClause = ast.child(node, "TOK_WINDOW");
+        if (windowClause == null) {
+            // Hive 4 retains the WINDOW keyword as the clause root.
+            windowClause = ast.child(node, "KW_WINDOW");
+        }
+        for (ASTNode named : ast.children(windowClause)) {
             windows.add(new NamedWindowSyntax(ast.part(ast.at(named, 0)), expressions.window(ast.at(named, 1))));
         }
         return new QueryClausesSyntax(predicate(node, "TOK_WHERE"), grouping(node), predicate(node, "TOK_HAVING"), windows,
@@ -245,7 +250,13 @@ final class HiveQueryNormalizer {
             return new TableSampleSyntax(SampleKindSyntax.BUCKET, expressions.expressions(sample, 0));
         }
         sample = ast.child(node, "TOK_TABLESPLITSAMPLE");
-        return sample == null ? null : new TableSampleSyntax(SampleKindSyntax.PERCENT, expressions.expressions(sample, 0));
+        if (sample == null) {
+            return null;
+        }
+        String unit = ast.kind(ast.at(sample, 0));
+        SampleKindSyntax kind = "TOK_ROWCOUNT".equals(unit) ? SampleKindSyntax.ROWS
+                : "TOK_LENGTH".equals(unit) ? SampleKindSyntax.BYTE_LENGTH : SampleKindSyntax.PERCENT;
+        return new TableSampleSyntax(kind, expressions.expressions(sample, 1));
     }
 
     QueryTailSyntax emptyTail() {

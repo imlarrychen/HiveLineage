@@ -56,6 +56,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.Assert;
@@ -228,7 +229,7 @@ public class HiveFrontendTest {
     }
 
     @Test
-    public void generatedCorpusHasOnlyItsDeclaredSyntaxFailureAndRecovers() throws IOException {
+    public void generatedCorpusHasOnlyItsDeclaredSyntaxFailuresAndRecovers() throws IOException {
         List<Path> files;
         try (Stream<Path> paths = Files.walk(Paths.get("src/test/resources/hql/generated"))) {
             files = paths.filter(path -> path.toString().endsWith(".sql")).sorted().collect(Collectors.toList());
@@ -236,6 +237,11 @@ public class HiveFrontendTest {
         Assert.assertTrue("baseline SQL corpus must remain present", files.size() >= 18);
         int failures = 0;
         int statements = 0;
+        Map<String, Integer> expectedFailures = new LinkedHashMap<>();
+        expectedFailures.put("lineage_case_11.sql", 0);
+        expectedFailures.put("v2_query_join_left_anti_rejected_by_frontend.sql", 0);
+        Map<String, Set<Integer>> expectedPartial = new LinkedHashMap<>(HiveDdlSyntaxIntegrationTest.expectedFrontendPartial());
+        expectedPartial.putAll(HiveKeywordSyntaxIntegrationTest.expectedFrontendPartial());
         for (Path path : files) {
             String script = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
             Map<String, Map<String, String>> variables = new LinkedHashMap<String, Map<String, String>>();
@@ -247,19 +253,23 @@ public class HiveFrontendTest {
                 LexResult lexed = factory.createLexer().tokenize(expanded, new LexicalOptions(factory.getProfile(), true));
                 Assert.assertEquals(path.toString(), StageOutcome.SUCCESS, lexed.getOutcome());
                 ParseResult<HiveParseArtifact> parsed = factory.createParser().parse(lexed.getUnit(), syntaxOptions());
+                String file = path.getFileName().toString();
+                boolean expectedFailure = expectedFailures.containsKey(file)
+                    && expectedFailures.get(file).equals(unit.getStatementIndex());
+                Assert.assertEquals(path + ":" + unit.getStatementIndex(), expectedFailure, parsed.getOutcome() == StageOutcome.FAILED);
                 if (parsed.getOutcome() == StageOutcome.FAILED) {
                     failures++;
-                    Assert.assertEquals("lineage_case_11.sql", path.getFileName().toString());
-                    Assert.assertEquals(0, unit.getStatementIndex());
                     Assert.assertEquals(AnalysisStage.SYNTAX, parsed.getDiagnostics().get(0).getStage());
                     continue;
                 }
                 SyntaxResult normalized = factory.createNormalizer().normalize(parsed.getArtifact(), syntaxOptions());
-                Assert.assertEquals(path + ":" + unit.getStatementIndex(), StageOutcome.SUCCESS, normalized.getOutcome());
+                StageOutcome expectedOutcome = expectedPartial.getOrDefault(file, Collections.emptySet()).contains(unit.getStatementIndex())
+                    ? StageOutcome.PARTIAL : StageOutcome.SUCCESS;
+                Assert.assertEquals(path + ":" + unit.getStatementIndex(), expectedOutcome, normalized.getOutcome());
                 rememberSet(normalized.getStatement(), variables);
             }
         }
-        Assert.assertEquals(1, failures);
+        Assert.assertEquals(expectedFailures.size(), failures);
         Assert.assertTrue(statements >= 48);
     }
 
@@ -272,6 +282,9 @@ public class HiveFrontendTest {
             return;
         }
         SetCommandSyntax set = (SetCommandSyntax) command;
+        if (set.getValue() == null) {
+            return;
+        }
         Map<String, String> namespace = variables.get(set.getNamespace());
         if (namespace == null) {
             namespace = new LinkedHashMap<String, String>();

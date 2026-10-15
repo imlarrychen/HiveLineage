@@ -1,0 +1,1 @@
+create table dwd.created as select u.id,upper(u.name) as name from ods.t u; insert into dwd.t(id,name) select c.id,c.name from dwd.created c

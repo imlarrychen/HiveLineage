@@ -1,0 +1,9 @@
+package com.panfan.hivelineage.v2.testing.runnerfixtures;
+
+import com.panfan.hivelineage.v2.metadata.JdbcMetadataConnectionRule;
+import org.junit.Rule;
+
+public class JdbcMetadataFixture extends com.panfan.hivelineage.JdbcMetadataColumnV2ProviderIntegrationTest {
+    @Rule
+    public final JdbcMetadataConnectionRule jdbcConnection = new JdbcMetadataConnectionRule();
+}

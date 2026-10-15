@@ -1,6 +1,9 @@
 package com.panfan.hivelineage.v2.dialect.hive;
 
 import com.panfan.hivelineage.v2.syntax.AlterActionSyntax;
+import com.panfan.hivelineage.v2.syntax.ChangeColumnActionSyntax;
+import com.panfan.hivelineage.v2.syntax.ColumnPositionKindSyntax;
+import com.panfan.hivelineage.v2.syntax.ColumnPositionSyntax;
 import com.panfan.hivelineage.v2.syntax.ColumnChangeKindSyntax;
 import com.panfan.hivelineage.v2.syntax.ColumnDefinitionSyntax;
 import com.panfan.hivelineage.v2.syntax.ColumnsActionSyntax;
@@ -20,6 +23,7 @@ import com.panfan.hivelineage.v2.syntax.SortItemSyntax;
 import com.panfan.hivelineage.v2.syntax.StorageSpecificationSyntax;
 import com.panfan.hivelineage.v2.syntax.SyntaxExpression;
 import com.panfan.hivelineage.v2.syntax.SyntaxName;
+import com.panfan.hivelineage.v2.syntax.UnknownAlterActionSyntax;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -48,8 +52,9 @@ final class HiveDefinitionNormalizer {
                 columns(ast.child(node, "TOK_TABLEPARTCOLS")), storage(node), like(node));
         DefinitionOptionsSyntax options = new DefinitionOptionsSyntax(ast.child(node, "KW_TEMPORARY") != null,
                 ast.child(node, "KW_EXTERNAL") != null, ast.child(node, "TOK_IFNOTEXISTS") != null,
-                ast.child(node, "TOK_IFEXISTS") != null, properties(ast.first(node, "TOK_TABLEPROPERTIES")),
-                location(ast.child(node, "TOK_TABLELOCATION")));
+                ast.child(node, "TOK_IFEXISTS") != null, properties(ast.child(node, "TOK_TABLEPROPERTIES")),
+                location(ast.child(node, "TOK_TABLELOCATION")), ast.child(node, "TOK_ORREPLACE") != null,
+                comment(ast.child(node, "TOK_TABLECOMMENT")));
         return new DefinitionStatementSyntax(ast.id(node, "statement"), ast.ref(node), new DefinitionBodySyntax(definitionKind,
                 ast.name(ast.first(node, "TOK_TABNAME")), schema, options, query == null ? null : queries.query(query), actions(node)));
     }
@@ -79,8 +84,7 @@ final class HiveDefinitionNormalizer {
             if ("TOK_TABCOL".equals(ast.kind(column))) {
                 DataTypeSyntax type = column.getChildCount() > 1 && !"TOK_NULL".equals(ast.kind(ast.at(column, 1)))
                         ? queries.expressions().type(ast.at(column, 1)) : null;
-                String comment = column.getChildCount() > 2 ? HiveAstSupport.unquote(ast.at(column, 2).getText()) : null;
-                columns.add(new ColumnDefinitionSyntax(ast.part(ast.at(column, 0)), type, comment));
+                columns.add(new ColumnDefinitionSyntax(ast.part(ast.at(column, 0)), type, comment(column)));
             } else {
                 columns.add(new ColumnDefinitionSyntax(ast.part(column), null, null));
             }
@@ -97,13 +101,27 @@ final class HiveDefinitionNormalizer {
         return node == null || node.getChildCount() == 0 ? null : queries.expressions().expression(ast.at(node, 0));
     }
 
+    private String comment(ASTNode node) {
+        for (ASTNode child : ast.children(node)) {
+            if (ast.kind(child).contains("StringLiteral")) {
+                return HiveAstSupport.unquote(child.getText());
+            }
+        }
+        return null;
+    }
+
     private StorageSpecificationSyntax storage(ASTNode node) {
         ASTNode format = ast.child(node, "TOK_FILEFORMAT_GENERIC");
         SyntaxName fileFormat = format == null ? null : ast.name(ast.at(format, 0));
         ASTNode serdeNode = ast.first(node, "TOK_TABLESERIALIZER");
-        SerdeSyntax serde = serdeNode == null ? null : new SerdeSyntax(
-                HiveAstSupport.unquote(ast.at(serdeNode, 0).getText()), properties(ast.child(serdeNode, "TOK_TABLEPROPERTIES")));
+        ASTNode serdeName = ast.child(serdeNode, "TOK_SERDENAME");
+        ASTNode serdeBody = serdeName == null ? serdeNode : serdeName;
+        SerdeSyntax serde = serdeBody == null ? null : new SerdeSyntax(
+                HiveAstSupport.unquote(ast.at(serdeBody, 0).getText()), properties(ast.child(serdeBody, "TOK_TABLEPROPERTIES")));
         ASTNode bucket = ast.child(node, "TOK_TABLEBUCKETS");
+        if (bucket == null) {
+            bucket = ast.child(node, "TOK_ALTERTABLE_BUCKETS");
+        }
         List<IdentifierPart> buckets = new ArrayList<IdentifierPart>();
         List<SortItemSyntax> sorts = Collections.emptyList();
         SyntaxExpression count = null;
@@ -122,6 +140,10 @@ final class HiveDefinitionNormalizer {
     private DelimitedRowFormatSyntax rowFormat(ASTNode node) {
         if (node == null) {
             return null;
+        }
+        ASTNode properties = ast.child(node, "TOK_SERDEPROPS");
+        if (properties != null) {
+            node = properties;
         }
         return new DelimitedRowFormatSyntax(delimiter(node, "TOK_TABLEROWFORMATFIELD", 0),
                 delimiter(node, "TOK_TABLEROWFORMATFIELD", 1), delimiter(node, "TOK_TABLEROWFORMATCOLLITEMS", 0),
@@ -150,18 +172,39 @@ final class HiveDefinitionNormalizer {
 
     private List<AlterActionSyntax> actions(ASTNode node) {
         List<AlterActionSyntax> actions = new ArrayList<AlterActionSyntax>();
+        boolean partitionScoped = ast.child(node, "TOK_PARTSPEC") != null;
         for (ASTNode action : ast.children(node)) {
             String kind = ast.kind(action);
-            if ("TOK_ALTERTABLE_RENAME".equals(kind)) {
+            if (!kind.startsWith("TOK_ALTER")) {
+                continue;
+            }
+            // Partition schemas may differ from the table schema. Do not apply their changes to the table.
+            if (partitionScoped) {
+                actions.add(new UnknownAlterActionSyntax(kind));
+            } else if ("TOK_ALTERTABLE_RENAME".equals(kind) || "TOK_ALTERVIEW_RENAME".equals(kind)) {
                 actions.add(new RenameActionSyntax(ast.name(ast.at(action, 0))));
             } else if ("TOK_ALTERTABLE_ADDCOLS".equals(kind) || "TOK_ALTERTABLE_REPLACECOLS".equals(kind)) {
                 actions.add(new ColumnsActionSyntax(kind.endsWith("ADDCOLS") ? ColumnChangeKindSyntax.ADD
                         : ColumnChangeKindSyntax.REPLACE, columns(ast.at(action, 0))));
+            } else if ("TOK_ALTERTABLE_RENAMECOL".equals(kind)) {
+                ASTNode after = ast.child(action, "TOK_ALTERTABLE_CHANGECOL_AFTER_POSITION");
+                ColumnPositionSyntax position = after != null
+                        ? new ColumnPositionSyntax(ColumnPositionKindSyntax.AFTER, ast.part(ast.at(after, 0)))
+                        : new ColumnPositionSyntax(ast.child(action, "KW_FIRST") != null
+                                ? ColumnPositionKindSyntax.FIRST : ColumnPositionKindSyntax.UNCHANGED, null);
+                actions.add(new ChangeColumnActionSyntax(ast.part(ast.at(action, 0)),
+                        new ColumnDefinitionSyntax(ast.part(ast.at(action, 1)),
+                                queries.expressions().type(ast.at(action, 2)), comment(action)), position));
             } else if ("TOK_ALTERTABLE_PROPERTIES".equals(kind)) {
                 actions.add(new PropertiesActionSyntax(properties(ast.at(action, 0))));
             } else if ("TOK_ALTERTABLE_LOCATION".equals(kind)) {
                 actions.add(new SetLocationActionSyntax(queries.expressions().expression(ast.at(action, 0))));
+            } else {
+                actions.add(new UnknownAlterActionSyntax(kind));
             }
+        }
+        if (("TOK_ALTERTABLE".equals(ast.kind(node)) || "TOK_ALTERVIEW".equals(ast.kind(node))) && actions.isEmpty()) {
+            actions.add(new UnknownAlterActionSyntax(ast.kind(node)));
         }
         return actions;
     }

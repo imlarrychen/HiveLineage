@@ -27,7 +27,7 @@ V1 保留。V2 尽量新增类；原有 SQL、测试、DTO、Provider 和默认 
 | `export` | 独立语句和 Join 导出记录 |
 | `compare` | 双运行、规范化比较与报告 |
 
-`HiveV2LineageAnalyzer` 实现现有 `HiveLineageAnalyzer`，保留 `analyzeScript(LineageAnalyzeRequest)` 返回类型。V2 原生入口额外接收能力集合和显式执行上下文，并返回完整质量及证据。
+`HiveScriptLineageAdapter` 实现现有 `HiveLineageAnalyzer`，保留 `analyzeScript(LineageAnalyzeRequest)` 返回类型。V2 原生入口额外接收能力集合和显式执行上下文，并返回完整质量及证据。
 
 V2 不调用 V1 的投影推断、字段血缘构建或展开流程；可复用公开 DTO、外部 Provider、测试 fixture、输出渲染器及注入的脚本预处理实现。
 
@@ -155,7 +155,7 @@ statementIndex 兼容当前从 0 起始；joinIndex 从 1 起始；statementId �
 
 直接扫描 `src/test/resources/hql/generated/**/*.sql`，UTF-8 读取、按相对路径排序，当前 18 个文件是基线而非上限。采用相对路径作为 case 身份，避免新增子目录同名文件冲突。
 
-新增同包 fixture 桥复用 `GeneratedSqlTestSetTest.generatedMetadataProvider()`，不改旧测试；V2 通过生产元数据适配器消费该 fixture。两边元数据及运行上下文一致，Session 独立、缓存独立重放或按明确共享协议执行。
+比对测试的原配置元数据契约由 `v2.testing.LegacyCorpusMetadataFixture` 提供，测试辅助独立维护在 v2 包，不改既有 v1 测试；V2 通过生产元数据适配器消费该 fixture。两边元数据及运行上下文一致，Session 独立、缓存独立重放或按明确共享协议执行。
 
 先使用现有生成测试配置，再覆盖三种模式、Join-only、临时/忽略/视图选项。默认测试不访问外部数据库。原生扩展配置与既有配置的报告分开。
 

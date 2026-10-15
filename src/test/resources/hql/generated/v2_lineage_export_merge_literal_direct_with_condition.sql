@@ -1,0 +1,1 @@
+merge into dwd.t t using ods.t s on t.id=s.id when matched then update set name='fixed',amount=s.amount;

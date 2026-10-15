@@ -9,9 +9,9 @@ import com.panfan.hivelineage.request.LineageParseMode;
 import com.panfan.hivelineage.result.LineageAnalyzeResult;
 import com.panfan.hivelineage.v2.api.AnalysisCapability;
 import com.panfan.hivelineage.v2.api.AnalysisContract;
-import com.panfan.hivelineage.v2.api.DefaultV2LineageAnalyzer;
-import com.panfan.hivelineage.v2.api.V2AnalyzeRequest;
-import com.panfan.hivelineage.v2.api.V2AnalyzeResult;
+import com.panfan.hivelineage.v2.api.DefaultScriptLineageAnalyzer;
+import com.panfan.hivelineage.v2.api.ScriptAnalysisRequest;
+import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
 import com.panfan.hivelineage.v2.compat.DefaultLegacyResultProjector;
 import com.panfan.hivelineage.v2.metadata.DefaultMetadataCache;
 import com.panfan.hivelineage.v2.metadata.MetadataSnapshot;
@@ -31,19 +31,19 @@ import java.util.Optional;
 /** Both engines read the same frozen payloads with separate caches and Sessions. */
 public final class DefaultLineageComparisonRunner implements LineageComparisonRunner {
     private final HiveLineageAnalyzer legacy;
-    private final DefaultV2LineageAnalyzer semantic;
+    private final DefaultScriptLineageAnalyzer semantic;
 
     public DefaultLineageComparisonRunner() {
-        this(new HiveScriptLineageAnalyzer(), new DefaultV2LineageAnalyzer());
+        this(new HiveScriptLineageAnalyzer(), new DefaultScriptLineageAnalyzer());
     }
 
-    public DefaultLineageComparisonRunner(HiveLineageAnalyzer legacy, DefaultV2LineageAnalyzer semantic) {
+    public DefaultLineageComparisonRunner(HiveLineageAnalyzer legacy, DefaultScriptLineageAnalyzer semantic) {
         this.legacy = legacy;
         this.semantic = semantic;
     }
 
     @Override
-    public ComparisonResult compare(V2AnalyzeRequest request, WorkflowContext workflow, MetadataSnapshot snapshot) {
+    public ComparisonResult compare(ScriptAnalysisRequest request, WorkflowContext workflow, MetadataSnapshot snapshot) {
         if (!request.getMetadataContext().equals(snapshot.getReadContext()) || !workflow.getReadContext().equals(snapshot.getReadContext())) {
             throw new IllegalArgumentException("comparison must share one captured metadata context");
         }
@@ -51,7 +51,7 @@ public final class DefaultLineageComparisonRunner implements LineageComparisonRu
         WorkflowContext frozen = new WorkflowContext(workflow.getWorkflowId(), snapshot.getReadContext(), replay, new DefaultMetadataCache(),
             Optional.of(replay), Optional.of(replay));
         LineageAnalyzeResult before = legacy.analyzeScript(asLegacy(request, replay));
-        V2AnalyzeResult after = semantic.analyzeScript(request, frozen);
+        ScriptAnalysisResult after = semantic.analyzeScript(request, frozen);
         LineageAnalyzeResult projected = new DefaultLegacyResultProjector().project(after).getResult();
         LineageDifferenceReport compared = LegacyStructureDiffer.compare(before, projected);
         List<Difference> differences = new ArrayList<>(compared.getDifferences());
@@ -71,7 +71,7 @@ public final class DefaultLineageComparisonRunner implements LineageComparisonRu
             unsupported ? 1 : 0, differences.isEmpty() ? 0 : 1));
     }
 
-    private static LineageAnalyzeRequest asLegacy(V2AnalyzeRequest request, SnapshotMetadataServices replay) {
+    private static LineageAnalyzeRequest asLegacy(ScriptAnalysisRequest request, SnapshotMetadataServices replay) {
         AnalysisContract contract = request.getContract();
         boolean table = contract.getCapabilities().supports(AnalysisCapability.TABLE_LINEAGE);
         boolean column = contract.getCapabilities().supports(AnalysisCapability.COLUMN_LINEAGE);

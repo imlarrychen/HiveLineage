@@ -14,6 +14,7 @@ import com.panfan.hivelineage.v2.ir.statement.VersionRef;
 import com.panfan.hivelineage.v2.metadata.ColumnMetadata;
 import com.panfan.hivelineage.v2.metadata.LookupResult;
 import com.panfan.hivelineage.v2.metadata.LookupStatus;
+import com.panfan.hivelineage.v2.metadata.ObjectDescriptor;
 import com.panfan.hivelineage.v2.metadata.RelationSchema;
 import com.panfan.hivelineage.v2.session.CatalogEntry;
 import com.panfan.hivelineage.v2.session.OverlayEntry;
@@ -41,17 +42,23 @@ final class CatalogActionBinder {
                            NodeId id, Effects.Precondition precondition) {
         List<BoundEffect> effects = new ArrayList<>();
         List<ColumnMetadata> columns = null;
+        CatalogEntry local = local(name, object);
+        Effects.ObjectKind objectKind = local != null && local.getObject().getKind() == ObjectDescriptor.Kind.TEMPORARY_TABLE
+            ? Effects.ObjectKind.TEMPORARY_TABLE : local != null && local.getObject().getKind() == ObjectDescriptor.Kind.VIEW
+                ? Effects.ObjectKind.VIEW : body.getKind() == com.panfan.hivelineage.v2.syntax.DefinitionKindSyntax.ALTER_VIEW
+                    ? Effects.ObjectKind.VIEW : Effects.ObjectKind.TABLE;
         int actionIndex = 0;
         for (AlterActionSyntax action : body.getAlterActions()) {
             NodeId actionId = new NodeId(id.getValue() + "/" + actionIndex++);
             if (action instanceof RenameActionSyntax) {
                 effects.add(new Effects.RenameObject(actionId, Effects.Certainty.CERTAIN, precondition, object,
-                    SemanticNames.qualify(((RenameActionSyntax) action).getNewName(), context, false), name));
+                    SemanticNames.qualify(((RenameActionSyntax) action).getNewName(), context,
+                        objectKind == Effects.ObjectKind.TEMPORARY_TABLE), name));
                 continue;
             }
             if (!(action instanceof ColumnsActionSyntax) && !(action instanceof ChangeColumnActionSyntax)) {
                 effects.add(new Effects.UnknownEffect(actionId, Effects.Certainty.UNKNOWN, precondition,
-                    Collections.singletonList(object), Collections.<Effects.SessionKey>emptyList(), true,
+                    Collections.singletonList(object), Collections.<Effects.SessionKey>emptyList(), false,
                     "CATALOG_ACTION_NOT_BOUND"));
                 continue;
             }
@@ -63,7 +70,7 @@ final class CatalogActionBinder {
             }
             if (columns == null) {
                 effects.add(new Effects.UnknownEffect(actionId, Effects.Certainty.UNKNOWN, precondition,
-                    Collections.singletonList(object), Collections.<Effects.SessionKey>emptyList(), true, "CATALOG_SCHEMA_UNKNOWN"));
+                    Collections.singletonList(object), Collections.<Effects.SessionKey>emptyList(), false, "CATALOG_SCHEMA_UNKNOWN"));
                 continue;
             }
             if (action instanceof ColumnsActionSyntax) {
@@ -76,8 +83,8 @@ final class CatalogActionBinder {
                         }
                     }
                     columns.clear();
-                    addColumns(columns, change.getColumns());
                     columns.addAll(partitions);
+                    addColumns(columns, change.getColumns());
                 } else {
                     addColumns(columns, change.getColumns());
                 }
@@ -88,12 +95,21 @@ final class CatalogActionBinder {
                     throw new BindingFailure("COLUMN_NOT_FOUND", "ALTER column does not exist in the known schema");
                 }
                 ColumnMetadata previous = columns.remove(position);
+                if (previous.getRole() == ColumnMetadata.Role.PARTITION) {
+                    throw new BindingFailure("INVALID_PARTITION_COLUMN_CHANGE", "CHANGE COLUMN cannot modify a partition key");
+                }
+                if (find(columns, change.getNewDefinition().getName().getValue()) >= 0) {
+                    throw new BindingFailure("DUPLICATE_COLUMN", "ALTER declares a duplicate column");
+                }
                 if (change.getPosition().getKind() == ColumnPositionKindSyntax.FIRST) {
                     position = 0;
                 } else if (change.getPosition().getKind() == ColumnPositionKindSyntax.AFTER) {
                     int preceding = find(columns, change.getPosition().getAfterColumn().getValue());
                     if (preceding < 0) {
                         throw new BindingFailure("COLUMN_NOT_FOUND", "ALTER AFTER column does not exist");
+                    }
+                    if (columns.get(preceding).getRole() == ColumnMetadata.Role.PARTITION) {
+                        throw new BindingFailure("INVALID_COLUMN_POSITION", "Data columns must precede partition keys");
                     }
                     position = preceding + 1;
                 }
@@ -102,15 +118,19 @@ final class CatalogActionBinder {
                 columns.add(Math.min(position, columns.size()), replacement);
             }
             List<OutputSlot> slots = new ArrayList<>();
+            List<String> partitions = new ArrayList<>();
             int position = 0;
             for (ColumnMetadata column : columns) {
                 String columnName = SemanticNames.normalize(column.getName());
+                if (column.getRole() == ColumnMetadata.Role.PARTITION) {
+                    partitions.add(columnName);
+                }
                 FieldIdentity field = new FieldIdentity(object.getValue() + "/field/" + columnName, columnName);
                 slots.add(new OutputSlot(new SlotId(actionId.getValue() + "/column-" + position++), columnName, column.getType(), field));
             }
             effects.add(new Effects.AlterObject(actionId, Effects.Certainty.CERTAIN, precondition,
-                new Effects.ObjectShape(object, name, body.getOptions().isTemporary() ? Effects.ObjectKind.TEMPORARY_TABLE
-                    : Effects.ObjectKind.TABLE, OutputSchema.known(slots), VersionRef.notRequested())));
+                new Effects.ObjectShape(object, name, objectKind, OutputSchema.known(slots), VersionRef.notRequested(),
+                    local == null ? Collections.singletonList(name) : local.getLookupNames(), partitions)));
         }
         return effects;
     }
@@ -135,13 +155,30 @@ final class CatalogActionBinder {
         return metadata.getStatus() == LookupStatus.FOUND ? metadata.getValue().get() : null;
     }
 
+    private CatalogEntry local(QualifiedName name, ObjectId object) {
+        for (CatalogEntry entry : context.getSession().getTemporaryCatalog().values()) {
+            if (entry.getObject().getObjectId().equals(object)) {
+                return entry;
+            }
+        }
+        OverlayEntry overlay = context.getSession().getPersistentOverlay().get(name);
+        return overlay == null ? null : overlay.getEntry().orElse(null);
+    }
+
     private void addColumns(List<ColumnMetadata> columns, List<ColumnDefinitionSyntax> additions) {
         for (ColumnDefinitionSyntax addition : additions) {
             String name = SemanticNames.normalize(addition.getName().getValue());
             if (find(columns, name) >= 0) {
                 throw new BindingFailure("DUPLICATE_COLUMN", "ALTER declares a duplicate column");
             }
-            columns.add(new ColumnMetadata(name, columns.size(), SemanticTypes.declared(addition.getType()),
+            int position = columns.size();
+            for (int index = 0; index < columns.size(); index++) {
+                if (columns.get(index).getRole() == ColumnMetadata.Role.PARTITION) {
+                    position = index;
+                    break;
+                }
+            }
+            columns.add(position, new ColumnMetadata(name, position, SemanticTypes.declared(addition.getType()),
                 ColumnMetadata.Role.DATA, ColumnMetadata.Nullability.UNKNOWN));
         }
     }
@@ -155,4 +192,3 @@ final class CatalogActionBinder {
         return -1;
     }
 }
-

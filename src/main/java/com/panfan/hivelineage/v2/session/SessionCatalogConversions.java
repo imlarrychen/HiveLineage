@@ -66,16 +66,21 @@ final class SessionCatalogConversions {
         ObjectDescriptor object = new ObjectDescriptor(shape.getObjectId(), shape.getName(), kind,
             Optional.<DefinitionRef>empty(), provenance, MetadataVersion.unknown());
         return new CatalogEntry(object, shape.getLookupNames(),
-            Optional.of(schema(shape.getSchema(), provenance)), Optional.<LogicalDefinition>empty());
+            Optional.of(schema(shape.getSchema(), provenance, shape.getPartitionColumns())), Optional.<LogicalDefinition>empty());
     }
 
     static RelationSchema schema(OutputSchema schema, MetadataProvenance provenance) {
+        return schema(schema, provenance, Collections.<String>emptyList());
+    }
+
+    private static RelationSchema schema(OutputSchema schema, MetadataProvenance provenance, List<String> partitions) {
         List<ColumnMetadata> columns = new ArrayList<>();
         for (OutputSegment segment : schema.getSegments()) {
             if (segment instanceof KnownOutputSegment) {
                 for (OutputSlot slot : ((KnownOutputSegment) segment).getSlots()) {
                     columns.add(new ColumnMetadata(slot.getDisplayName(), columns.size(), slot.getType(),
-                        ColumnMetadata.Role.DATA, ColumnMetadata.Nullability.UNKNOWN));
+                        partitions.contains(slot.getDisplayName()) ? ColumnMetadata.Role.PARTITION : ColumnMetadata.Role.DATA,
+                        ColumnMetadata.Nullability.UNKNOWN));
                 }
             }
         }
@@ -86,7 +91,17 @@ final class SessionCatalogConversions {
         ObjectDescriptor old = original.getObject();
         ObjectDescriptor replacement = new ObjectDescriptor(old.getObjectId(), name, old.getKind(), old.getDefinition(),
             old.getProvenance(), old.getVersion());
-        return new CatalogEntry(replacement, Collections.singletonList(name), original.getSchema(), original.getDefinition());
+        Set<QualifiedName> lookupNames = new LinkedHashSet<>();
+        lookupNames.add(name);
+        if (old.getKind() == ObjectDescriptor.Kind.TEMPORARY_TABLE) {
+            String simpleName = name.getParts().get(name.getParts().size() - 1);
+            for (QualifiedName alias : original.getLookupNames()) {
+                List<String> parts = new ArrayList<>(alias.getParts());
+                parts.set(parts.size() - 1, simpleName);
+                lookupNames.add(new QualifiedName(parts));
+            }
+        }
+        return new CatalogEntry(replacement, new ArrayList<>(lookupNames), original.getSchema(), original.getDefinition());
     }
 
     static LogicalDefinition definition(Effects.RegisterDefinition effect, SessionEffectPlan plan, SessionSnapshot session) {

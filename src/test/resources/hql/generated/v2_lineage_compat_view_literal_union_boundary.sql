@@ -1,0 +1,1 @@
+create view dim.literal_set_view as select 'a' as name from ods.t union all select 'b' as name from ods.u; insert into dwd.t(name) select name from dim.literal_set_view

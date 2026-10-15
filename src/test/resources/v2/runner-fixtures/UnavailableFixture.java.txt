@@ -1,0 +1,18 @@
+package com.panfan.hivelineage.v2.testing.runnerfixtures;
+
+import org.junit.Assume;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import static org.junit.Assert.fail;
+
+public class UnavailableFixture {
+    @BeforeClass
+    public static void prerequisite() {
+        Assume.assumeTrue("class prerequisite unavailable", false);
+    }
+
+    @Test
+    public void notStarted() {
+        fail("class prerequisite must prevent execution");
+    }
+}

@@ -1,0 +1,15 @@
+create temporary function udf_pek_cym AS 'udf_pek.udf_pek_csym' using JAR 'hdfs://nameservicel/user/100314/900086/ETL_HQT_110/UDE_PEK/udf_pek_csym.jar';
+
+DROP TABLE TMP_PEK.NEW_CLT_TYP_BRN_TMP1;
+
+TRUNCATE table mtr_bbk_op1_571.FZ_JingwaiHuiKuan;
+
+DROP TABLE IF EXISTS TMP_PEK.WET_FTP;
+
+drop view qd_yyys.twq;
+
+ALTER TABLE his_bbk_851.1j01_buq_eva_dta_t SET TBLPROPERTIES（'comment'='公共事件表，）;
+
+CREATE TEMPORARY TABLE TMP_PEK.WET(DAT_DTE STRING, DAT_YEA INT);
+
+CREATE EXTERNAL TABLE IF NOT EXISTS JC_BBK_315.GS_SR_KHJC(DW_DAT_DT DATE COMMENT '数据日期');

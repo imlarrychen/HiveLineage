@@ -1,0 +1,17 @@
+package com.panfan.hivelineage.v2.testing.runnerfixtures;
+
+import org.junit.BeforeClass;
+import org.junit.Test;
+import static org.junit.Assert.fail;
+
+public class BrokenFixture {
+    @BeforeClass
+    public static void prerequisite() {
+        fail("intentional class fixture failure");
+    }
+
+    @Test
+    public void notStarted() {
+        fail("class failure must prevent execution");
+    }
+}

@@ -6,7 +6,7 @@ import com.panfan.hivelineage.request.LineageAnalyzeRequest;
 import com.panfan.hivelineage.result.ColumnLineage;
 import com.panfan.hivelineage.result.LineageType;
 import com.panfan.hivelineage.result.StatementLineageResult;
-import com.panfan.hivelineage.v2.api.V2AnalyzeResult;
+import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.stream.Collectors;
@@ -17,7 +17,7 @@ public class LegacyPresentationRegressionTest {
     @Test
     public void normalizedDisplayRemovesTriviaWhileNativeEvidenceAndLiteralBytesArePreserved() {
         String sql = "/* lead */\ninsert into dwd.t(name) select '/* literal */--text' from ods.a";
-        V2AnalyzeResult nativeResult = new HiveV2LineageAnalyzer().analyzeNative(request(sql));
+        ScriptAnalysisResult nativeResult = new HiveScriptLineageAdapter().analyzeNative(request(sql));
         StatementLineageResult statement = new DefaultLegacyResultProjector().project(nativeResult).getResult().getStatements().get(0);
         Assert.assertEquals("insert into dwd.t(name) select '/* literal */--text' from ods.a", statement.getNormalizedSql());
         Assert.assertEquals(sql, statement.getRawSql());
@@ -27,7 +27,7 @@ public class LegacyPresentationRegressionTest {
 
     @Test
     public void legacyColumnObjectSourcesCoverWholeInputsEvenForSingleFieldAndConstantValues() {
-        StatementLineageResult statement = new HiveV2LineageAnalyzer().analyzeScript(request(
+        StatementLineageResult statement = new HiveScriptLineageAdapter().analyzeScript(request(
                 "insert into dwd.t(id,name) select a.id,'fixed' from ods.a a join ods.b b on a.id=b.id")).getStatements().get(0);
         for (ColumnLineage column : statement.getColumnLineages()) {
             Assert.assertEquals(Arrays.asList("ods.a", "ods.b"), column.getSourceObjects().stream()
@@ -40,7 +40,7 @@ public class LegacyPresentationRegressionTest {
 
     @Test
     public void setOperationTagsKeepFunctionOccurrencesAndConstantDisplayRules() {
-        StatementLineageResult statement = new HiveV2LineageAnalyzer().analyzeScript(request(
+        StatementLineageResult statement = new HiveScriptLineageAdapter().analyzeScript(request(
                 "insert overwrite table dwd.t(id,name) select upper(name),'one' from ods.a "
                         + "union select upper(name),'two' from ods.b")).getStatements().get(0);
         Assert.assertEquals("INSERT_OVERWRITE", statement.getStatementType());

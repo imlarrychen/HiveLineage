@@ -1,0 +1,12 @@
+-- 元数据展示与计划展示的查询内容不会被误报成正式写入血缘。
+SHOW DATABASES LIKE 'ddl*';
+SHOW TABLES IN ods LIKE 'users*';
+SHOW VIEWS IN dim;
+SHOW FUNCTIONS LIKE 'ddl*';
+SHOW PARTITIONS ods.users;
+SHOW TBLPROPERTIES ods.users;
+SHOW CREATE TABLE ods.users;
+DESCRIBE FORMATTED ods.users;
+DESCRIBE DATABASE EXTENDED ods;
+DESCRIBE FUNCTION EXTENDED default.ddl_function;
+EXPLAIN SELECT q.id FROM (SELECT id FROM ods.users) q;

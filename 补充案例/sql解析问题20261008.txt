@@ -1,0 +1,39 @@
+insert into OPT_DATA_BOARD_BBK_OPT_757.sopr_tsk_dtl_lmt partition(biz_date)
+ select distinct 
+ A.dw_stat_dt,A.dat_dt,A.tsk_enc,A.evt_enc,A.brn_nbr,A.tlr_nbr,A.eac_id,A.cust_id,A.cust_nm,A.cust_ctg_cd,A.ccy_cd,
+ A.trx_amt,A.crt_tm,A.start_tm,A.end_tm,A.hung_sec,A.tm_csm,A.tm_wrk,A.opr_cd,A.key_val,A.evt_id,A.tsk_sts_ind,
+ A.dat_src_ind,A.loc_ip,A.csh_ind,A.seq_nbr,A.bat_cnt,A.if_start,A.mnt_dt,A.mnt_tm,
+ '',regexp_replace(date_sub(CURRENT_DATE,2),'-','') biz_date
+ from ods_data_757.sopr_tsk_dtl A
+ where A.dw_stat_dt in (select max(B.dw_stat_dt) from ods_data_757.sopr_tsk_dtl B)
+错误信息：
+[{"warningCode":"UNSUPPORTED_STATEMENT","message":"Unsupported statement","statementIndex":17}]
+
+
+INSERT INTO OPT_DATA_BOARD_BBK_OPT_757.lc60_t_data_stat partition(biz_date)
+ SELECT a.wrkdat,a.orgcod,a.brncod,a.gettyp,a.seqnum,a.cursts,a.bustyp,a.quenum,a.waitcnt,a.winno,
+ a.lsttyp,a.maclct,a.wintyp,a.userid,a.usrnam
+ ,a.enttim,a.caltim,a.begtim,a.endtim,a.wattim,a.prctim,a.evtsts,a.dtlevt,a.crdnum,a.crdtyp,a.dtasts,a.upldat,a.ipdadr,a.regnbr,a.vadtag,a.ydbsec,a.ydbval,a.stamsg,a.statim,a.updtim,''
+ ,substr(CURRENT_DATE,1,4) biz_date
+ FROM ods_data_757.lc60_t_data_stat a
+ WHERE a.wrkdat IN (SELECT MAX(b.wrkdat) FROM ods_data_757.lc60_t_data_stat b)
+错误信息：
+[{"warningCode":"UNSUPPORTED_STATEMENT","message":"Unsupported statement","statementIndex":17}]
+
+
+INSERT OVERWRITE TABLE sum_pfm_110.acglgdthp PARTITION(BIZ_DATE = '2026-09-20') 
+ SELECT roll_nbr_dt,dtl_act_org_id,act_itm_id,ccy_cd,bal,mon_acm,anl_acm,udf_pek_date('20260921',0,1,0,0,-1)
+ FROM (select * from ods_bbk_110.t09_gl where biz_date = udf_pek_date('20260921',0,1,0,0,-1))
+ INNER JOIN sum_bas_110.sypamcod
+ ON PAM_COD = gl_org_id
+ WHERE PAM_ROT = 'SUM_COR' AND PAM_FAT = 'BBK_NBR'
+错误信息：
+[{"warningCode":"UNSUPPORTED_STATEMENT","message":"Unsupported statement","statementIndex":3}]
+
+
+
+
+INSERT INTO sum_cor_110.xc_dept
+ SELECT '1100++','全部单位','D','1100++','1100++',udf_pek_date('20260921',0,1,0,0,-1)
+错误信息：
+[{"warningCode":"UNSUPPORTED_STATEMENT","message":"Unsupported statement","statementIndex":4}]

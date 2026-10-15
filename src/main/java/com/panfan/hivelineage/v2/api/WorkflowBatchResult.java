@@ -8,11 +8,11 @@ import java.util.List;
 
 public final class WorkflowBatchResult {
     private final String workflowId;
-    private final List<V2AnalyzeResult> tasks;
+    private final List<ScriptAnalysisResult> tasks;
     private final MetadataReadManifest metadataReads;
     private final DiagnosticBag diagnostics;
 
-    public WorkflowBatchResult(String workflowId, List<V2AnalyzeResult> tasks, MetadataReadManifest metadataReads, DiagnosticBag diagnostics) {
+    public WorkflowBatchResult(String workflowId, List<ScriptAnalysisResult> tasks, MetadataReadManifest metadataReads, DiagnosticBag diagnostics) {
         this.workflowId = ModelChecks.text(workflowId, "workflowId");
         this.tasks = ModelCollections.immutableList(tasks);
         this.metadataReads = ModelChecks.value(metadataReads, "metadataReads");
@@ -23,7 +23,7 @@ public final class WorkflowBatchResult {
         return workflowId;
     }
 
-    public List<V2AnalyzeResult> getTasks() {
+    public List<ScriptAnalysisResult> getTasks() {
         return tasks;
     }
 

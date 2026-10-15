@@ -81,6 +81,29 @@ public class SessionLifecycleTest {
     }
 
     @Test
+    public void renameCannotClearAnObjectsEarlierSchemaOrDataVersionUncertainty() {
+        for (Effects.ObjectKind kind : Arrays.asList(Effects.ObjectKind.TABLE, Effects.ObjectKind.TEMPORARY_TABLE)) {
+            ObjectId object = new ObjectId("uncertain-object");
+            SessionSnapshot created = commit(initial("one"), Collections.<BoundEffect>singletonList(
+                create(object.getValue(), name("old"), kind))).getSnapshot();
+            DataVersionState version = new DataVersionState(VersionRef.known(new DatasetVersionId("before.unknown.effect")),
+                Collections.singletonList(new DatasetVersionId("predecessor")), DataVersionState.Basis.ASSUMED_PREDECESSOR_SUCCESS);
+            SessionSnapshot uncertain = commit(withVersion(created, object, version), Collections.<BoundEffect>singletonList(
+                new Effects.UnknownEffect(new NodeId("unknown"), Effects.Certainty.UNKNOWN, always(),
+                    Collections.singletonList(object), Collections.emptyList(), false, "CATALOG_ACTION_NOT_BOUND"))).getSnapshot();
+            SessionCommitResult renamed = commit(uncertain, Collections.<BoundEffect>singletonList(
+                new Effects.RenameObject(new NodeId("rename"), Effects.Certainty.CERTAIN, always(), object, name("new"), name("old"))));
+            assertEquals(CommitOutcome.UNCERTAIN, renamed.getOutcome());
+            assertTrue(renamed.getSnapshot().getUncertainty().getObjects().contains(object));
+            assertFalse(renamed.getSnapshot().getUncertainty().isCatalogUncertain());
+            DataVersionState after = renamed.getSnapshot().getDatasetVersions().get(object);
+            assertEquals(VersionRef.State.UNKNOWN, after.getVersion().getState());
+            assertEquals(DataVersionState.Basis.UNKNOWN, after.getBasis());
+            assertEquals(version.getPredecessors(), after.getPredecessors());
+        }
+    }
+
+    @Test
     public void staleRevisionCannotPartiallyApplyPlan() {
         SessionSnapshot before = initial("one");
         SessionCommitResult result = new DefaultSessionEffectCommitter().commit(before, new SessionEffectPlan(2,

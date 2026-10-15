@@ -46,7 +46,7 @@ public class ExternalDefinitionSourceIntegrationTest {
     public void opaqueReferenceIsReadByInjectedProviderAndPreparedBySharedFrontend() {
         Fixture fixture = new Fixture();
         fixture.warmMetadata();
-        V2AnalyzeResult result = fixture.analyzer.analyzeScript(fixture.request(1), fixture.workflow);
+        ScriptAnalysisResult result = fixture.analyzer.analyzeScript(fixture.request(1), fixture.workflow);
         assertEquals(0, result.getCounts().getFailed());
         assertEquals(1, fixture.sourceReads.get());
         assertEquals(3, fixture.metadataReads.get());
@@ -60,18 +60,18 @@ public class ExternalDefinitionSourceIntegrationTest {
     @Test
     public void sourceAndMetadataReadsConsumeOneRequestBudgetAndFailureRecovers() {
         Fixture fixture = new Fixture();
-        V2AnalyzeResult cold = fixture.analyzer.analyzeScript(fixture.request(1), fixture.workflow);
+        ScriptAnalysisResult cold = fixture.analyzer.analyzeScript(fixture.request(1), fixture.workflow);
         assertEquals(1, fixture.metadataReads.get());
         assertEquals(0, fixture.sourceReads.get());
         assertEquals(1, cold.getCounts().getFailed());
         assertEquals("RESOURCE_LIMIT", cold.getStatements().get(0).getFailureCode().get());
 
         fixture.warmMetadata();
-        V2AnalyzeRequest request = fixture.request(0);
-        request = new V2AnalyzeRequest(request.getTask(), new SourceDocument("recovery",
+        ScriptAnalysisRequest request = fixture.request(0);
+        request = new ScriptAnalysisRequest(request.getTask(), new SourceDocument("recovery",
             "insert into db.dest(id) select id from db.v; insert into db.dest(id) select id from db.src"),
             request.getDialect(), request.getInitialSession(), request.getMetadataContext(), request.getContract(), request.getResourceLimits());
-        V2AnalyzeResult result = fixture.analyzer.analyzeScript(request, fixture.workflow);
+        ScriptAnalysisResult result = fixture.analyzer.analyzeScript(request, fixture.workflow);
         assertEquals(0, fixture.sourceReads.get());
         assertEquals(1, result.getCounts().getFailed());
         assertEquals("RESOURCE_LIMIT", result.getStatements().get(0).getFailureCode().get());
@@ -83,8 +83,8 @@ public class ExternalDefinitionSourceIntegrationTest {
     public void defaultInlineProviderReportsMissingTextWithoutExternalRead() {
         Fixture fixture = new Fixture();
         fixture.warmMetadata();
-        DefaultV2LineageAnalyzer analyzer = new DefaultV2LineageAnalyzer(fixture.frontend, new DefaultSemanticBinder(), fixture.metadata);
-        V2AnalyzeResult result = analyzer.analyzeScript(fixture.request(0), fixture.workflow);
+        DefaultScriptLineageAnalyzer analyzer = new DefaultScriptLineageAnalyzer(fixture.frontend, new DefaultSemanticBinder(), fixture.metadata);
+        ScriptAnalysisResult result = analyzer.analyzeScript(fixture.request(0), fixture.workflow);
         assertEquals(0, result.getCounts().getFailed());
         assertTrue(result.getDiagnostics().getDiagnostics().stream()
             .anyMatch(diagnostic -> diagnostic.getCode().equals("VIEW_DEFINITION_NOT_FOUND")));
@@ -98,12 +98,12 @@ public class ExternalDefinitionSourceIntegrationTest {
         Fixture fixture = new Fixture();
         fixture.warmMetadata();
         fixture.definitionSql = "select id from db.src --" + String.join("", Collections.nCopies(200, "x"));
-        V2AnalyzeRequest request = fixture.request(1);
+        ScriptAnalysisRequest request = fixture.request(1);
         ResourceLimits old = request.getResourceLimits();
-        request = new V2AnalyzeRequest(request.getTask(), request.getSource(), request.getDialect(), request.getInitialSession(),
+        request = new ScriptAnalysisRequest(request.getTask(), request.getSource(), request.getDialect(), request.getInitialSession(),
             request.getMetadataContext(), request.getContract(), new ResourceLimits(100, old.getMaxExpansionDepth(), old.getMaxIrNodes(),
                 old.getMaxEvidenceEdges(), 1, old.getMaxIrDepth()));
-        V2AnalyzeResult result = fixture.analyzer.analyzeScript(request, fixture.workflow);
+        ScriptAnalysisResult result = fixture.analyzer.analyzeScript(request, fixture.workflow);
         assertEquals(1, result.getCounts().getFailed());
         assertEquals("RESOURCE_LIMIT", result.getStatements().get(0).getFailureCode().get());
         assertFalse(result.getStatements().get(0).isFormalLineageProduced());
@@ -112,7 +112,7 @@ public class ExternalDefinitionSourceIntegrationTest {
     }
 
     private static final class Fixture {
-        private final V2AnalyzeRequest base = new DefaultRequestAdapter().adapt(LineageAnalyzeRequest.builder()
+        private final ScriptAnalysisRequest base = new DefaultRequestAdapter().adapt(LineageAnalyzeRequest.builder()
             .workflowId("wf").taskId("external-definition").taskVersion("1")
             .rawScript("insert into db.dest(id) select id from db.v")
             .options(LineageAnalyzeOptions.builder().expandViewLineage(true).build()).build());
@@ -122,7 +122,7 @@ public class ExternalDefinitionSourceIntegrationTest {
         private final DefaultMetadataAccessFactory metadata = new DefaultMetadataAccessFactory();
         private final SyntaxFrontend frontend = new DialectSyntaxFrontend<HiveParseArtifact>(new HiveDialectFactory());
         private final WorkflowContext workflow;
-        private final DefaultV2LineageAnalyzer analyzer;
+        private final DefaultScriptLineageAnalyzer analyzer;
 
         private Fixture() {
             MetadataProvider provider = new MetadataProvider() {
@@ -156,7 +156,7 @@ public class ExternalDefinitionSourceIntegrationTest {
                 sourceReads.incrementAndGet();
                 return LookupResult.found(new SourceDocument(reference.getSource().getSourceId(), definitionSql));
             };
-            analyzer = new DefaultV2LineageAnalyzer(frontend, new DefaultSemanticBinder(), metadata, new DefaultScriptPreprocessor(),
+            analyzer = new DefaultScriptLineageAnalyzer(frontend, new DefaultSemanticBinder(), metadata, new DefaultScriptPreprocessor(),
                 new DefaultViewTemplateCache(), sources);
         }
 
@@ -166,9 +166,9 @@ public class ExternalDefinitionSourceIntegrationTest {
             }
         }
 
-        private V2AnalyzeRequest request(int reads) {
+        private ScriptAnalysisRequest request(int reads) {
             ResourceLimits limits = base.getResourceLimits();
-            return new V2AnalyzeRequest(base.getTask(), base.getSource(), base.getDialect(), base.getInitialSession(), base.getMetadataContext(),
+            return new ScriptAnalysisRequest(base.getTask(), base.getSource(), base.getDialect(), base.getInitialSession(), base.getMetadataContext(),
                 base.getContract(), new ResourceLimits(limits.getMaxScriptCharacters(), limits.getMaxExpansionDepth(), limits.getMaxIrNodes(),
                     limits.getMaxEvidenceEdges(), reads, limits.getMaxIrDepth()));
         }

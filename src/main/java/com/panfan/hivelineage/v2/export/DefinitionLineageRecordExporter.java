@@ -1,12 +1,10 @@
 package com.panfan.hivelineage.v2.export;
 
 import com.panfan.hivelineage.v2.analysis.ColumnEndpoint;
-import com.panfan.hivelineage.v2.analysis.ConstantEndpoint;
 import com.panfan.hivelineage.v2.analysis.Dependency;
 import com.panfan.hivelineage.v2.analysis.DependencyRole;
 import com.panfan.hivelineage.v2.analysis.ExpressionFacts;
 import com.panfan.hivelineage.v2.analysis.RelationFacts;
-import com.panfan.hivelineage.v2.analysis.UnknownEndpoint;
 import com.panfan.hivelineage.v2.api.StatementAnalysisResult;
 import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.ir.TypeRef;
@@ -101,11 +99,7 @@ final class DefinitionLineageRecordExporter {
     private ColumnLineageRecord column(Relations.DefinitionInstance definition, SlotMapping mapping,
                                        ColumnAddress target, ExpressionFacts facts) {
         Map<String, ColumnAddress> sources = new LinkedHashMap<String, ColumnAddress>();
-        boolean constant = !facts.getDependencies().isEmpty();
-        boolean unknown = false;
         for (Dependency dependency : facts.getDependencies()) {
-            constant = constant && dependency.getSource() instanceof ConstantEndpoint;
-            unknown = unknown || dependency.getSource() instanceof UnknownEndpoint;
             if (dependency.getSource() instanceof ColumnEndpoint && dependency.getRole() != DependencyRole.ROWSET
                     && dependency.getRole() != DependencyRole.DEFINITION) {
                 ColumnEndpoint endpoint = (ColumnEndpoint) dependency.getSource();
@@ -123,8 +117,7 @@ final class DefinitionLineageRecordExporter {
         NodeId id = new NodeId(definition.getId().getValue() + ":export:" + mapping.getInput().getValue());
         Expressions.SlotRef expression = new Expressions.SlotRef(id, TypeRef.unknown(), null, mapping.getInput(), Collections.emptyList());
         Optional<String> text = expressions.format(expression);
-        ColumnDerivationKind kind = unknown ? ColumnDerivationKind.UNKNOWN : constant ? ColumnDerivationKind.CONSTANT
-                : sources.size() == 1 && !expressions.complex(expression) ? ColumnDerivationKind.DIRECT : ColumnDerivationKind.DERIVED;
+        ColumnDerivationKind kind = ColumnDerivationClassifier.classify(expressions, expression, facts.getDependencies());
         return new ColumnLineageRecord(statement.getIdentity(), target, new ArrayList<ColumnAddress>(sources.values()), kind,
                 new RenderedExpression(text, expressions.extracted(expression)), expressions.functions(expression), facts.getQuality());
     }

@@ -1,0 +1,1 @@
+create view dim.count_view as select count(*) as amount,sum(1) as qty from ods.t; insert into dwd.t(amount,qty) select amount,qty from dim.count_view

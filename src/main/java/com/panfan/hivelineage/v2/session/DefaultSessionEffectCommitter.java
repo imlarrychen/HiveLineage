@@ -8,6 +8,7 @@ import com.panfan.hivelineage.v2.common.SourceRef;
 import com.panfan.hivelineage.v2.ir.identity.ObjectId;
 import com.panfan.hivelineage.v2.ir.statement.BoundEffect;
 import com.panfan.hivelineage.v2.ir.statement.Effects;
+import com.panfan.hivelineage.v2.ir.statement.VersionRef;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -214,11 +215,19 @@ public final class DefaultSessionEffectCommitter implements SessionEffectCommitt
             }
             if (found.isPresent()) {
                 CatalogEntry original = found.get();
+                boolean originallyUncertain = uncertainObjects.contains(effect.getObjectId());
                 DataVersionState originalVersion = versions.get(effect.getObjectId());
                 drop(effect.getObjectId());
                 put(SessionCatalogConversions.renamed(original, effect.getNewName()));
+                if (originallyUncertain) {
+                    uncertainObjects.add(effect.getObjectId());
+                    uncertain = true;
+                }
                 if (originalVersion != null) {
-                    versions.put(effect.getObjectId(), originalVersion);
+                    versions.put(effect.getObjectId(), originallyUncertain
+                        && originalVersion.getVersion().getState() != VersionRef.State.NOT_REQUESTED
+                        ? new DataVersionState(VersionRef.unknown("RENAMED_OBJECT_STATE_UNCERTAIN"),
+                            originalVersion.getPredecessors(), DataVersionState.Basis.UNKNOWN) : originalVersion);
                 }
                 original.getDefinition().ifPresent(definition -> definitions.put(effect.getNewName(), definition));
             } else {

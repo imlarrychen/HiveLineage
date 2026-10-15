@@ -1,0 +1,1 @@
+create view dim.literal_view as select 'fixed' as name from ods.t; insert into dwd.t(name) select name from dim.literal_view

@@ -9,8 +9,8 @@ import com.panfan.hivelineage.result.LineageAnalyzeResult;
 import com.panfan.hivelineage.result.LineageWarning;
 import com.panfan.hivelineage.result.StatementLineageResult;
 import com.panfan.hivelineage.result.WarningCode;
-import com.panfan.hivelineage.v2.api.DefaultV2LineageAnalyzer;
-import com.panfan.hivelineage.v2.api.V2AnalyzeRequest;
+import com.panfan.hivelineage.v2.api.DefaultScriptLineageAnalyzer;
+import com.panfan.hivelineage.v2.api.ScriptAnalysisRequest;
 import com.panfan.hivelineage.v2.compat.DefaultRequestAdapter;
 import com.panfan.hivelineage.v2.metadata.DefaultMetadataCache;
 import com.panfan.hivelineage.v2.metadata.MetadataSnapshot;
@@ -33,7 +33,7 @@ public class ComparisonIntegrityTest {
         variables.put("hiveconf:x", "B");
         LineageAnalyzeRequest original = LineageAnalyzeRequest.builder().workflowId("wf").taskId("task").taskVersion("1")
             .defaultDatabase(null).runtimeVariables(variables).rawScript("select 1").build();
-        V2AnalyzeRequest request = new DefaultRequestAdapter().adapt(original);
+        ScriptAnalysisRequest request = new DefaultRequestAdapter().adapt(original);
         MetadataSnapshot snapshot = new MetadataSnapshot(request.getMetadataContext(), Collections.emptyList());
         SnapshotMetadataServices replay = new SnapshotMetadataServices(snapshot);
         WorkflowContext workflow = new WorkflowContext("wf", request.getMetadataContext(), replay, new DefaultMetadataCache());
@@ -41,7 +41,7 @@ public class ComparisonIntegrityTest {
         new DefaultLineageComparisonRunner(legacyRequest -> {
             captured.set(legacyRequest);
             return LineageAnalyzeResult.builder().workflowId("wf").taskId("task").taskVersion("1").build();
-        }, new DefaultV2LineageAnalyzer()).compare(request, workflow, snapshot);
+        }, new DefaultScriptLineageAnalyzer()).compare(request, workflow, snapshot);
         assertEquals(variables, captured.get().getRuntimeVariables());
         assertNull(captured.get().getDefaultDatabase());
     }

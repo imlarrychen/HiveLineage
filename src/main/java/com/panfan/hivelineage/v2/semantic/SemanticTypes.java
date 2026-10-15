@@ -28,6 +28,8 @@ final class SemanticTypes {
             kind = TypeRef.Kind.DECIMAL;
         } else if ("varchar".equals(name) || "char".equals(name) || "string".equals(name)) {
             kind = TypeRef.Kind.STRING;
+        } else if ("list".equals(name)) {
+            kind = TypeRef.Kind.ARRAY;
         } else if ("uniontype".equals(name)) {
             kind = TypeRef.Kind.UNION;
         } else {
@@ -39,7 +41,13 @@ final class SemanticTypes {
         }
         List<TypeRef> arguments = new ArrayList<>();
         for (DataTypeSyntax argument : syntax.getTypeArguments()) {
-            arguments.add(declared(argument));
+            if (kind == TypeRef.Kind.UNION && "coltypelist".equals(SemanticNames.last(argument.getTypeName()))) {
+                for (DataTypeSyntax member : argument.getTypeArguments()) {
+                    arguments.add(declared(member));
+                }
+            } else {
+                arguments.add(declared(argument));
+            }
         }
         List<TypeRef.StructField> fields = new ArrayList<>();
         for (TypeFieldSyntax field : syntax.getFields()) {
@@ -70,4 +78,3 @@ final class SemanticTypes {
         return result;
     }
 }
-

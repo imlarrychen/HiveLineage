@@ -74,8 +74,12 @@ final class StatementBinder {
                 work.partial = true;
             }
         }
-        if (!effectResult.getDiagnostics().getDiagnostics().isEmpty()) {
-            work.failed = true;
+        for (com.panfan.hivelineage.v2.common.Diagnostic diagnostic : effectResult.getDiagnostics().getDiagnostics()) {
+            if ("CREATE_LIKE_SCHEMA_UNKNOWN".equals(diagnostic.getCode())) {
+                work.partial = true;
+            } else {
+                work.failed = true;
+            }
         }
         if (statement instanceof QueryStatementSyntax) {
             QueryStatementSyntax query = (QueryStatementSyntax) statement;

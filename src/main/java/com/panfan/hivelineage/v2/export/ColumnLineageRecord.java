@@ -39,6 +39,7 @@ public final class ColumnLineageRecord {
         return sources;
     }
 
+    /** Value-expression classification, retaining UNKNOWN when the proof is incomplete. */
     public ColumnDerivationKind getDerivation() {
         return derivation;
     }
@@ -47,6 +48,7 @@ public final class ColumnLineageRecord {
         return expression;
     }
 
+    /** Function calls collected from the bound expression, independently of source-column count. */
     public List<String> getFunctionNames() {
         return functionNames;
     }

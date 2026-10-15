@@ -1,0 +1,4 @@
+-- MACRO 与 RELOAD FUNCTIONS 是审计边界，不执行注册或函数重载。
+CREATE TEMPORARY MACRO ddl_plus_one(x INT) x + 1;
+DROP TEMPORARY MACRO IF EXISTS ddl_plus_one;
+RELOAD FUNCTIONS;

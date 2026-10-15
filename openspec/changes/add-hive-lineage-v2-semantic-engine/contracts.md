@@ -16,7 +16,7 @@ V1、默认入口、POM、原测试和 generated SQL/快照保持原样。
 
 | 层 | 接口 | 核心模型 |
 |---|---|---|
-| api | V2LineageAnalyzer、WorkflowBatchAnalyzer | 请求、执行契约、能力、资源限制、任务/引擎身份、语句/批次结果、分析依据 |
+| api | ScriptLineageAnalyzer、WorkflowBatchAnalyzer | 请求、执行契约、能力、资源限制、任务/引擎身份、语句/批次结果、分析依据 |
 | frontend | ScriptPreprocessor、VariableResolver | ScriptUnit、ExpandedUnit、SourceMap、VariableEvidence、入口和变量选项 |
 | lexical | SqlLexer | LexToken、Trivia、LexedUnit、LexResult、词法符号和通道 |
 | syntax | SqlSyntaxParser<P>、SyntaxNormalizer<P> | SyntaxStatement、SyntaxQuery、结构化名称、表达式、FROM/CTE/Join、窗口、生成、集合、分区、写入、DDL/命令和 SyntaxTemplate |

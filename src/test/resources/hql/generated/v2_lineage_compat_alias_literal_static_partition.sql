@@ -1,0 +1,1 @@
+insert overwrite table dwd.t partition(dt='20261015') (id,name) select u.id as renamed, null from ods.t u

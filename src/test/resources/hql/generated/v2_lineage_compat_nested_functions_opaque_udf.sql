@@ -1,0 +1,1 @@
+insert into dwd.t(name,amount) select concat(upper(u.name),cast(u.id as string)),custom_udf(42) from ods.t u

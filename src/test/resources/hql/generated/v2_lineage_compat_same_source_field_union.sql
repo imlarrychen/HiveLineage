@@ -1,0 +1,1 @@
+insert into dwd.t(id) select id from ods.t union all select id from ods.t

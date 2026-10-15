@@ -68,6 +68,10 @@ public final class HiveSqlLexer implements SqlLexer {
         String symbol = type == Token.EOF ? "EOF" : HiveParser.tokenNames[type];
         SourceRef source = new SourceRef(unit.getExpandedSourceId(), new SourceSpan(unit.getExpandedSourceId(), start, end));
         TokenKind kind = kind(symbol);
+        if (kind == TokenKind.IDENTIFIER) {
+            // The native lexer decodes backtick identifiers; retain their declaration spelling.
+            text = unit.getExpandedText().substring(start, end);
+        }
         return new LexToken(index, kind, text, decoded(kind, text),
                 token.getChannel() == Token.DEFAULT_CHANNEL ? TokenChannel.DEFAULT : TokenChannel.HIDDEN,
                 new TokenLocation(source, new DialectSymbol("hive", symbol)));

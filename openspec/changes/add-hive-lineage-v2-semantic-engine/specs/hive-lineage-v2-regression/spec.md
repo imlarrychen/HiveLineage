@@ -65,14 +65,14 @@
 
 ### Requirement: 复用现有元数据 fixture
 
-系统 SHALL 通过新增测试桥复用 `GeneratedSqlTestSetTest.generatedMetadataProvider()`，并通过 V1 Provider 适配层供 V2 使用，不改变现有测试的引擎和断言。
+系统 SHALL 在 `v2.testing.LegacyCorpusMetadataFixture` 中维护与既有 generated 基线一致的元数据契约，并通过 V1 Provider 适配层供 V2 使用。测试辅助独立放在 v2 包，不修改既有 v1 测试源码、引擎或断言。
 
 #### Scenario: 同一元数据用于两个引擎
 
 - **假设** generated fixture 包含表和视图定义
 - **当** 运行 V1/V2
 - **那么** 两边使用相同有序结构及定义快照
-- **并且** 不复制维护两份元数据清单，不访问真实数据库
+- **并且** 同次比对的两个引擎共享同一份 v2 测试元数据快照，与原始基线结构及定义一致，不访问真实数据库
 
 #### Scenario: 不同元数据需求可重放
 

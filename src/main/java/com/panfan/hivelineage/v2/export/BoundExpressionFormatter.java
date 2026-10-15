@@ -35,6 +35,7 @@ public final class BoundExpressionFormatter {
     private final Map<SlotId, Relations.SetOutputMapping> sets = new LinkedHashMap<SlotId, Relations.SetOutputMapping>();
     private final Map<SlotId, String> setNames = new LinkedHashMap<SlotId, String>();
     private final Map<SlotId, Relations.Generate> generators = new LinkedHashMap<SlotId, Relations.Generate>();
+    private final Map<SlotId, Relations.WindowComputation> windows = new LinkedHashMap<SlotId, Relations.WindowComputation>();
 
     public BoundExpressionFormatter(BoundAnalysisUnit unit, BoundNameIndex names, SourceRenderer renderer) {
         this(unit, names, renderer, object -> false);
@@ -58,6 +59,7 @@ public final class BoundExpressionFormatter {
         } else if (relation instanceof Relations.Window) {
             for (Relations.WindowComputation computation : ((Relations.Window) relation).getComputations()) {
                 assignments.put(computation.getAssignment().getOutput(), computation.getAssignment().getExpression());
+                windows.put(computation.getAssignment().getOutput(), computation);
             }
             mappings(((Relations.Window) relation).getRetainedSlots());
         } else if (relation instanceof Relations.SetOp) {
@@ -344,13 +346,13 @@ public final class BoundExpressionFormatter {
 
     public List<String> functions(BoundExpression expression) {
         Set<String> functions = new LinkedHashSet<String>();
-        collectFunctions(origin(expression), functions, new LinkedHashSet<SlotId>());
+        collectFunctions(expression, functions, new LinkedHashSet<SlotId>());
         return new ArrayList<String>(functions);
     }
 
     public List<String> functionsWithOccurrences(BoundExpression expression) {
         List<String> functions = new ArrayList<String>();
-        collectFunctions(origin(expression), functions, new LinkedHashSet<SlotId>());
+        collectFunctions(expression, functions, new LinkedHashSet<SlotId>());
         return functions;
     }
 
@@ -358,6 +360,8 @@ public final class BoundExpressionFormatter {
         if (expression instanceof Expressions.SlotRef) {
             SlotId id = ((Expressions.SlotRef) expression).getSlotId();
             collectSlotFunctions(id, functions, seen);
+        } else if (expression instanceof Expressions.ScalarSubquery) {
+            collectSlotFunctions(((Expressions.ScalarSubquery) expression).getResultSlot(), functions, seen);
         } else if (expression instanceof Expressions.Call) {
             Expressions.Call call = (Expressions.Call) expression;
             if (call.getFunction().getKind() != FunctionSymbol.FunctionKind.OPERATOR) {
@@ -375,12 +379,27 @@ public final class BoundExpressionFormatter {
         if (!seen.add(slot) || boundary(slot)) {
             return;
         }
-        if (assignments.containsKey(slot)) {
+        if (windows.containsKey(slot)) {
+            Relations.WindowComputation window = windows.get(slot);
+            collectFunctions(window.getAssignment().getExpression(), functions, seen);
+            for (BoundExpression partition : window.getPartitions()) {
+                collectFunctions(partition, functions, seen);
+            }
+            for (Relations.OrderKey key : window.getOrderKeys()) {
+                collectFunctions(key.getExpression(), functions, seen);
+            }
+            window.getFrame().ifPresent(frame -> {
+                frame.getStart().getOffset().ifPresent(offset -> collectFunctions(offset, functions, seen));
+                frame.getEnd().getOffset().ifPresent(offset -> collectFunctions(offset, functions, seen));
+            });
+        } else if (assignments.containsKey(slot)) {
             collectFunctions(assignments.get(slot), functions, seen);
         } else if (mappings.containsKey(slot)) {
             collectSlotFunctions(mappings.get(slot), functions, seen);
         } else if (sets.containsKey(slot)) {
-            functions.add(setNames.get(slot));
+            if (!literalSlot(slot, new LinkedHashSet<SlotId>())) {
+                functions.add(setNames.get(slot));
+            }
             for (Relations.BranchSlot branch : sets.get(slot).getBranchSlots()) {
                 if (branch.getSlot().isPresent()) {
                     collectSlotFunctions(branch.getSlot().get(), functions, seen);
@@ -402,6 +421,44 @@ public final class BoundExpressionFormatter {
                 && generatedSlot(((Expressions.SlotRef) origin).getSlotId(), new LinkedHashSet<SlotId>());
         return set || generated || !(origin instanceof Expressions.SlotRef) && !(origin instanceof QualifiedFieldHandle)
                 && !(origin instanceof Expressions.Literal);
+    }
+
+    /** Only literal leaves and sets of literal leaves are constant assignments; calls are never folded here. */
+    public boolean literalOnly(BoundExpression expression) {
+        return literalOnly(expression, new LinkedHashSet<SlotId>());
+    }
+
+    private boolean literalOnly(BoundExpression expression, Set<SlotId> seen) {
+        if (expression instanceof Expressions.Literal) {
+            return true;
+        }
+        return expression instanceof Expressions.SlotRef && ((Expressions.SlotRef) expression).getFieldPath().isEmpty()
+                && literalSlot(((Expressions.SlotRef) expression).getSlotId(), seen);
+    }
+
+    private boolean literalSlot(SlotId slot, Set<SlotId> seen) {
+        if (!seen.add(slot) || boundary(slot)) {
+            return false;
+        }
+        if (assignments.containsKey(slot)) {
+            return literalOnly(assignments.get(slot), seen);
+        }
+        if (mappings.containsKey(slot)) {
+            return literalSlot(mappings.get(slot), seen);
+        }
+        if (sets.containsKey(slot)) {
+            List<Relations.BranchSlot> branches = sets.get(slot).getBranchSlots();
+            if (branches.isEmpty()) {
+                return false;
+            }
+            for (Relations.BranchSlot branch : branches) {
+                if (!branch.getSlot().isPresent() || !literalSlot(branch.getSlot().get(), new LinkedHashSet<SlotId>(seen))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
     }
 
     private boolean boundary(SlotId slot) {

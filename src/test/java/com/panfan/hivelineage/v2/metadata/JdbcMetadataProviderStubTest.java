@@ -11,10 +11,10 @@ import com.panfan.hivelineage.result.ColumnLineage;
 import com.panfan.hivelineage.result.JoinCondition;
 import com.panfan.hivelineage.result.LineageAnalyzeResult;
 import com.panfan.hivelineage.result.StatementLineageResult;
-import com.panfan.hivelineage.v2.api.V2AnalyzeResult;
+import com.panfan.hivelineage.v2.api.ScriptAnalysisResult;
 import com.panfan.hivelineage.v2.common.QualifiedName;
 import com.panfan.hivelineage.v2.compat.DefaultLegacyResultProjector;
-import com.panfan.hivelineage.v2.compat.HiveV2LineageAnalyzer;
+import com.panfan.hivelineage.v2.compat.HiveScriptLineageAdapter;
 import com.panfan.hivelineage.v2.export.DefaultFormalLineageRecordExporter;
 import java.sql.SQLException;
 import java.util.Arrays;
@@ -75,7 +75,7 @@ public class JdbcMetadataProviderStubTest {
                     sources(column(statement, "dim_it.v_user_it.user_id")));
             Assert.assertEquals("VIEW_DEFINITION", statement.getTableLineages().get(0).getOperation());
             if (result.nativeResult.isPresent()) {
-                V2AnalyzeResult nativeResult = result.nativeResult.get();
+                ScriptAnalysisResult nativeResult = result.nativeResult.get();
                 List<MetadataReadRecord> reads = nativeResult.getBasis().get().getMetadataReads().getRecords().stream()
                         .filter(read -> "dim_it.v_user_it".equals(read.getKey().getObjectName().getDisplayName())).collect(Collectors.toList());
                 Assert.assertFalse(reads.isEmpty());
@@ -199,7 +199,7 @@ public class JdbcMetadataProviderStubTest {
         if (engine == Engine.V1) {
             return new Result(new HiveScriptLineageAnalyzer().analyzeScript(request), Optional.empty());
         }
-        V2AnalyzeResult nativeResult = new HiveV2LineageAnalyzer().analyzeNative(request);
+        ScriptAnalysisResult nativeResult = new HiveScriptLineageAdapter().analyzeNative(request);
         return new Result(new DefaultLegacyResultProjector().project(nativeResult).getResult(), Optional.of(nativeResult));
     }
 
@@ -249,9 +249,9 @@ public class JdbcMetadataProviderStubTest {
 
     private static final class Result {
         private final LineageAnalyzeResult legacy;
-        private final Optional<V2AnalyzeResult> nativeResult;
+        private final Optional<ScriptAnalysisResult> nativeResult;
 
-        private Result(LineageAnalyzeResult legacy, Optional<V2AnalyzeResult> nativeResult) {
+        private Result(LineageAnalyzeResult legacy, Optional<ScriptAnalysisResult> nativeResult) {
             this.legacy = legacy;
             this.nativeResult = nativeResult;
         }
